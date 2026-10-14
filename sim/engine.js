@@ -187,6 +187,8 @@
       if (name === 'junction') return [this.junction];
       if (name === 'battery') return this.batteries;
       const m = /^battery(\d+)$/.exec(name); if (m) return this.batteries[+m[1] - 1] ? [this.batteries[+m[1] - 1]] : [];
+      // const.<value>: a lever/switch or any fixed signal source, sends <value> every tick (e.g. const.1 = lever on)
+      if (name === 'const') { if (!this.constItem) this.constItem = this.mkItem('const', {}); return [this.constItem]; }
       // recorded devices: test-file columns named "<device>.<pin>" (nav terminal, engines, pumps, guns, sonar, ...)
       const chans = (this.profile.channels || []).filter(c => c.startsWith(name + '.'));
       if (chans.length || RECORDED.includes(name)) {
@@ -202,7 +204,7 @@
         pins = pins || DEFAULT_PINS[box.model.name] || {};
         for (const [p, ep] of Object.entries(pins)) {
           if (!ep || ep === 'none' || ep.startsWith('link.')) continue; // links are wired below
-          const [dev, dpin] = ep.split('.');
+          const di = ep.indexOf('.'), dev = ep.slice(0, di), dpin = ep.slice(di + 1); // split at the first dot (const.1.5)
           const ds = this.devices(dev);
           if (!ds) { this.warnings.push(`unknown device "${dev}" in pin ${box.model.name}.${p}`); continue; }
           const full = /^in\d$/.test(p) ? 'signal_' + p : /^out\d$/.test(p) ? 'signal_' + p : p;
@@ -468,6 +470,7 @@
       // delayed (stepsTaken > 10) signals from the previous frame
       if (this.pending.length) { const p = this.pending; this.pending = []; for (const e of p) this.connSend(e.conn, e.sig); }
       this.updateRecorded();
+      if (this.constItem) for (const v of Object.keys(this.constItem.conns)) this.send(this.constItem, v, v);
       this.updateRods();
       this.updateReactor(dt);
       this.updateJunction(dt);
@@ -490,7 +493,7 @@
   class Metrics {
     constructor(sim) { this.sim = sim; this.reset(); }
     reset() {
-      Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, eRSurplus: 0, eRShort: 0, eAbsorbed: 0, eCovered: 0, eChargeInShort: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
+      Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, eUnavoidable: 0, eAvoidable: 0, eRSurplus: 0, eRShort: 0, eAbsorbed: 0, eCovered: 0, eChargeInShort: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
         overloadT: 0, junctionBreaks: 0, reactorCondMin: 100, fires: 0, meltdownAt: null, tempMax: 0, tAboveOpt: 0, tCritical: 0, noCtlF: 0, noCtlT: 0, events: [], timeline: [], nextTl: 0, outAbs: 0, battMin: Infinity, battMax: -Infinity, lowRun: 0, worstLow: 0 });
       if (this.sim.reactor) this.fuelStart = this.sim.reactor.rods.reduce((a, r) => a + r.cond, 0);
       Object.assign(this, { socSum: 0, tFull: 0, tEmpty: 0, tLow20: 0, tHigh90: 0, eLostFull: 0, eLostEmpty: 0, fullRun: 0, emptyRun: 0 });
@@ -504,6 +507,12 @@
       this.eDemand += dem * dt; this.eReactor += -R.cpc * dt;
       const sh = Math.max(0, g.load - g.power), su = Math.max(0, g.power - g.load);
       this.eUnmet += Math.min(sh, dem) * dt; this.eSurplus += su * dt;
+      // what the hardware could deliver right now: reactor max at the best temperature for its fuel
+      // (max heat = min(100, fuel) * fuel / 50; output <= heat/150 of max) plus what the batteries can give
+      const maxHeat = Math.min(100, R.availFuel) * R.availFuel / 50, cap = R.cond > 0 ? R.maxPower * Math.min(1, maxHeat / 150) : 0;
+      let bcap = 0; for (const b of s.batteries) bcap += this.sim.battMinMax(b);
+      const unavoidable = Math.max(0, dem - cap - bcap);
+      this.eUnavoidable += unavoidable * dt; this.eAvoidable += Math.max(0, Math.min(sh, dem) - unavoidable) * dt;
       // battery buffering: surplus = reactor output above demand (would be overvoltage), shortfall = demand above reactor output
       const rOut = -R.cpc, rs = Math.max(0, rOut - dem), rd = Math.max(0, dem - rOut);
       this.eRSurplus += rs * dt; this.eRShort += rd * dt;
@@ -538,6 +547,8 @@
         circuit: s.cfg.circuitName || '', profile: s.profile.name || '', duration_s: +T.toFixed(1), reactor_max_kw: s.reactor.maxPower,
         rods: `${s.reactor.rods.length}x ${s.fuelType}`, batteries: s.batteries.length ? `${s.batteries.length}x ${(s.cfg.batteries || {}).type || 'battery'}` : 'off',
         demand_kwh: +kwh(this.eDemand).toFixed(1), unmet_kwh: +kwh(this.eUnmet).toFixed(2), unmet_pct: +(this.eUnmet / Math.max(this.eDemand, 1e-9) * 100).toFixed(2),
+        unmet_avoidable_pct: +(this.eAvoidable / Math.max(this.eDemand, 1e-9) * 100).toFixed(2), // the controller's fault
+        unmet_unavoidable_pct: +(this.eUnavoidable / Math.max(this.eDemand, 1e-9) * 100).toFixed(2), // demand above reactor capacity (fuel/max) + batteries
         surplus_kwh: +kwh(this.eSurplus).toFixed(2), reactor_kwh: +kwh(this.eReactor).toFixed(1),
         fuel_condition_used: +fuelUsed.toFixed(2), fuel_rods_used: +(fuelUsed / (s.reactor.rods[0] ? s.reactor.rods[0].max : 100)).toFixed(3),
         fuel_per_mwh: delivered > 0 ? +(fuelUsed / (delivered / 1000)).toFixed(2) : null,
@@ -562,7 +573,7 @@
         battery_net_kwh: s.batteries.length ? +((s.batteries.reduce((a, b) => a + b.charge, 0) - this.chargeStart) / 60).toFixed(2) : null, // + = ended with more stored energy
       };
       // scores 0-100 (higher is better)
-      r.score_reliability = +Math.max(0, 100 - r.unmet_pct * 10 - r.voltage_mean_abs_dev * 200 - r.fluctuation_events / (T / 60) * 2 - (r.meltdown_at_s !== null ? 100 : 0) - r.fires * 10 - r.junction_breaks * 10).toFixed(1);
+      r.score_reliability = +Math.max(0, 100 - r.unmet_avoidable_pct * 10 - r.voltage_mean_abs_dev * 200 - r.fluctuation_events / (T / 60) * 2 - (r.meltdown_at_s !== null ? 100 : 0) - r.fires * 10 - r.junction_breaks * 10).toFixed(1);
       r.kwh_per_rod = r.fuel_rods_used > 0 ? +(delivered / r.fuel_rods_used).toFixed(0) : null; // fuel efficiency: higher is better
       // fair fuel efficiency: energy borrowed from (or banked into) the batteries is counted, so draining them is not free
       if (s.batteries.length) r.kwh_per_rod_adjusted = r.fuel_rods_used > 0 ? +((delivered + r.battery_net_kwh) / r.fuel_rods_used).toFixed(0) : null;

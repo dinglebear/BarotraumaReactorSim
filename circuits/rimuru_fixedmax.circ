@@ -1,0 +1,106 @@
+# Rimuru autoreactor with the auto-calibration loop removed (max output fixed from $MAX); everything else original.
+name rimuru_fixedmax
+box reactor
+pin in0 reactor.temperature_out
+pin in1 reactor.power_value_out
+pin in2 reactor.load_value_out
+pin in3 reactor.fuel_out
+pin in4 reactor.fuel_percentage_left
+pin out0 reactor.set_turbineoutput
+pin out1 reactor.set_fissionrate
+pin out2 none
+pin out3 none
+pin out4 none
+pin out5 none
+pin in9 const.1
+label in0 Temperature
+label in1 Power
+label in2 Load
+label in3 Fuel
+label in4 Fuel Percent
+label in9 Responsiveness/Efficiency Swap
+label in5 -
+label in6 -
+label in7 -
+label in8 -
+label out0 Turbine
+label out1 Fission
+label out2 Fuel
+label out3 Fuel (Color)
+label out4 Rod
+label out5 Rod (Color)
+label out6 -
+label out7 -
+label out8 -
+label out9 -
+c mem0 mem Value=50
+c div1 div
+c mul2 mul ClampMin=0.10000000149011612
+c mem3 mem Value=$MAX/100   # fixed max output / 100 (calibration loop removed)
+c div4 div ClampMax=100 ClampMin=0
+c mul5 mul
+c mem6 mem Value=75
+c check7 check Output=48.820087 FalseOutput=100 TargetSignal=1
+c check8 check Output=3661.5066 FalseOutput="" TargetSignal=1
+c div9 div
+c regex10 regex Output=11.4375 Expression=^(5000|[1-4]?\d{1,3})$
+c regex11 regex Output=11.4375 Expression=^(0\.?\d?|1$|1\.[0-5])
+c mem12 mem Value=25
+c mem13 mem Value=5000
+c add14 add
+c mul15 mul
+c check16 check Output=6220 FalseOutput="" TargetSignal=0
+c div17 div
+c mem18 mem
+c concat19 concat Separator="#0#1#2#3#4"
+c concat20 concat Separator=" "
+c concat21 concat Separator="#250,0,0,210#255,100,0,210#180,180,0,210#150,210,0,210#0,210,0,210"
+c concat22 concat Separator="% Fuel"
+c concat23 concat Separator="#250,0,0,210#255,100,0,210#180,180,0,210#150,210,0,210#0,210,0,210"
+c regex24 regex Output=output UseCaptureGroup=true FalseOutput="" Expression="^(((0)|(80|100|150)|(160|180|200|230|250)|(240|260|280|300|310|330|350)|(320|340|360|380|390|400|410|430|450|460|480|500|530|550|600))#)([^#]+#)*?(?<output>(?(3)0)(?(4)1)(?(5)2)(?(6)3)(?(7)4))"
+c check25 check Output=Rod FalseOutput=Rods TargetSignal=1
+c div26 div
+c regex27 regex Output=output UseCaptureGroup=true FalseOutput="" Expression="^(((([0])|([1])|([2])|([3])|([4]))|)#)([^#]+#)*?(?<output>(?(4)250,0,0,210)(?(5)255,100,0,210)(?(6)180,180,0,210)(?(7)150,210,0,210)(?(8)0,210,0,210))"
+c regex28 regex Output=output UseCaptureGroup=true FalseOutput="" Expression="^(((([0-8])|(9|1\\d)|(2\\d|3\\d)|(4\\d|5\\d|6[0-5])|(6[6-9]|[7-9]\\d|100))|)#)([^#]+#)*?(?<output>(?(4)250,0,0,210)(?(5)255,100,0,210)(?(6)180,180,0,210)(?(7)150,210,0,210)(?(8)0,210,0,210))"
+c round29 round
+w mem0.out div1.1
+w in0 div1.2 regex10.in
+w in1 mul2.2 div17.1
+w in2 div4.1 div17.2
+w mem3.out div4.2
+w div1.out mul2.1
+w in9 check7.in check8.in check16.in
+w mem6.out mul5.2
+w div4.out check7.set_output mul5.1 mul15.1
+w in3 div9.2 concat19.1
+w mem12.out mul15.2
+w mem13.out add14.2
+w mul15.out add14.1
+w regex11.out out1
+w check7.out out0
+w regex10.out regex11.set_output
+w div17.out regex11.in
+w add14.out check16.set_output
+w mul5.out check8.set_output
+w check8.out div9.1
+w check16.out div9.1
+w div9.out regex10.set_output
+w concat19.out regex24.in
+w regex24.out concat20.1 check25.in concat21.1 div26.2
+w div26.out round29.in
+w round29.out concat22.1 concat23.1
+w concat21.out regex27.in
+w concat20.out out4
+w regex27.out out5
+w concat22.out out2
+w regex28.out out3
+w concat23.out regex28.in
+w check25.out concat20.2
+w mem18.out concat21.2 concat23.2 concat22.2 concat19.2
+w in4 div26.1
+note "Fuel Display" "Don't kidnap what I've rightfully stolen - Rimuru"
+note "Original By Selkn" ""
+note AUTOREACTOR "Drops Fission if High Temp or Overvolt "
+note "Auto Calculate Max OUtput - BEUG &amp; Rimuru" ""
+note "Swapping circuit" ""
+note "Protection Circuit" "Temp > 5000 = Fission -> 0\nPower / Load > 1.5 = Fission -> 0"

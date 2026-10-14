@@ -1,0 +1,267 @@
+<Root>
+  <Item name="" identifier="circuitbox" ID="5533" markedfordeconstruction="false" rect="-1819,-13,32,32" NonInteractable="False" NonPlayerTeamInteractable="False" AllowSwapping="True" Rotation="0" ImpactTolerance="0" ImpactDamage="0" ImpactDamageProbability="1" Scale="0.6" SpriteColor="255,255,255,255" InventoryIconColor="255,255,255,255" ContainerColor="255,255,255,255" HasBeenInstantiatedOnce="True" InvulnerableToDamage="False" Tags="smallitem" DisplaySideBySideWhenLinked="False" DisallowedUpgrades="" SpriteDepth="0.86" HiddenInGame="False" Layer="Non-container items" conditionpercentage="100">
+    <Holdable Attached="True" DisallowAttachingOverTags="" DisallowAttachingOverSize="0,0" SpriteDepthWhenDropped="0.55" MsgWhenDropped="ItemMsgPickupSelect" PickingTime="5" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgDetachWrench">
+      <requireditem items="wrench" type="Equipped" characterinventoryslottype="None" optional="false" ignoreineditor="false" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" excludedidentifiers="multitool" />
+    </Holdable>
+    <ConnectionPanel Locked="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="222,-76" AllowInGameEditing="True" Msg="ItemMsgRewireScrewdriver">
+      <requireditem items="screwdriver" type="Equipped" characterinventoryslottype="None" optional="false" ignoreineditor="false" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" />
+      <input name="signal_in1">
+        <link w="306" i="1" />
+      </input>
+      <input name="signal_in2">
+        <link w="418" i="1" />
+      </input>
+      <input name="signal_in3">
+        <link w="419" i="1" />
+      </input>
+      <input name="signal_in4">
+        <link w="427" i="1" />
+      </input>
+      <input name="signal_in5">
+        <link w="2275" i="1" />
+      </input>
+      <input name="signal_in6">
+        <link w="3351" i="1" />
+      </input>
+      <input name="signal_in7">
+        <link w="5097" i="1" />
+      </input>
+      <input name="signal_in8" />
+      <output name="signal_out1">
+        <link w="428" i="1" />
+      </output>
+      <output name="signal_out2">
+        <link w="430" i="1" />
+      </output>
+      <output name="signal_out3">
+        <link w="3348" i="1" />
+        <link w="3377" i="1" />
+      </output>
+      <output name="signal_out4" />
+      <output name="signal_out5" />
+      <output name="signal_out6" />
+      <output name="signal_out7" />
+      <output name="signal_out8" />
+      <input name="signal_in0" />
+      <input name="signal_in9" />
+      <output name="signal_out0" />
+      <output name="signal_out9" />
+    </ConnectionPanel>
+    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="5534,5535,5536,5537,5538,5539,5540,5541,5542,5543,5544,5545,5546,5547,5548,5549,5550,5551,5552,5553,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ExtraStackSize="0" />
+    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="5554;5555;5556;5557,5558;5559;5560;5561;5562;5563;5564;5565;5566;5567;5568;5569;5570;5571;5572;5573;5574;5575;5576;5577;5578,5579;5580,,,,,,," ExtraStackSize="0" />
+    <CircuitBox Locked="False" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="Lammert ARC HTS v2.1 PF">
+      <requireditem items="id_engineer,id_captain" type="Picked" characterinventoryslottype="None" optional="false" ignoreineditor="true" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" msg="itemmsgunauthorizedaccess" />
+      <InputNode pos="-1746,400" />
+      <OutputNode pos="1574,149" />      <Component id="0" position="545,-14" backingitemid="0,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>XorComponent<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> Output=<<<STRINGSTART>>>3825.6228<<<STRINGEND>>> FalseOutput=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>xorcomponent<<<STRINGEND>>> />
+      <Component id="1" position="-937,334" backingitemid="1,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>OrComponent<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> Output=<<<STRINGSTART>>>1.7<<<STRINGEND>>> FalseOutput=<<<STRINGSTART>>>1<<<STRINGEND>>> item=<<<STRINGSTART>>>orcomponent<<<STRINGEND>>> />
+      <Component id="2" position="-1286,-295" backingitemid="2,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>OrComponent<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> Output=<<<STRINGSTART>>>0<<<STRINGEND>>> FalseOutput=<<<STRINGSTART>>>1.1<<<STRINGEND>>> item=<<<STRINGSTART>>>orcomponent<<<STRINGEND>>> />
+      <Component id="3" position="-1374,1024" backingitemid="3,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>0<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
+      <Component id="4" position="-1368,790" backingitemid="4,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>1<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="5" position="-936,105" backingitemid="5,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="6" position="-982,1028" backingitemid="6,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>1<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="7" position="-985,784" backingitemid="7,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
+      <Component id="8" position="-834,-291" backingitemid="8,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>1<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="9" position="-392,637" backingitemid="9,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>2500<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="10" position="-372,300" backingitemid="10,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>1<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="11" position="-392,-308" backingitemid="11,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>GreaterComponent<<<STRINGEND>>> Output=<<<STRINGSTART>>>3922.267<<<STRINGEND>>> FalseOutput=<<<STRINGSTART>>>5000<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>greatercomponent<<<STRINGEND>>> />
+      <Component id="12" position="144,-24" backingitemid="12,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>4.099999904632568<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-4.099999904632568<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
+      <Component id="13" position="1052,-266" backingitemid="13,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>50<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="14" position="148,-252" backingitemid="14,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="15" position="191,527" backingitemid="15,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>1<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
+      <Component id="16" position="194,774" backingitemid="16,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="17" position="764,631" backingitemid="17,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="18" position="1214,356" backingitemid="18,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
+      <Component id="19" position="1052,-9" backingitemid="19,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />      <Wire id="0" backingitemid="0,0" prefab="greenwire">
+        <From name="signal_out" target="13" />
+        <To name="signal_in2" target="19" />
+      </Wire>
+      <Wire id="1" backingitemid="1,0" prefab="orangewire">
+        <From name="signal_out" target="14" />
+        <To name="signal_in1" target="19" />
+      </Wire>
+      <Wire id="2" backingitemid="1,1" prefab="orangewire">
+        <From name="signal_out" target="9" />
+        <To name="signal_in1" target="16" />
+      </Wire>
+      <Wire id="3" backingitemid="1,2" prefab="orangewire">
+        <From name="signal_out" target="15" />
+        <To name="signal_in2" target="16" />
+      </Wire>
+      <Wire id="4" backingitemid="1,3" prefab="orangewire">
+        <From name="signal_out" target="16" />
+        <To name="signal_in1" target="17" />
+      </Wire>
+      <Wire id="5" backingitemid="1,4" prefab="orangewire">
+        <From name="signal_out" target="14" />
+        <To name="signal_in2" target="17" />
+      </Wire>
+      <Wire id="6" backingitemid="1,5" prefab="orangewire">
+        <From name="signal_out" target="17" />
+        <To name="signal_in1" target="18" />
+      </Wire>
+      <Wire id="7" backingitemid="1,6" prefab="orangewire">
+        <From name="signal_out" target="5" />
+        <To name="signal_in2" target="9" />
+      </Wire>
+      <Wire id="8" backingitemid="1,7" prefab="orangewire">
+        <From name="signal_out" target="7" />
+        <To name="signal_in1" target="9" />
+      </Wire>
+      <Wire id="9" backingitemid="1,8" prefab="orangewire">
+        <From name="signal_out" target="1" />
+        <To name="signal_in2" target="5" />
+      </Wire>
+      <Wire id="10" backingitemid="0,1" prefab="greenwire">
+        <From name="signal_out" target="0" />
+        <To name="signal_in2" target="12" />
+      </Wire>
+      <Wire id="11" backingitemid="1,9" prefab="orangewire">
+        <From name="signal_out" target="11" />
+        <To name="signal_in1" target="12" />
+      </Wire>
+      <Wire id="12" backingitemid="1,10" prefab="orangewire">
+        <From name="signal_out" target="12" />
+        <To name="signal_in2" target="14" />
+      </Wire>
+      <Wire id="13" backingitemid="1,11" prefab="orangewire">
+        <From name="signal_out" target="0" />
+        <To name="signal_in1" target="14" />
+      </Wire>
+      <Wire id="14" backingitemid="2,0" prefab="brownwire">
+        <From name="signal_out" target="14" />
+        <To name="set_output" target="0" />
+      </Wire>
+      <Wire id="15" backingitemid="1,12" prefab="orangewire">
+        <From name="signal_out" target="9" />
+        <To name="signal_in1" target="10" />
+      </Wire>
+      <Wire id="16" backingitemid="1,13" prefab="orangewire">
+        <From name="signal_out" target="9" />
+        <To name="signal_in2" target="10" />
+      </Wire>
+      <Wire id="17" backingitemid="" prefab="greenwire">
+        <From name="signal_in4" target="" />
+        <To name="signal_in2" target="18" />
+      </Wire>
+      <Wire id="18" backingitemid="0,2" prefab="greenwire">
+        <From name="signal_out" target="10" />
+        <To name="signal_in2" target="15" />
+      </Wire>
+      <Wire id="19" backingitemid="1,14" prefab="orangewire">
+        <From name="signal_out" target="14" />
+        <To name="signal_in1" target="15" />
+      </Wire>
+      <Wire id="20" backingitemid="1,15" prefab="orangewire">
+        <From name="signal_out" target="14" />
+        <To name="signal_in1" target="3" />
+      </Wire>
+      <Wire id="21" backingitemid="" prefab="orangewire">
+        <From name="signal_in2" target="" />
+        <To name="signal_in1" target="6" />
+      </Wire>
+      <Wire id="22" backingitemid="" prefab="orangewire">
+        <From name="signal_in2" target="" />
+        <To name="signal_in2" target="6" />
+      </Wire>
+      <Wire id="23" backingitemid="" prefab="greenwire">
+        <From name="signal_in1" target="" />
+        <To name="signal_in2" target="3" />
+      </Wire>
+      <Wire id="24" backingitemid="" prefab="orangewire">
+        <From name="signal_in1" target="" />
+        <To name="signal_in2" target="4" />
+      </Wire>
+      <Wire id="25" backingitemid="1,16" prefab="orangewire">
+        <From name="signal_out" target="3" />
+        <To name="signal_in1" target="4" />
+      </Wire>
+      <Wire id="26" backingitemid="0,3" prefab="greenwire">
+        <From name="signal_out" target="6" />
+        <To name="signal_in2" target="7" />
+      </Wire>
+      <Wire id="27" backingitemid="1,17" prefab="orangewire">
+        <From name="signal_out" target="4" />
+        <To name="signal_in1" target="7" />
+      </Wire>
+      <Wire id="28" backingitemid="" prefab="bluewire">
+        <From name="signal_in5" target="" />
+        <To name="signal_in1" target="0" />
+      </Wire>
+      <Wire id="29" backingitemid="" prefab="bluewire">
+        <From name="signal_in8" target="" />
+        <To name="signal_in1" target="0" />
+      </Wire>
+      <Wire id="30" backingitemid="" prefab="bluewire">
+        <From name="signal_in8" target="" />
+        <To name="signal_in2" target="0" />
+      </Wire>
+      <Wire id="32" backingitemid="" prefab="redwire">
+        <From name="signal_out" target="18" />
+        <To name="signal_out1" target="" />
+      </Wire>
+      <Wire id="33" backingitemid="" prefab="redwire">
+        <From name="signal_out" target="19" />
+        <To name="signal_out2" target="" />
+      </Wire>
+      <Wire id="34" backingitemid="2,1" prefab="brownwire">
+        <From name="signal_out" target="10" />
+        <To name="set_output" target="11" />
+      </Wire>
+      <Wire id="35" backingitemid="" prefab="orangewire">
+        <From name="signal_in3" target="" />
+        <To name="signal_in1" target="5" />
+      </Wire>
+      <Wire id="38" backingitemid="1,18" prefab="orangewire">
+        <From name="signal_out" target="2" />
+        <To name="signal_in2" target="8" />
+      </Wire>
+      <Wire id="39" backingitemid="1,19" prefab="orangewire">
+        <From name="signal_out" target="8" />
+        <To name="signal_in1" target="11" />
+      </Wire>
+      <Wire id="40" backingitemid="" prefab="greenwire">
+        <From name="signal_in2" target="" />
+        <To name="signal_in2" target="11" />
+      </Wire>
+      <Wire id="31" backingitemid="" prefab="bluewire">
+        <From name="signal_in6" target="" />
+        <To name="signal_in1" target="2" />
+      </Wire>
+      <Wire id="36" backingitemid="" prefab="bluewire">
+        <From name="signal_in7" target="" />
+        <To name="signal_in1" target="1" />
+      </Wire>
+      <Wire id="37" backingitemid="1,20" prefab="orangewire">
+        <From name="signal_out" target="5" />
+        <To name="signal_in1" target="8" />
+      </Wire>
+      <Wire id="41" backingitemid="" prefab="bluewire">
+        <From name="signal_out" target="1" />
+        <To name="signal_out3" target="" />
+      </Wire>
+      <Label id="0" color="#7ED3E0" position="-1172,930" size="806,535" header="<<<STRINGSTART>>>AUTO CALIBRATE: MAX(TURBINE,TEMP)/2(POWER)<<<STRINGEND>>>" body="" />
+      <Label id="1" color="#7ED3E0" position="-387,672" size="503,295" header="<<<STRINGSTART>>>CALIBRATE * LOAD normalizes to 2500 max<<<STRINGEND>>>" body="" />
+      <Label id="3" color="#7ED3E0" position="-373,334" size="466,268" header="<<<STRINGSTART>>>2x LOAD, turbine target<<<STRINGEND>>>" body="" />
+      <Label id="4" color="#7ED3E0" position="330,-102" size="833,524" header="<<<STRINGSTART>>>turbine change limiter and storage circuit<<<STRINGEND>>>" body="" />
+      <Label id="5" color="#7ED3E0" position="198,692" size="469,569" header="<<<STRINGSTART>>>limit fission to min(load, turbine), optional<<<STRINGEND>>>" body="This limits the temperature component to what the turbine can deliver, ensuring minimum temperature at all times. Improves performance and is sort of necessary with an auto-calibration circuit." />
+      <Label id="6" color="#7ED3E0" position="762,653" size="437,282" header="<<<STRINGSTART>>>required temperature + turbine = fission<<<STRINGEND>>>" body="" />
+      <Label id="7" color="#7ED3E0" position="1212,356" size="403,307" header="<<<STRINGSTART>>>fission / fuel<<<STRINGEND>>>" body="" />
+      <Label id="8" color="#7ED3E0" position="1051,-136" size="419,499" header="<<<STRINGSTART>>>turbine / 50<<<STRINGEND>>>" body="" />
+      <Label id="2" color="#7ED3E0" position="-834,-286" size="1386,394" header="<<<STRINGSTART>>>move turbine to max if voltage is too high or performance switch on, optional<<<STRINGEND>>>" body="" />
+      <Label id="9" color="#7ED3E0" position="-933,302" size="529,587" header="<<<STRINGSTART>>>OVERVOLTing / UNDERVOLTing<<<STRINGEND>>>" body="Over/undervolting only applies when 'Voltage Modifier' lever is activated." />
+      <Label id="10" color="#FF0000" position="-984,1046" size="374,195" header="<<<STRINGSTART>>>clamp min=1<<<STRINGEND>>>" body="" />
+      <Label id="11" color="#FF0000" position="-1366,802" size="360,205" header="<<<STRINGSTART>>>clamp min=1<<<STRINGEND>>>" body="" />
+      <Label id="12" color="#FF0000" position="-390,654" size="385,207" header="<<<STRINGSTART>>>clamp max=2500<<<STRINGEND>>>" body="" />
+      <Label id="13" color="#FF0000" position="191,547" size="378,213" header="<<<STRINGSTART>>>                    clamp max=1<<<STRINGEND>>>" body="" />
+      <Label id="14" color="#FF0000" position="-371,316" size="433,208" header="<<<STRINGSTART>>>                                          clamp min=1<<<STRINGEND>>>" body="" />
+      <Label id="15" color="#FF0000" position="147,-10" size="413,228" header="<<<STRINGSTART>>>clamp min= -4.1, max=4.1<<<STRINGEND>>>" body="" />
+      <Label id="16" color="#FF0000" position="1049,-254" size="372,217" header="<<<STRINGSTART>>>                          mem=50<<<STRINGEND>>>" body="" />
+      <Label id="17" color="#FF0000" position="-934,366" size="472,273" header="<<<STRINGSTART>>>true=(ov/uv factor), false=1<<<STRINGEND>>>" body="Set the true 'Output' at the desired OV/UV factor." />
+      <Label id="18" color="#FF0000" position="-1284,-277" size="425,260" header="<<<STRINGSTART>>>  true=0, false=1.1<<<STRINGEND>>>" body="" />
+      <Label id="19" color="#FF0000" position="-832,-276" size="436,251" header="<<<STRINGSTART>>>                      clamp min=1<<<STRINGEND>>>" body="" />
+      <Label id="20" color="#FF0000" position="-391,-297" size="425,254" header="<<<STRINGSTART>>>                           true=0, false=5000<<<STRINGEND>>>" body="" />
+      <Label id="21" color="#FF0000" position="-1374,1048" size="370,185" header="<<<STRINGSTART>>>CLAMP MAX=0<<<STRINGEND>>>" body="" />
+    </CircuitBox>
+    <itemstats />
+  </Item>
+</Root>

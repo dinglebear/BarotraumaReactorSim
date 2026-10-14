@@ -15,7 +15,7 @@ for (const f of list('context/reactor_circuits')) {
   if (!f.endsWith('.txt') || f.endsWith('_battery.txt')) continue;
   const bf = f.replace(/_reactor\.txt$/, '_battery.txt');
   lib.circuits[f.replace(/(_reactor)?\.txt$/, '')] = { main: read('context/reactor_circuits/' + f), mainName: f, battery: bf !== f && list('context/reactor_circuits').includes(bf) ? read('context/reactor_circuits/' + bf) : null, group: 'Community' };
-  const pf = f.replace(/(_reactor)?\.txt$/, '.pins'); if (list('context/reactor_circuits').includes(pf)) lib.circuits[f.replace(/(_reactor)?\.txt$/, '')].pins = read('context/reactor_circuits/' + pf);
+  const pf = [f.replace(/\.txt$/, '.pins'), f.replace(/(_reactor)?\.txt$/, '.pins')].find(p => list('context/reactor_circuits').includes(p)); if (pf) lib.circuits[f.replace(/(_reactor)?\.txt$/, '')].pins = read('context/reactor_circuits/' + pf);
 }
 // Real round logs can be huge (a 64-minute round is ~18 MB). For the page, keep only rows where something the simulator
 // replays changed (demand >= 5 kW, a pin >= 1, rods/fuel), at least every 5 s, and bake in the rod fuel worked out from the full log.

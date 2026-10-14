@@ -32,7 +32,7 @@ function resolve(p, dirs) {
 const CIRC_DIRS = ['circuits', 'context/community_circuits', 'context/reactor_circuits'];
 function loadModel(file, batteryFile) {
   if (!batteryFile && file.endsWith('_reactor.txt')) { const b = file.replace(/_reactor\.txt$/, '_battery.txt'); if (fs.existsSync(b)) batteryFile = b; }
-  const pinsFile = file.replace(/(_reactor)?\.(txt|circ)$/, '.pins');
+  const pinsFile = [file.replace(/\.(txt|circ)$/, '.pins'), file.replace(/(_reactor)?\.(txt|circ)$/, '.pins')].find(p => fs.existsSync(p)) || '';
   return P.loadModel(read(file), path.basename(file), batteryFile ? read(batteryFile) : null, fs.existsSync(pinsFile) ? read(pinsFile) : null);
 }
 function exportTxt(model, file, vals) {
@@ -67,7 +67,7 @@ function listProfiles(a) {
 }
 function printTable(rows) {
   const batt = rows.some(r => r.score_battery != null);
-  const cols = ['circuit', 'profile', 'score_reliability', ...(batt ? ['score_battery', 'battery_soc_avg_pct', 'battery_full_s', 'battery_empty_s', 'kwh_per_rod_adjusted'] : ['kwh_per_rod']), 'unmet_pct', 'voltage_mean_abs_dev', 'fluctuation_events', 'brownout_s_v_lt_0_9', 'overvolt_s_v_gt_1_1', 'temp_max', 'meltdown_at_s'];
+  const cols = ['circuit', 'profile', 'score_reliability', 'unmet_avoidable_pct', 'unmet_unavoidable_pct', ...(batt ? ['score_battery', 'battery_soc_avg_pct', 'battery_full_s', 'battery_empty_s', 'kwh_per_rod_adjusted'] : ['kwh_per_rod']), 'unmet_pct', 'voltage_mean_abs_dev', 'fluctuation_events', 'brownout_s_v_lt_0_9', 'overvolt_s_v_gt_1_1', 'temp_max', 'meltdown_at_s'];
   console.log(cols.join('\t'));
   for (const r of rows) console.log(cols.map(c => r[c] === null || r[c] === undefined ? '-' : r[c]).join('\t'));
   const w = [...new Set(rows.flatMap(r => r.warnings || []))]; if (w.length) console.log('WARNINGS:\n  ' + w.join('\n  '));

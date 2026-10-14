@@ -81,9 +81,14 @@
     const depth = {}; box.components.forEach(c => depth[c.id] = 0);
     for (let it = 0; it < box.components.length + 1; it++)
       for (const w of box.wires) if (w.from.c !== null && w.to.c !== null && w.from.c !== w.to.c && depth[w.to.c] < depth[w.from.c] + 1 && depth[w.from.c] < 40) depth[w.to.c] = depth[w.from.c] + 1;
-    const rows = {};
-    const maxD = Math.max(0, ...Object.values(depth));
-    for (const c of box.components) { const d = depth[c.id]; rows[d] = (rows[d] || 0) + 1; if (!c.pos) c.pos = [-900 + d * 400, 600 - (rows[d] - 1) * 260]; }
+    // positions are node CENTRES (as in game); a node is 48 (header) + 64 + 32 per pin row tall
+    const nextY = {}, maxD = Math.max(0, ...Object.values(depth));
+    for (const c of box.components) {
+      const d = depth[c.id], def = C.byItem(c.item), h = 48 + 64 + 32 * Math.max(def ? def.ins.length : 1, def ? def.outs.length : 1);
+      if (nextY[d] === undefined) nextY[d] = 600;
+      if (!c.pos) c.pos = [-900 + d * 400, nextY[d] - h / 2];
+      nextY[d] = Math.min(nextY[d], c.pos[1] - h / 2) - 60;
+    }
     box.inPos = box.inPos || [-1400, 0]; box.outPos = box.outPos || [Math.max(1200, -900 + (maxD + 1) * 400 + 300), 0];
   }
   function toTxt(box, opts) {

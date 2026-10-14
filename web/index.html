@@ -671,9 +671,14 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
     const depth = {}; box.components.forEach(c => depth[c.id] = 0);
     for (let it = 0; it < box.components.length + 1; it++)
       for (const w of box.wires) if (w.from.c !== null && w.to.c !== null && w.from.c !== w.to.c && depth[w.to.c] < depth[w.from.c] + 1 && depth[w.from.c] < 40) depth[w.to.c] = depth[w.from.c] + 1;
-    const rows = {};
-    const maxD = Math.max(0, ...Object.values(depth));
-    for (const c of box.components) { const d = depth[c.id]; rows[d] = (rows[d] || 0) + 1; if (!c.pos) c.pos = [-900 + d * 400, 600 - (rows[d] - 1) * 260]; }
+    // positions are node CENTRES (as in game); a node is 48 (header) + 64 + 32 per pin row tall
+    const nextY = {}, maxD = Math.max(0, ...Object.values(depth));
+    for (const c of box.components) {
+      const d = depth[c.id], def = C.byItem(c.item), h = 48 + 64 + 32 * Math.max(def ? def.ins.length : 1, def ? def.outs.length : 1);
+      if (nextY[d] === undefined) nextY[d] = 600;
+      if (!c.pos) c.pos = [-900 + d * 400, nextY[d] - h / 2];
+      nextY[d] = Math.min(nextY[d], c.pos[1] - h / 2) - 60;
+    }
     box.inPos = box.inPos || [-1400, 0]; box.outPos = box.outPos || [Math.max(1200, -900 + (maxD + 1) * 400 + 300), 0];
   }
   function toTxt(box, opts) {
@@ -1990,7 +1995,7 @@ function showTab(name) { document.querySelectorAll('[role=tab]').forEach(b => b.
 // what each box pin connects to. "Apply & test" turns the drawing into .circ text and runs it.
 const C = self.BaroComponents;
 const ED = { model: null, box: 'reactor', sel: null, pend: null, view: null, dirty: false, drag: null, liveAt: 0 };
-const CW = 290, HEAD = 40, ROW = 30, IOW = 380, NS = 'http://www.w3.org/2000/svg';
+const CW = 300, HEAD = 48, ROW = 32, IOW = 380, NS = 'http://www.w3.org/2000/svg';
 const NAMES = { and: 'AND', or: 'OR', xor: 'XOR', add: 'Adder', sub: 'Subtract', mul: 'Multiply', div: 'Divide', mod: 'Modulo', pow: 'Exponentiation', round: 'Round', ceil: 'Ceil', floor: 'Floor', factorial: 'Factorial', abs: 'Abs', sqrt: 'Square root', sin: 'Sin', cos: 'Cos', tan: 'Tan', asin: 'Asin', acos: 'Acos', atan: 'Atan', not: 'NOT', greater: 'Greater than', equals: 'Equals', check: 'Signal check', mem: 'Memory', delay: 'Delay', osc: 'Oscillator', relay: 'Relay', concat: 'Concatenation', color: 'Color', regex: 'RegEx find', mux: 'Multiplexer', demux: 'Demultiplexer', wifi: 'Wifi' };
 const WIRE_COLORS = { redwire: '#d0453a', bluewire: '#3a7bd0', greenwire: '#3aa65a', orangewire: '#e08a2c', yellowwire: '#d4b52a', blackwire: '#777', brownwire: '#9a6b3c', wire: '#9aa' };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2008,21 +2013,21 @@ function edSync(force) { // take the circuit under test into the editor unless t
 }
 function edSetBoxButtons() { document.querySelectorAll('#edBox button').forEach(x => x.setAttribute('aria-pressed', x.dataset.b === ED.box)); }
 function edMsg(t) { $('edMsg').textContent = t || (ED.dirty ? 'Unsaved changes: press Apply & test.' : ''); }
-// geometry
-function compSize(c) { const d = defOf(c); const n = Math.max(d ? d.ins.length : 1, d ? d.outs.length : 1); return [CW, HEAD + n * ROW + 10 + propLines(c).length * 24]; }
-function propLines(c) { const d = defOf(c); return Object.entries(c.props).filter(([k, v]) => !d || String(d.defaults[k]) !== String(v)).slice(0, 3).map(([k, v]) => `${k}=${String(v).length > 18 ? String(v).slice(0, 17) + '…' : v}`); }
-function ioPlace(b) {
-  const xs = b.components.map(c => c.pos[0]), ys = b.components.map(c => -c.pos[1]);
-  const minX = xs.length ? Math.min(...xs) : 0, maxX = xs.length ? Math.max(...xs) + CW : 600, cy = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
-  return { inX: minX - IOW - 160, outX: maxX + 160, top: cy - 5 * ROW * 1.6 };
-}
+// geometry, as in the game's circuit box (CircuitBoxNode/CircuitBoxSizes): a saved position is the node's CENTRE, y points up,
+// body = 64 padding + 32 per pin row, a 48-high header sits on top, pins are 32 apart around the centre
+function compSize(c) { const d = defOf(c); const n = Math.max(d ? d.ins.length : 1, d ? d.outs.length : 1); return [CW, 64 + n * ROW]; }
+function propLines(c) { const d = defOf(c); return Object.entries(c.props).filter(([k, v]) => !d || String(d.defaults[k]) !== String(v)).slice(0, 3).map(([k, v]) => `${k}=${String(v).length > 14 ? String(v).slice(0, 13) + '…' : v}`); }
+function nodeRect(pos, w, h) { return { x: pos[0] - w / 2, y: -pos[1] - h / 2, w, h }; } // body rect in screen coords (header above)
+const IOH = 64 + 10 * ROW;
+function ioPos(b, side) { return (side === 'in' ? b.inPos : b.outPos) || (side === 'in' ? [-1400, 0] : [1400, 0]); }
+function pinRow(k, count, cy) { return cy + k * ROW - count * ROW / 2 + ROW / 2; }
 function pinXY(b, end) { // end = {c, pin}
-  const io = ioPlace(b), m = /^signal_(in|out)(\d)$/.exec(end.pin);
-  if (end.c === null && m) { const i = Number(m[2]), y = io.top + 40 + i * ROW * 1.6; return m[1] === 'in' ? [io.inX + IOW, y] : [io.outX, y]; }
+  const m = /^signal_(in|out)(\d)$/.exec(end.pin);
+  if (end.c === null && m) { const pos = ioPos(b, m[1]), y = pinRow(Number(m[2]), 10, -pos[1]); return [pos[0] + (m[1] === 'in' ? 1 : -1) * (IOW / 2 - 32), y]; }
   const c = b.components.find(x => x.id === end.c); if (!c) return [0, 0];
-  const d = defOf(c), x = c.pos[0], y = -c.pos[1], pl = propLines(c).length * 24;
-  const ii = d ? d.ins.indexOf(end.pin) : -1; if (ii >= 0) return [x, y + HEAD + pl + ii * ROW + ROW / 2 + 4];
-  const oi = d ? d.outs.indexOf(end.pin) : -1; return [x + CW, y + HEAD + pl + Math.max(0, oi) * ROW + ROW / 2 + 4];
+  const d = defOf(c), half = CW / 2 - 32;
+  const ii = d ? d.ins.indexOf(end.pin) : -1; if (ii >= 0) return [c.pos[0] - half, pinRow(ii, d.ins.length, -c.pos[1])];
+  const oi = d ? d.outs.indexOf(end.pin) : -1; return [c.pos[0] + half, pinRow(Math.max(0, oi), d ? d.outs.length : 1, -c.pos[1])];
 }
 // live values from the running simulation (only while the drawing matches what is running)
 function liveConn(b, end) {
@@ -2042,21 +2047,21 @@ function edRender() {
   const b = edBox(); edMsg(); edInspector();
   if (!b) { svg.innerHTML = `<text x="20" y="40" class="cb-m" font-size="14">${ED.box === 'battery' ? 'No battery box. Pick a battery circuit, or press "New empty box" to build one.' : 'No reactor box (vanilla). Press "New empty box" to build one.'}</text>`; svg.removeAttribute('viewBox'); return; }
   if (!ED.view) edFit();
-  const v = ED.view, o = [], io = ioPlace(b), wiredPins = new Set();
+  const v = ED.view, o = [], wiredPins = new Set();
   for (const w of b.wires) { wiredPins.add((w.from.c ?? 'BOX') + '|' + w.from.pin); wiredPins.add((w.to.c ?? 'BOX') + '|' + w.to.pin); }
   const pinDot = (x, y, c, pin, role) => {
     const key = (c ?? 'BOX') + '|' + pin, pend = ED.pend && ED.pend.c === c && ED.pend.pin === pin, sel = ED.sel && ED.sel.kind === 'pin' && ED.sel.c === c && ED.sel.pin === pin;
     return `<circle class="cb-pin${wiredPins.has(key) ? ' wired' : ''}${pend ? ' pend' : ''}${sel ? ' sel' : ''}" cx="${x}" cy="${y}" r="9" data-k="pin" data-c="${c ?? ''}" data-pin="${pin}" data-role="${role}"/>`;
   };
   const val = (x, y, vv, anchor) => vv === undefined ? '' : `<text class="cb-v" x="${x}" y="${y}" font-size="17" text-anchor="${anchor}">${esc(String(vv).slice(0, 12))}</text>`;
-  // input / output nodes
+  // input / output nodes (draggable in Edit mode, like in game)
   for (const side of ['in', 'out']) {
-    const x = side === 'in' ? io.inX : io.outX, y0 = io.top, h = 40 + 10 * ROW * 1.6;
-    o.push(`<g class="cb-io"><rect class="body" x="${x}" y="${y0}" width="${IOW}" height="${h}" rx="10"/><text class="cb-m" x="${x + 14}" y="${y0 + 26}" font-size="20">${side === 'in' ? 'INPUTS (from the sub)' : 'OUTPUTS (to the sub)'}</text>`);
+    const r = nodeRect(ioPos(b, side), IOW, IOH);
+    o.push(`<g class="cb-io"><rect class="body" x="${r.x}" y="${r.y - HEAD}" width="${IOW}" height="${IOH + HEAD}" rx="10" data-k="io" data-side="${side}"/><text class="cb-m" x="${r.x + 14}" y="${r.y - HEAD + 30}" font-size="20" pointer-events="none">${side === 'in' ? 'INPUTS (from the sub)' : 'OUTPUTS (to the sub)'}</text>`);
     for (let i = 0; i < 10; i++) {
       const pin = `signal_${side}${i}`, [px, py] = pinXY(b, { c: null, pin }), lab = boxPinLabel(b, pin);
-      o.push(`<text class="cb-t" x="${side === 'in' ? px - 18 : px + 18}" y="${py + 6}" font-size="18" text-anchor="${side === 'in' ? 'end' : 'start'}">${side}${i}</text>`);
-      if (lab) o.push(`<text class="cb-m" x="${side === 'in' ? x + 12 : x + IOW - 12}" y="${py + 6}" font-size="17" text-anchor="${side === 'in' ? 'start' : 'end'}">${esc(lab.length > 30 ? lab.slice(0, 29) + '…' : lab)}</text>`);
+      o.push(`<text class="cb-t" x="${side === 'in' ? px - 18 : px + 18}" y="${py + 6}" font-size="18" text-anchor="${side === 'in' ? 'end' : 'start'}" pointer-events="none">${side}${i}</text>`);
+      if (lab) o.push(`<text class="cb-m" x="${side === 'in' ? r.x + 12 : r.x + IOW - 12}" y="${py + 6}" font-size="16" text-anchor="${side === 'in' ? 'start' : 'end'}" pointer-events="none">${esc(lab.length > 28 ? lab.slice(0, 27) + '…' : lab)}</text>`);
       o.push(pinDot(px, py, null, pin, side === 'in' ? 'src' : 'dst'));
       o.push(val(side === 'in' ? px + 14 : px - 14, py - 12, liveConn(b, { c: null, pin }), side === 'in' ? 'start' : 'end'));
     }
@@ -2071,10 +2076,10 @@ function edRender() {
   });
   // components
   for (const c of b.components) {
-    const d = defOf(c), [w, h] = compSize(c), x = c.pos[0], y = -c.pos[1], sel = ED.sel && ED.sel.kind === 'comp' && ED.sel.id === c.id, pl = propLines(c);
-    o.push(`<g class="cb-comp${sel ? ' sel' : ''}"><rect class="body" x="${x}" y="${y}" width="${w}" height="${h}" rx="8" data-k="comp" data-id="${esc(c.id)}"/><rect class="head" x="${x}" y="${y}" width="${w}" height="${HEAD - 6}" rx="8" data-k="comp" data-id="${esc(c.id)}"/>`
-      + `<text class="cb-h" x="${x + 12}" y="${y + 24}" font-size="20" pointer-events="none">${esc((d ? NAMES[d.alias] || d.alias : c.item) + ' · ' + c.id)}</text>`);
-    pl.forEach((t, k) => o.push(`<text class="cb-m" x="${x + 12}" y="${y + HEAD + 14 + k * 24}" font-size="17" pointer-events="none">${esc(t)}</text>`));
+    const d = defOf(c), [w, h] = compSize(c), r = nodeRect(c.pos, w, h), sel = ED.sel && ED.sel.kind === 'comp' && ED.sel.id === c.id, pl = propLines(c);
+    o.push(`<g class="cb-comp${sel ? ' sel' : ''}"><rect class="body" x="${r.x}" y="${r.y - HEAD}" width="${w}" height="${h + HEAD}" rx="8" data-k="comp" data-id="${esc(c.id)}"/><rect class="head" x="${r.x}" y="${r.y - HEAD}" width="${w}" height="${HEAD - 4}" rx="8" data-k="comp" data-id="${esc(c.id)}"/>`
+      + `<text class="cb-h" x="${r.x + 12}" y="${r.y - HEAD + 27}" font-size="20" pointer-events="none">${esc((d ? NAMES[d.alias] || d.alias : c.item) + ' · ' + c.id)}</text>`);
+    if (pl.length) o.push(`<text class="cb-m" x="${r.x + w / 2}" y="${r.y + 22}" font-size="15" text-anchor="middle" pointer-events="none">${esc(pl.join('  '))}</text>`);
     for (const pin of (d ? d.ins : [])) { const [px, py] = pinXY(b, { c: c.id, pin }); o.push(pinDot(px, py, c.id, pin, 'dst'), `<text class="cb-t" x="${px + 14}" y="${py + 6}" font-size="17" pointer-events="none">${pinShort(pin)}</text>`, val(px - 12, py - 10, liveConn(b, { c: c.id, pin }), 'end')); }
     for (const pin of (d ? d.outs : [])) { const [px, py] = pinXY(b, { c: c.id, pin }); o.push(pinDot(px, py, c.id, pin, 'src'), `<text class="cb-t" x="${px - 14}" y="${py + 6}" font-size="17" text-anchor="end" pointer-events="none">${pinShort(pin)}</text>`, val(px + 12, py - 10, liveConn(b, { c: c.id, pin }), 'start')); }
     o.push('</g>');
@@ -2085,8 +2090,10 @@ function edRender() {
 function edFit(overview) { // whole box; but open at a readable zoom (text >= ~9 px), starting from the inputs
   const b = edBox(), wrap = $('edWrap'), W = wrap.clientWidth || 800, H = wrap.clientHeight || 560;
   if (!b) { ED.view = { x: 0, y: 0, w: W, h: H }; return; }
-  const io = ioPlace(b); let x0 = io.inX - 40, x1 = io.outX + IOW + 40, y0 = io.top - 40, y1 = io.top + 40 + 10 * ROW * 1.6 + 40;
-  for (const c of b.components) { const [w, h] = compSize(c); y0 = Math.min(y0, -c.pos[1] - 40); y1 = Math.max(y1, -c.pos[1] + h + 40); }
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  const grow = (r) => { x0 = Math.min(x0, r.x - 40); x1 = Math.max(x1, r.x + r.w + 40); y0 = Math.min(y0, r.y - HEAD - 40); y1 = Math.max(y1, r.y + r.h + 40); };
+  grow(nodeRect(ioPos(b, 'in'), IOW, IOH)); grow(nodeRect(ioPos(b, 'out'), IOW, IOH));
+  for (const c of b.components) { const [w, h] = compSize(c); grow(nodeRect(c.pos, w, h)); }
   const k = Math.max((x1 - x0) / W, (y1 - y0) / H), kMax = 1.9;
   if (overview || k <= kMax) ED.view = { x: (x0 + x1) / 2 - W * k / 2, y: (y0 + y1) / 2 - H * k / 2, w: W * k, h: H * k };
   else ED.view = { x: x0, y: Math.max(y0, (y0 + y1) / 2 - H * kMax / 2), w: W * kMax, h: H * kMax };
@@ -2174,7 +2181,7 @@ function edAdd() {
   let n = 1; while (b.components.some(c => c.id === d.alias + n)) n++;
   const v = ED.view || { x: 0, y: 0, w: 800, h: 560 };
   const nc = { id: d.alias + n, item: d.item, cls: d.cls, props: {}, pos: [Math.round(v.x + v.w / 2 - CW / 2), -Math.round(v.y + v.h / 4)] };
-  const [nw, nh] = compSize(nc), hit = c => { const [w, h] = compSize(c); return nc.pos[0] < c.pos[0] + w + 30 && c.pos[0] < nc.pos[0] + nw + 30 && -nc.pos[1] < -c.pos[1] + h + 30 && -c.pos[1] < -nc.pos[1] + nh + 30; };
+  const [nw, nh] = compSize(nc), hit = c => { const [w, h] = compSize(c); return Math.abs(nc.pos[0] - c.pos[0]) < (w + nw) / 2 + 30 && Math.abs(nc.pos[1] - c.pos[1]) < (h + nh) / 2 + HEAD + 30; };
   for (let k = 0; k < 60 && b.components.some(hit); k++) { nc.pos[1] -= 60; if (k % 8 === 7) { nc.pos[0] += CW + 60; nc.pos[1] += 480; } } // next free spot
   b.components.push(nc);
   ED.sel = { kind: 'comp', id: d.alias + n }; edChanged(`Added ${NAMES[d.alias] || d.alias}. Drag it by its title bar.`);
@@ -2182,11 +2189,11 @@ function edAdd() {
 function edNewBox() {
   if (!ED.model) ED.model = { name: 'my_circuit', boxes: [], links: [], meta: {} };
   if (ED.box === 'battery' && !$('battOn').checked) { $('battOn').checked = true; }
-  const nb = { name: ED.box, pins: Object.assign({}, E.DEFAULT_PINS[ED.box] || {}), components: [], wires: [], labels: [], inLabels: {}, outLabels: {}, inPos: null, outPos: null };
+  const nb = { name: ED.box, pins: Object.assign({}, E.DEFAULT_PINS[ED.box] || {}), components: [], wires: [], labels: [], inLabels: {}, outLabels: {}, inPos: [-700, 0], outPos: [700, 0] };
   ED.model.boxes = ED.model.boxes.filter(b => b.name !== ED.box).concat([nb]);
   ED.model.links = (ED.model.links || []).filter(l => !l.from.startsWith(ED.box + '.') && !l.to.startsWith(ED.box + '.'));
   ED.model.boxes.sort((a, b) => a.name === 'reactor' ? -1 : 1);
-  $('edEdit').checked = true; ED.sel = ED.pend = null; ED.view = null; edChanged('Empty box with the default pin wiring. Add components and wire them.');
+  $('edEdit').checked = true; ED.sel = ED.pend = null; edFit(true); edChanged('Empty box with the default pin wiring. Add components and wire them.');
 }
 function edApply() {
   if (!ED.model || !ED.model.boxes.length) return;
@@ -2204,6 +2211,10 @@ function edLive() { if (!ED.dirty && !$('edSvg').closest('[hidden]') && performa
     if (k === 'pin') { edPinClick(t.dataset.c === '' ? null : t.dataset.c, t.dataset.pin, t.dataset.role); return; }
     if (k === 'wire') { ED.sel = { kind: 'wire', i: Number(t.dataset.i) }; edRender(); return; }
     const [px, py] = svgPt(e);
+    if (k === 'io' && editing()) {
+      const side = t.dataset.side, pos = ioPos(edBox(), side);
+      ED.drag = { kind: 'io', side, ox: px - pos[0], oy: py + pos[1], moved: false }; svg.setPointerCapture(e.pointerId); return;
+    }
     if (k === 'comp') {
       const c = edBox().components.find(x => x.id === t.dataset.id); ED.sel = { kind: 'comp', id: c.id };
       if (editing()) ED.drag = { kind: 'comp', c, ox: px - c.pos[0], oy: py + c.pos[1], moved: false };
@@ -2213,6 +2224,7 @@ function edLive() { if (!ED.dirty && !$('edSvg').closest('[hidden]') && performa
   });
   svg.addEventListener('pointermove', e => {
     const d = ED.drag; if (!d) return;
+    if (d.kind === 'io') { const [px, py] = svgPt(e), b = edBox(), np = [Math.round(px - d.ox), -Math.round(py - d.oy)]; if (d.side === 'in') b.inPos = np; else b.outPos = np; d.moved = true; ED.dirty = true; edRender(); return; }
     if (d.kind === 'comp') { const [px, py] = svgPt(e); d.c.pos = [Math.round(px - d.ox), -Math.round(py - d.oy)]; d.moved = true; ED.dirty = true; edRender(); }
     else { const r = svg.getBoundingClientRect(); ED.view.x = d.vx - (e.clientX - d.sx) / r.width * ED.view.w; ED.view.y = d.vy - (e.clientY - d.sy) / r.height * ED.view.h; d.moved = true; svg.setAttribute('viewBox', `${ED.view.x} ${ED.view.y} ${ED.view.w} ${ED.view.h}`); }
   });

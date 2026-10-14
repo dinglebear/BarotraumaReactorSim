@@ -69,3 +69,34 @@ console.log('real-game checks passed');
   assert(/^const\./.test(res.pins.reactor.in9) && res.pins.reactor.out0 === 'reactor.set_turbineoutput' && res.pins.reactor.out1 === 'reactor.set_fissionrate', 'autopins found odd pins: ' + JSON.stringify(res.pins));
   console.log('autopins check passed');
 }
+// Blueprints mod compatibility (github.com/Max112358/Barotrauma-Blueprints, load_blueprint.lua parseXML + builder):
+// components are added in file order and wires find them by id, so ids must be 0..n-1; every component needs item=,
+// Class= and a position; attribute names are letters/digits only; wire ends must point at real components; pin labels
+// are matched by value="..." (non-empty, no quotes); a component's attributes must not contain "/>" (ends the match).
+{
+  const F = require('./format'), P = require('./project');
+  const files = [];
+  for (const f of fs.readdirSync(path.join(ROOT, 'circuits')).filter(f => f.endsWith('.circ'))) {
+    const m = F.parseCirc(fs.readFileSync(path.join(ROOT, 'circuits', f), 'utf8'));
+    for (const o of P.exportBoxes(m, { MAX: 3000, BATT_N: 2, BATT_KW: 1000, BATT_OUT: 2000, BATT_CAP: 4000 })) files.push(o);
+  }
+  // a hand-placed circuit from the web editor (positions kept)
+  files.push(...P.exportBoxes(F.parseCirc('name ed\nbox reactor\nc mem1 mem Value=30 @-150,423\nc div1 div @-150,183\nw in1 div1.1\nw mem1.out div1.2\nw div1.out out2\n'), { MAX: 3000 }));
+  for (const { filename, text } of files) {
+    const comps = [...text.matchAll(/<Component[\s\S]*?\/>/g)].map(x => x[0]);
+    assert(comps.length > 0, filename + ': no components');
+    comps.forEach((c, i) => {
+      assert(new RegExp(`\\bid="${i}"`).test(c), `${filename}: component #${i} must have id="${i}"`);
+      assert(/position="-?[\d.]+,-?[\d.]+"/.test(c), `${filename}: component ${i} has no position`);
+      assert(/item=<<<STRINGSTART>>>[a-z]+<<<STRINGEND>>>/.test(c) && /Class=<<<STRINGSTART>>>[A-Za-z]+<<<STRINGEND>>>/.test(c), `${filename}: component ${i} needs item= and Class=`);
+      for (const [, k] of c.matchAll(/([\w-]+)=<<<STRINGSTART>>>/g)) assert(/^[A-Za-z0-9]+$/.test(k), `${filename}: attribute "${k}" (letters/digits only)`);
+    });
+    for (const w of text.matchAll(/<Wire[\s\S]*?<\/Wire>/g)) {
+      for (const [, side, t] of w[0].matchAll(/<(From|To) name="[^"]+" target="([^"]*)"/g)) assert(t === '' || (Number(t) >= 0 && Number(t) < comps.length), `${filename}: wire ${side} target ${t} is not a component`);
+      assert(/prefab="[a-z]+"/.test(w[0]), `${filename}: wire without prefab`);
+    }
+    for (const l of text.matchAll(/<ConnectionLabelOverride name="([^"]+)" value="([^"]*)"/g)) assert(l[2].length > 0, `${filename}: empty label on ${l[1]}`);
+    assert(/<InputNode pos="-?[\d.]+,-?[\d.]+"/.test(text) && /<OutputNode pos="-?[\d.]+,-?[\d.]+"/.test(text), filename + ': input/output node positions');
+  }
+  console.log(`blueprints compatibility passed (${files.length} files)`);
+}

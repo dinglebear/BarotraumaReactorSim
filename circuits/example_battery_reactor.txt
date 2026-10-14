@@ -35,8 +35,8 @@
         <ConnectionLabelOverride name="signal_out1" value="<<<STRINGSTART>>>reactor.set_fissionrate<<<STRINGEND>>>" />
       </OutputNode>
       <Component id="0" position="-500,600" backingitemid="0,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
-      <Component id="1" position="-900,600" backingitemid="1,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>5200<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
-      <Component id="2" position="-100,600" backingitemid="2,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="1" position="-900,600" backingitemid="1,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>3000<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="2" position="-100,600" backingitemid="2,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>100<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>0<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
       <Component id="3" position="-900,340" backingitemid="3,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>100<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
       <Component id="4" position="300,600" backingitemid="4,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
       <Component id="5" position="-900,80" backingitemid="5,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>50<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
@@ -90,7 +90,7 @@
         <From name="signal_out" target="7" />
         <To name="signal_out1" target="" />
       </Wire>
-      <Label id="0" color="#FFB000" position="0,-900" size="500,250" header="SHIP-SPECIFIC VALUES" body="Exported for: reactor 5200 kW, 2 batteries (1000 kW recharge, 2000 kW output). On another ship edit: tmax ($MAX)" />
+      <Label id="0" color="#FFB000" position="0,-900" size="500,250" header="SHIP-SPECIFIC VALUES" body="Exported for: reactor 3000 kW, 2 batteries (1000 kW recharge, 2000 kW output). On another ship edit: tmax ($MAX)" />
     </CircuitBox>
     <itemstats />
   </Item>

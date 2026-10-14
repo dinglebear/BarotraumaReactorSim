@@ -152,7 +152,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       <section class="panel chartbox" aria-label="Charts">
         <div class="legend">
           <span><i style="background:var(--c-demand)"></i>Demand kW</span><span><i style="background:var(--c-supply)"></i>Supply kW</span><span><i style="background:var(--c-batt)"></i>Battery out kW</span><span><i style="background:var(--c-battin)"></i>Battery charging kW</span>
-          <span><i style="background:var(--c-volt)"></i>Voltage</span><span><i style="background:var(--c-temp)"></i>Temperature</span><span><i style="background:var(--c-fission)"></i>Fission %</span><span><i style="background:var(--c-turbine)"></i>Turbine %</span>
+          <span><i style="background:var(--c-volt)"></i>Voltage</span><span><i style="background:var(--c-temp)"></i>Temperature</span><span><i style="background:var(--c-fission)"></i>Fission %</span><span><i style="background:var(--c-turbine)"></i>Turbine %</span><span><i style="background:var(--c-batt)"></i>Battery charge %</span>
         </div>
         <canvas id="chart" role="img" aria-label="Power, voltage and reactor charts over time"></canvas>
       </section>
@@ -224,6 +224,7 @@ function selectProfile() {
   if ($('maxAuto').checked && profile.reactorMaxKW) $('maxKW').value = profile.reactorMaxKW;
   if (!$('maxKW').value) $('maxKW').value = 5000;
   if (profile.meta.fuel_rods && Number(profile.meta.fuel_rods) >= 1 && Number(profile.meta.fuel_rods) <= 4) $('rods').value = profile.meta.fuel_rods;
+  if (profile.meta.fuel_type && [...$('fuelType').options].some(o => o.value === profile.meta.fuel_type)) $('fuelType').value = profile.meta.fuel_type;
 }
 function selectCircuit() {
   const key = $('circSel').value;
@@ -271,7 +272,7 @@ function finish() {
   running = false; finished = true; setRunLabel();
   report = sim.metrics.report();
   $('log').textContent = P.fmtReport(report);
-  status(`Finished: reliability ${report.score_reliability}/100, ${report.kwh_per_rod ?? '–'} kWh per fuel rod, ${report.unmet_pct}% demand unmet.`);
+  status(`Finished: reliability ${report.score_reliability}/100` + (report.score_battery != null ? `, batteries ${report.score_battery}/100 (avg charge ${report.battery_soc_avg_pct}%)` : '') + `, ${report.kwh_per_rod_adjusted ?? report.kwh_per_rod ?? '–'} kWh per fuel rod, ${report.unmet_pct}% demand unmet.`);
   showTab('log');
 }
 
@@ -291,7 +292,7 @@ function render() {
   setTile('tF', `${n.fission.toFixed(1)}%`, 'sF', `→ ${n.tf.toFixed(1)}% ${n.fCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
   setTile('tU', `${n.turbine.toFixed(1)}%`, 'sU', `→ ${n.tt.toFixed(1)}% · ideal ${n.cto.toFixed(1)}% ${n.tCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
   setTile('tFu', `${n.fuel.toFixed(1)}%`, 'sFu', `${R.rods.length} rod${R.rods.length > 1 ? 's' : ''} · used ${sim.metrics.fuel.toFixed(1)}`);
-  if (sim.batteries.length) setTile('tB', `${n.batt.toFixed(1)}%`, 'sB', `in ${Math.round(n.battIn)} · out ${Math.round(n.battOut)} kW`);
+  if (sim.batteries.length) setTile('tB', `${n.batt.toFixed(1)}%`, 'sB', `charging ${Math.round(n.battIn)} · giving ${Math.round(n.battOut)} kW`, n.batt < 10 || n.batt > 95 ? 'warn' : '');
   else setTile('tB', 'off', 'sB', 'enable in settings');
 }
 
@@ -309,7 +310,7 @@ function draw() {
   const panels = [
     { y0: top, name: 'kW', min: 0, max: Math.ceil(maxKW / 1000) * 1000, ticks: 4, series: [['demand', '--c-demand'], ['power', '--c-supply'], ['battOut', '--c-batt'], ['battIn', '--c-battin']] },
     { y0: top + ph + gap, name: 'V', min: 0, max: 2, ticks: 4, band: [0.9, 1.1], series: [['voltage', '--c-volt']] },
-    { y0: top + 2 * (ph + gap), name: '%', min: 0, max: 100, ticks: 4, band: sim ? [sim.reactor.optTemp[0], sim.reactor.optTemp[1]] : [40, 60], series: [['temp', '--c-temp'], ['fission', '--c-fission'], ['turbine', '--c-turbine']] },
+    { y0: top + 2 * (ph + gap), name: '%', min: 0, max: 100, ticks: 4, band: sim ? [sim.reactor.optTemp[0], sim.reactor.optTemp[1]] : [40, 60], series: [['temp', '--c-temp'], ['fission', '--c-fission'], ['turbine', '--c-turbine'], ['batt', '--c-batt']] },
   ];
   ctx.font = font; ctx.textBaseline = 'middle';
   for (const p of panels) {

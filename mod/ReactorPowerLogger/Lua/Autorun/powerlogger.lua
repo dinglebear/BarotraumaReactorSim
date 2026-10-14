@@ -85,13 +85,21 @@ local function startRound()
     local n = 1
     while File.Exists(string.format("%s/%s_round%03d.csv", dir, safe, n)) do n = n + 1 end
     filePath = string.format("%s/%s_round%03d.csv", dir, safe, n)
-    local rods = 0
-    pcall(function() for _ in reactors[1].Item.OwnInventory.AllItems do rods = rods + 1 end end)
+    local rods, fuelType = 0, "uranium"
+    local types = { fuelrod = "uranium", thoriumfuelrod = "thorium", fulguriumfuelrod = "fulgurium", fulguriumfuelrodvolatile = "volatile" }
+    pcall(function()
+        for rod in reactors[1].Item.OwnInventory.AllItems do
+            rods = rods + 1
+            local t = types[tostring(rod.Prefab.Identifier)]
+            if t then fuelType = t end
+        end
+    end)
     header = "# BaroPowerLog v1\n"
         .. "# sub=" .. tostring(subName) .. "\n"
         .. "# reactor_max_kw=" .. fmt(maxKW) .. "\n"
         .. "# reactors=" .. #reactors .. " (" .. table.concat(maxEach, "+") .. ")\n"
         .. "# fuel_rods=" .. rods .. "\n"
+        .. "# fuel_type=" .. fuelType .. "\n"
         .. "# fuel_consumption_rate=" .. fmt(reactors[1].FuelConsumptionRate) .. "\n"
         .. "t,demand,load,reactor_out,turbine,fission,temp,fuel,voltage,batt_in,batt_out\n"
     rows, roundTime, lastReal, nextSample, lastRowT, lastDemand, nextFlush = {}, 0, Timer.GetTime(), 0, -1e9, nil, PL.flushInterval

@@ -66,7 +66,8 @@ function listProfiles(a) {
   return fs.readdirSync(d).filter(f => f.endsWith('.csv')).sort().map(f => path.join(d, f));
 }
 function printTable(rows) {
-  const cols = ['circuit', 'profile', 'score_reliability', 'kwh_per_rod', 'unmet_pct', 'voltage_mean_abs_dev', 'fluctuation_events', 'brownout_s_v_lt_0_9', 'overvolt_s_v_gt_1_1', 'temp_max', 'meltdown_at_s'];
+  const batt = rows.some(r => r.score_battery != null);
+  const cols = ['circuit', 'profile', 'score_reliability', ...(batt ? ['score_battery', 'battery_soc_avg_pct', 'battery_full_s', 'battery_empty_s', 'kwh_per_rod_adjusted'] : ['kwh_per_rod']), 'unmet_pct', 'voltage_mean_abs_dev', 'fluctuation_events', 'brownout_s_v_lt_0_9', 'overvolt_s_v_gt_1_1', 'temp_max', 'meltdown_at_s'];
   console.log(cols.join('\t'));
   for (const r of rows) console.log(cols.map(c => r[c] === null || r[c] === undefined ? '-' : r[c]).join('\t'));
   const w = [...new Set(rows.flatMap(r => r.warnings || []))]; if (w.length) console.log('WARNINGS:\n  ' + w.join('\n  '));

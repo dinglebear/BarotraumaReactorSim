@@ -41,7 +41,13 @@
   function substitute(model, vals) {
     if (typeof vals !== 'object') vals = { MAX: vals };
     const m = JSON.parse(JSON.stringify(model));
-    for (const b of m.boxes) for (const c of b.components) for (const k in c.props) if (typeof c.props[k] === 'string') c.props[k] = c.props[k].replace(PH, (x, n) => vals[n] == null ? x : String(vals[n]));
+    for (const b of m.boxes) for (const c of b.components) for (const k in c.props) {
+      const v = c.props[k]; if (typeof v !== 'string' || !PH.test(v)) continue; PH.lastIndex = 0;
+      let out = v.replace(PH, (x, n) => vals[n] == null ? x : String(vals[n]));
+      // simple formulas like "$BATT_KW*0.5" or "-$BATT_OUT/2" are calculated
+      if (/^[\d.+\-*/() eE]+$/.test(out) && /[*/+]|\d-/.test(out)) { try { const r = Function('"use strict";return (' + out + ')')(); if (Number.isFinite(r)) out = String(Math.round(r * 1000) / 1000); } catch (e) { } }
+      c.props[k] = out;
+    }
     return m;
   }
   // -> [{filename, text}]  one box: <name>.txt ; two boxes: <name>_reactor.txt + <name>_battery.txt

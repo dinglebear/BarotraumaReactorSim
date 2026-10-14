@@ -22,13 +22,14 @@
       <output name="signal_out7" />
       <output name="signal_out8" />
     </ConnectionPanel>
-    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="3000,3001,3002,3003,3004,3005,3006,3007,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ExtraStackSize="0" />
-    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="3200;3201;3202;3203;3204;3205;3206;3207;3208,,,,,,,,," ExtraStackSize="0" />
+    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="3000,3001,3002,3003,3004,3005,3006,3007,3008,3009,3010,3011,3012,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ExtraStackSize="0" />
+    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="3200;3201;3202;3203;3204;3205;3206;3207;3208;3209;3210;3211;3212;3213,,,,,,,,," ExtraStackSize="0" />
     <CircuitBox Locked="False" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgInteractSelect">
       <requireditem items="idcard" type="Picked" characterinventoryslottype="None" optional="false" ignoreineditor="true" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" msg="UNAUTHORIZED ACCESS" />
       <InputNode pos="-1400,0">
         <ConnectionLabelOverride name="signal_in2" value="<<<STRINGSTART>>>battery.charge_rate<<<STRINGEND>>>" />
         <ConnectionLabelOverride name="signal_in3" value="<<<STRINGSTART>>>junction.load_value_out<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_in1" value="<<<STRINGSTART>>>battery.charge_%<<<STRINGEND>>>" />
         <ConnectionLabelOverride name="signal_in6" value="<<<STRINGSTART>>>reactor.power_value_out<<<STRINGEND>>>" />
       </InputNode>
       <OutputNode pos="2200,0">
@@ -40,9 +41,14 @@
       <Component id="2" position="-500,600" backingitemid="2,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
       <Component id="3" position="-100,600" backingitemid="3,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
       <Component id="4" position="300,600" backingitemid="4,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
-      <Component id="5" position="700,600" backingitemid="5,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
-      <Component id="6" position="1100,600" backingitemid="6,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
-      <Component id="7" position="1500,600" backingitemid="7,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>100<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>0<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="5" position="-900,80" backingitemid="5,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>60<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="6" position="-500,340" backingitemid="6,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
+      <Component id="7" position="-900,-180" backingitemid="7,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>20<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="8" position="-100,340" backingitemid="8,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>500<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-500<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="9" position="700,600" backingitemid="9,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="10" position="700,340" backingitemid="10,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
+      <Component id="11" position="1100,600" backingitemid="11,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
+      <Component id="12" position="1500,600" backingitemid="12,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>100<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>0<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
       <Wire id="0" backingitemid="" prefab="redwire">
         <From name="signal_in2" target="" />
         <To name="signal_in1" target="2" />
@@ -53,7 +59,7 @@
       </Wire>
       <Wire id="2" backingitemid="0,1" prefab="redwire">
         <From name="signal_out" target="0" />
-        <To name="signal_in2" target="6" />
+        <To name="signal_in2" target="11" />
       </Wire>
       <Wire id="3" backingitemid="0,2" prefab="redwire">
         <From name="signal_out" target="2" />
@@ -65,7 +71,7 @@
       </Wire>
       <Wire id="5" backingitemid="0,4" prefab="redwire">
         <From name="signal_out" target="1" />
-        <To name="signal_in2" target="7" />
+        <To name="signal_in2" target="12" />
       </Wire>
       <Wire id="6" backingitemid="" prefab="redwire">
         <From name="signal_in3" target="" />
@@ -75,31 +81,55 @@
         <From name="signal_out" target="3" />
         <To name="signal_in2" target="4" />
       </Wire>
-      <Wire id="8" backingitemid="" prefab="redwire">
-        <From name="signal_in6" target="" />
-        <To name="signal_in1" target="5" />
-      </Wire>
-      <Wire id="9" backingitemid="0,6" prefab="redwire">
+      <Wire id="8" backingitemid="0,6" prefab="redwire">
         <From name="signal_out" target="4" />
-        <To name="signal_in2" target="5" />
+        <To name="signal_in1" target="9" />
       </Wire>
-      <Wire id="10" backingitemid="" prefab="redwire">
+      <Wire id="9" backingitemid="0,7" prefab="redwire">
         <From name="signal_out" target="4" />
-        <To name="signal_out2" target="" />
+        <To name="signal_in2" target="10" />
       </Wire>
-      <Wire id="11" backingitemid="0,7" prefab="redwire">
+      <Wire id="10" backingitemid="0,8" prefab="redwire">
         <From name="signal_out" target="5" />
         <To name="signal_in1" target="6" />
       </Wire>
-      <Wire id="12" backingitemid="0,8" prefab="redwire">
-        <From name="signal_out" target="6" />
-        <To name="signal_in1" target="7" />
+      <Wire id="11" backingitemid="" prefab="redwire">
+        <From name="signal_in1" target="" />
+        <To name="signal_in2" target="6" />
       </Wire>
-      <Wire id="13" backingitemid="" prefab="redwire">
+      <Wire id="12" backingitemid="0,9" prefab="redwire">
+        <From name="signal_out" target="6" />
+        <To name="signal_in1" target="8" />
+      </Wire>
+      <Wire id="13" backingitemid="0,10" prefab="redwire">
         <From name="signal_out" target="7" />
+        <To name="signal_in2" target="8" />
+      </Wire>
+      <Wire id="14" backingitemid="0,11" prefab="redwire">
+        <From name="signal_out" target="8" />
+        <To name="signal_in2" target="9" />
+      </Wire>
+      <Wire id="15" backingitemid="" prefab="redwire">
+        <From name="signal_out" target="9" />
+        <To name="signal_out2" target="" />
+      </Wire>
+      <Wire id="16" backingitemid="" prefab="redwire">
+        <From name="signal_in6" target="" />
+        <To name="signal_in1" target="10" />
+      </Wire>
+      <Wire id="17" backingitemid="0,12" prefab="redwire">
+        <From name="signal_out" target="10" />
+        <To name="signal_in1" target="11" />
+      </Wire>
+      <Wire id="18" backingitemid="0,13" prefab="redwire">
+        <From name="signal_out" target="11" />
+        <To name="signal_in1" target="12" />
+      </Wire>
+      <Wire id="19" backingitemid="" prefab="redwire">
+        <From name="signal_out" target="12" />
         <To name="signal_out1" target="" />
       </Wire>
-      <Label id="0" color="#FFB000" position="0,-900" size="500,250" header="SHIP-SPECIFIC VALUES" body="Exported for: reactor 5200 kW, 2 batteries (1000 kW recharge, 2000 kW output). On another ship edit: kb ($BATT_KW)" />
+      <Label id="0" color="#FFB000" position="0,-900" size="500,250" header="SHIP-SPECIFIC VALUES" body="Exported for: reactor 3000 kW, 2 batteries (1000 kW recharge, 2000 kW output). On another ship edit: kb ($BATT_KW), kg ($BATT_KW), bias ($BATT_KW)" />
     </CircuitBox>
     <itemstats />
   </Item>

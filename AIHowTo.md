@@ -39,7 +39,7 @@ link reactor.out5 battery.in1          # wire between the boxes (or use wifi com
 pin in1 reactor.load_value_out         # optional: override the default pin wiring for this box
 ```
 Component pin shorthand: `1`/`2` = `signal_in1/2`, `in` = `signal_in`, `out` = `signal_out`, plus named pins (`set_output`, `lock_state`, `set_targetsignal`, `set_frequency`, `move_input`, `signal_in3`, `signal_out0`...).
-Placeholders in any value, filled from the test settings: `$MAX` (reactor max output kW), `$BATT_KW` (total max recharge kW of all batteries), `$BATT_OUT` (total max output kW), `$BATT_CAP` (total capacity kW·min), `$BATT_N` (battery count). The export bakes in the numbers and adds an in-game note saying which components to edit for another ship.
+Placeholders in any value, filled from the test settings: `$MAX` (reactor max output kW), `$BATT_KW` (total max recharge kW of all batteries), `$BATT_OUT` (total max output kW), `$BATT_CAP` (total capacity kW·min), `$BATT_N` (battery count). Simple formulas are calculated: `Value=$BATT_KW/50`, `ClampMin=-$BATT_KW/2`. The export bakes in the numbers and adds an in-game note saying which components to edit for another ship.
 
 ## 4. Box pins (default wiring)
 | reactor box | | battery box | |
@@ -97,6 +97,25 @@ Number output format: shortest float32 text (`0.1`, `0.33333334`, `1E-05`). Unpa
   - Battery charging is part of `load_value_out` (reactor and junction). Ship demand = load − charging, and charging = charge_rate % × `$BATT_KW` / 100. A reactor box that follows the raw load will also chase the battery charging. See `circuits/example_battery.circ`: the battery box computes demand and sends it to the reactor box over a `link`.
   - Battery: 2000 kW·min, 500 kW recharge, 1000 kW out, 95 % efficient. Supercapacitor: 20 kW·min, 1000 kW recharge (squared curve: 50 % rate draws 25 %), effectively unlimited output, 10 % efficient.
 
+### Battery math (the AI must design this; batteries have no brain of their own)
+Goal: batteries absorb the reactor's surplus and cover its shortfalls. They must therefore stay **partly charged**: never full (no room to absorb) and never empty (nothing to cover with).
+```
+charging_kW = charge_rate% * $BATT_KW / 100        (in2; 0 if the battery is full)
+demand_kW   = grid_load - charging_kW              (in3 = junction load_value_out)
+surplus_kW  = reactor_output - demand_kW           (in6 = reactor power_value_out; < 0 = shortfall)
+set_rate%   = clamp(surplus_kW / $BATT_KW * 100, 0, 100)    -> "suck" exactly the surplus; 0 when short
+error%      = TARGET - charge%                     (in1; TARGET ~50-70: room both ways)
+bias_kW     = clamp(error% * GAIN, -LIMIT, +LIMIT) (e.g. GAIN = $BATT_KW/50, LIMIT = $BATT_KW/2)
+reactor_setpoint_kW = demand_kW + bias_kW          -> send to the reactor box (link); turbine = setpoint/$MAX*100
+```
+- Too full → negative bias → the reactor makes less than demand → the batteries discharge on their own to fill the gap.
+- Too empty → positive bias → the reactor makes more → the surplus is absorbed by `set_rate`.
+- Demand above `$MAX` (the reactor can't keep up) can only be covered from stored energy. Raise TARGET when the test has such bursts.
+- Stored energy: `charge% /100 * $BATT_CAP` kW·min. Time it lasts at P kW = `stored * 60 / P` seconds.
+- The reactor box must follow the setpoint/demand, NOT the raw `load_value_out`, which includes the battery charging. Otherwise the reactor chases its own charging.
+- Fission should follow the reactor's ACTUAL turbine (`in2 / $MAX * 100`) plus temperature feedback, e.g. `fission = (actual_turbine + 100 - temp) * 50 / fuel`. Using the turbine TARGET makes temperature overshoot when the setpoint jumps. Using only actual output without temperature feedback can lock up cold (output is capped at temp/50).
+- Working example: `circuits/example_battery.circ`. Naive version without charge management: `example_battery_naive.circ`. It drains to ~9 % on `synthetic_longhaul`.
+
 ### Nerfs on circuit control (all simulated)
 1. `set_fissionrate`/`set_turbineoutput` move the target at most 5 %/s (0→100 takes 20 s), then the ~1 s lag applies on top. **Plan ahead; you cannot step instantly.**
 2. You must keep sending (at least every 1 s), or control lapses and the target freezes. Arithmetic chains fed by reactor outputs send every tick, which is fine.
@@ -120,7 +139,12 @@ Key lines (`k=v`):
   - `surplus_into_batteries_pct`: share of that surplus the batteries absorbed (higher is better)
   - `shortfall_covered_by_batteries_pct`: share of the shortfall they covered
   - `battery_self_drain_kwh`: energy cycled by charging while discharging (lower is better)
-  - `battery_charge_min/max_pct`
+  - `battery_charge_min/max_pct`, `battery_soc_start/avg/end_pct`
+  - `battery_full_s` / `battery_empty_s` and `surplus_lost_while_full_kwh` / `shortfall_while_empty_kwh`: charge management failures
+  - `battery_below20_s` / `battery_above90_s`: thin margins
+  - `battery_net_kwh` (+ = ended with more stored)
+  - `kwh_per_rod_adjusted`: fuel efficiency counting borrowed battery energy, so draining batteries isn't free
+  - `score_battery` (0-100): absorbed % and covered %, minus full/empty/low/high time, net drain and self-drain
 - `WARNINGS` (wiring problems) and `EVENTS` (brownouts > 1 s, fires, meltdowns, timestamped)
 
 `--timeline` adds a 1 Hz CSV with these columns: t, demand, power, voltage, temp, fission, turbine, tf/tt (targets), cto, fuel, batt.
@@ -129,7 +153,7 @@ Key lines (`k=v`):
 1. Read the user's goal (e.g. "best fuel efficiency", "no fluctuations").
 2. `node sim/cli.js compare vanilla,<community circuits...> --profile all` gives the baseline to beat.
 3. Write `circuits/<name>.circ`, then `check`, then `run --profile all`. Read the table and the worst log, change one thing, repeat.
-4. Test with batteries when asked (`--batteries 2`; add `box battery`). Two boxes give two .txt files. Battery goal: high `surplus_into_batteries_pct` and `shortfall_covered_by_batteries_pct`, `battery_self_drain_kwh` near 0, and charge kept away from 0 % and 100 % so there is room both ways.
+4. Test with batteries when asked (`--batteries 2`; add `box battery`). Two boxes give two .txt files. Battery goal: high `score_battery`. That means high `surplus_into_batteries_pct` and `shortfall_covered_by_batteries_pct`, `battery_self_drain_kwh` near 0, `battery_full_s` = `battery_empty_s` = 0, and `battery_soc_end_pct` not below the start. Always include `synthetic_longhaul` (40 min, quiet stretches plus bursts above the reactor max): it exposes missing charge management.
 5. Report the table vs the baseline, plus the exported .txt path(s). Exported files load in game with the Blueprints mod. The box pins are labelled with what to wire them to in game.
 
 Tips:

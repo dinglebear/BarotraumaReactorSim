@@ -59,7 +59,8 @@
       this.items = []; this.pending = []; this.wifis = [];
       this.warnings = [];
       // ---- reactor ----
-      const rodType = FUEL[cfg.fuelType || 'uranium'] || FUEL.uranium;
+      const fuelType = cfg.fuelType || (this.profile.meta || {}).fuel_type || 'uranium'; this.fuelType = fuelType; // test file's rod type unless overridden
+      const rodType = FUEL[fuelType] || FUEL.uranium;
       const rodCount = cfg.rods == null ? (Number((this.profile.meta || {}).fuel_rods) || 1) : cfg.rods; // test file's rod count unless overridden
       this.reactor = this.mkItem('reactor', {
         maxPower: cfg.reactorMaxKW || this.profile.reactorMaxKW || 5000, fuelRate: cfg.fuelConsumptionRate || 0.2,
@@ -430,6 +431,8 @@
       Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, eRSurplus: 0, eRShort: 0, eAbsorbed: 0, eCovered: 0, eChargeInShort: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
         overloadT: 0, junctionBreaks: 0, fires: 0, meltdownAt: null, tempMax: 0, tAboveOpt: 0, tCritical: 0, noCtlF: 0, noCtlT: 0, events: [], timeline: [], nextTl: 0, outAbs: 0, battMin: Infinity, battMax: -Infinity, lowRun: 0, worstLow: 0 });
       if (this.sim.reactor) this.fuelStart = this.sim.reactor.rods.reduce((a, r) => a + r.cond, 0);
+      Object.assign(this, { socSum: 0, tFull: 0, tEmpty: 0, tLow20: 0, tHigh90: 0, eLostFull: 0, eLostEmpty: 0, fullRun: 0, emptyRun: 0 });
+      this.chargeStart = (this.sim.batteries || []).reduce((a, b) => a + b.charge, 0);
     }
     ev(msg) { if (this.events.length < 60) this.events.push(fmtT(this.sim.time) + ' ' + msg); }
     ctl(f, t) { if (this.sim.reactor.powerOn && this.sim.time > 1) { if (!f) this.noCtlF += 1 / 60; if (!t) this.noCtlT += 1 / 60; } }
@@ -445,6 +448,14 @@
       let bIn = 0, bOut = 0; for (const b of s.batteries) { bIn += b.cpc * v; bOut += b.out; }
       this.eAbsorbed += Math.min(rs, bIn) * dt; this.eCovered += Math.min(rd, bOut) * dt;
       if (rd > 0 && bIn > 0) this.eChargeInShort += Math.min(bIn, bOut) * dt;
+      if (s.batteries.length) { // state-of-charge management: full = no room to soak up surplus, empty = nothing to cover shortfalls
+        let soc = 0, full = true, empty = true;
+        for (const b of s.batteries) { const r = b.charge / b.capacity; soc += r; if (r < 0.99) full = false; if (r > 0.01) empty = false; }
+        this.socSum += soc / s.batteries.length * 100 * dt;
+        const socPct = soc / s.batteries.length * 100; if (socPct < 20) this.tLow20 += dt; if (socPct > 90) this.tHigh90 += dt;
+        if (full) { this.tFull += dt; this.eLostFull += rs * dt; if (this.fullRun === 0) this.ev('batteries FULL (cannot absorb surplus)'); this.fullRun += dt; } else this.fullRun = 0;
+        if (empty) { this.tEmpty += dt; this.eLostEmpty += rd * dt; if (this.emptyRun === 0) this.ev('batteries EMPTY (cannot cover shortfall)'); this.emptyRun += dt; } else this.emptyRun = 0;
+      }
       for (const b of s.batteries) { this.eBattOut += b.out * dt; this.eBattIn += b.cpc * dt; const pc = b.charge / b.capacity * 100; this.battMin = Math.min(this.battMin, pc); this.battMax = Math.max(this.battMax, pc); }
       const vv = g.load > 0 ? v : 1;
       this.vAbsDev += Math.abs(vv - 1) * dt; this.vSq += (vv - 1) * (vv - 1) * dt; this.vMin = Math.min(this.vMin, vv); this.vMax = Math.max(this.vMax, vv);
@@ -463,7 +474,7 @@
       const fuelUsed = this.fuel, delivered = kwh(this.eDemand - this.eUnmet);
       const r = {
         circuit: s.cfg.circuitName || '', profile: s.profile.name || '', duration_s: +T.toFixed(1), reactor_max_kw: s.reactor.maxPower,
-        rods: `${s.reactor.rods.length}x ${(s.cfg.fuelType || 'uranium')}`, batteries: s.batteries.length ? `${s.batteries.length}x ${(s.cfg.batteries || {}).type || 'battery'}` : 'off',
+        rods: `${s.reactor.rods.length}x ${s.fuelType}`, batteries: s.batteries.length ? `${s.batteries.length}x ${(s.cfg.batteries || {}).type || 'battery'}` : 'off',
         demand_kwh: +kwh(this.eDemand).toFixed(1), unmet_kwh: +kwh(this.eUnmet).toFixed(2), unmet_pct: +(this.eUnmet / Math.max(this.eDemand, 1e-9) * 100).toFixed(2),
         surplus_kwh: +kwh(this.eSurplus).toFixed(2), reactor_kwh: +kwh(this.eReactor).toFixed(1),
         fuel_condition_used: +fuelUsed.toFixed(2), fuel_rods_used: +(fuelUsed / (s.reactor.rods[0] ? s.reactor.rods[0].max : 100)).toFixed(3),
@@ -480,10 +491,26 @@
         surplus_into_batteries_pct: s.batteries.length && this.eRSurplus > 0 ? +(this.eAbsorbed / this.eRSurplus * 100).toFixed(1) : null,
         shortfall_covered_by_batteries_pct: s.batteries.length && this.eRShort > 0 ? +(this.eCovered / this.eRShort * 100).toFixed(1) : null,
         battery_self_drain_kwh: s.batteries.length ? +kwh(this.eChargeInShort).toFixed(2) : null, // charging while also discharging (wasted cycle)
+        battery_soc_avg_pct: s.batteries.length ? +(this.socSum / T).toFixed(1) : null,
+        battery_soc_end_pct: s.batteries.length ? +(s.batteries.reduce((a, b) => a + b.charge / b.capacity, 0) / s.batteries.length * 100).toFixed(1) : null,
+        battery_full_s: s.batteries.length ? +this.tFull.toFixed(1) : null, battery_empty_s: s.batteries.length ? +this.tEmpty.toFixed(1) : null,
+        battery_below20_s: s.batteries.length ? +this.tLow20.toFixed(1) : null, battery_above90_s: s.batteries.length ? +this.tHigh90.toFixed(1) : null,
+        surplus_lost_while_full_kwh: s.batteries.length ? +kwh(this.eLostFull).toFixed(2) : null, shortfall_while_empty_kwh: s.batteries.length ? +kwh(this.eLostEmpty).toFixed(2) : null,
+        battery_net_kwh: s.batteries.length ? +((s.batteries.reduce((a, b) => a + b.charge, 0) - this.chargeStart) / 60).toFixed(2) : null, // + = ended with more stored energy
       };
       // scores 0-100 (higher is better)
       r.score_reliability = +Math.max(0, 100 - r.unmet_pct * 10 - r.voltage_mean_abs_dev * 200 - r.fluctuation_events / (T / 60) * 2 - (r.meltdown_at_s !== null ? 100 : 0) - r.fires * 10 - r.junction_breaks * 10).toFixed(1);
       r.kwh_per_rod = r.fuel_rods_used > 0 ? +(delivered / r.fuel_rods_used).toFixed(0) : null; // fuel efficiency: higher is better
+      // fair fuel efficiency: energy borrowed from (or banked into) the batteries is counted, so draining them is not free
+      if (s.batteries.length) r.kwh_per_rod_adjusted = r.fuel_rods_used > 0 ? +((delivered + r.battery_net_kwh) / r.fuel_rods_used).toFixed(0) : null;
+      if (s.batteries.length) {
+        const sip = r.surplus_into_batteries_pct ?? 100, scp = r.shortfall_covered_by_batteries_pct ?? 100;
+        const selfPct = this.eBattIn > 0 ? this.eChargeInShort / this.eBattIn * 100 : 0;
+        const startPct = this.chargeStart / s.batteries.reduce((a, b) => a + b.capacity, 0) * 100;
+        r.score_battery = +Math.max(0, 0.5 * sip + 0.5 * scp - 50 * this.tFull / T - 100 * this.tEmpty / T - 40 * this.tLow20 / T - 20 * this.tHigh90 / T
+          - Math.max(0, startPct - r.battery_soc_end_pct) / 2 - Math.min(20, selfPct)).toFixed(1);
+        r.battery_soc_start_pct = +startPct.toFixed(1);
+      }
       r.events = this.events; r.warnings = s.warnings;
       return r;
     }

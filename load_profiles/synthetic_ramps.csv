@@ -3,6 +3,7 @@
 # reactor_max_kw=4000
 # duration=900
 # fuel_rods=2
+# fuel_type=uranium
 t,demand
 0,1200
 1,1200.1

@@ -18,18 +18,18 @@ for (const f of list('context/reactor_circuits')) {
   const pf = [f.replace(/\.txt$/, '.pins'), f.replace(/(_reactor)?\.txt$/, '.pins')].find(p => list('context/reactor_circuits').includes(p)); if (pf) lib.circuits[f.replace(/(_reactor)?\.txt$/, '')].pins = read('context/reactor_circuits/' + pf);
 }
 // Real round logs can be huge (a 64-minute round is ~18 MB). For the page, keep only rows where something the simulator
-// replays changed (demand >= 5 kW, a pin >= 1, rods/fuel), at least every 5 s, and bake in the rod fuel worked out from the full log.
+// replays changed (rods/fuel at once; demand >= 20 kW or a pin >= 5 at most 5 times a second), at least every 5 s, and bake in the rod fuel worked out from the full log.
 const E = require('./engine');
 function thin(text, name) {
-  if (text.length < 1.5e6) return text;
+  if (text.length < 3e5) return text;
   const prof = E.parseProfile(text, name);
   const ch = prof.channels, head = text.split(/\r?\n/).filter(l => l.startsWith('#') && !/duration/.test(l));
   const L = [...head, `# duration=${prof.duration}`, ['t', 'demand', 'rods', 'avail_fuel', 'fuel', ...ch].join(',')];
   let last = null;
   for (const p of prof.points) {
     const row = [p.demand, p.rods ?? '', p.rodFuel && p.rods !== undefined ? p.rodFuel * p.rods : '', p.g.fuelPct ?? '', ...ch.map(c => p.ch[c] ?? '')];
-    const keep = !last || p.t - last.t >= 5 || Math.abs(row[0] - last.row[0]) >= 10 || row[1] !== last.row[1] || row[2] !== last.row[2] || Math.abs((row[3] || 0) - (last.row[3] || 0)) >= 1
-      || row.slice(4).some((v, i) => Math.abs((v || 0) - (last.row[i + 4] || 0)) >= 2);
+    const keep = !last || p.t - last.t >= 5 || row[1] !== last.row[1] || row[2] !== last.row[2] || Math.abs((row[3] || 0) - (last.row[3] || 0)) >= 1
+      || (p.t - last.t >= 0.2 && (Math.abs(row[0] - last.row[0]) >= 20 || row.slice(4).some((v, i) => Math.abs((v || 0) - (last.row[i + 4] || 0)) >= 5)));
     if (!keep) continue;
     L.push([p.t.toFixed(2), ...row.map(v => typeof v === 'number' ? (Math.round(v * 10) / 10) : v)].join(','));
     last = { t: p.t, row };

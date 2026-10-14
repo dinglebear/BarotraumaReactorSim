@@ -124,7 +124,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
         <legend>Batteries</legend>
         <label class="check"><input type="checkbox" id="battOn"> Allow batteries (adds a 2nd circuit box)</label>
         <label class="row">Count<input type="number" id="battN" min="1" max="8" value="2"></label>
-        <label class="row">Type<select id="battType"><option value="battery">Battery</option><option value="supercapacitor">Supercapacitor</option></select></label>
+        <label class="row">Type<select id="battType"><option value="battery">Battery</option><option value="supercapacitor">Supercapacitor (meant for guns)</option></select></label>
         <label class="row">Start charge %<input type="number" id="battStart" min="0" max="100" value="50"></label>
         <label class="row">Start charge rate %<input type="number" id="battRate" min="0" max="100" step="10" value="0"></label>
         <p class="hint">Batteries cover any shortfall on their own. To soak up surplus (overvoltage), the battery box has to raise <code>set_rate</code>.</p>
@@ -220,7 +220,7 @@ function selectProfile() {
   const key = $('profileSel').value; if (!key) return;
   profile = E.parseProfile(profiles[key], key);
   const d = profile.points.map(p => p.demand);
-  $('profileInfo').textContent = `${profile.meta.sub || 'unknown sub'} · ${fmtClock(profile.duration)} · demand ${Math.round(Math.min(...d))}–${Math.round(Math.max(...d))} kW · max output ${profile.reactorMaxKW ? profile.reactorMaxKW + ' kW' : 'not saved'}`;
+  $('profileInfo').textContent = `${profile.meta.sub || 'unknown sub'} · ${fmtClock(profile.duration)} · demand ${Math.round(Math.min(...d))}–${Math.round(Math.max(...d))} kW · max output ${profile.reactorMaxKW ? profile.reactorMaxKW + ' kW' : 'not saved'}` + (profile.channels.length ? ` · recorded pins you can wire: ${profile.channels.join(', ')}` : '');
   if ($('maxAuto').checked && profile.reactorMaxKW) $('maxKW').value = profile.reactorMaxKW;
   if (!$('maxKW').value) $('maxKW').value = 5000;
   if (profile.meta.fuel_rods && Number(profile.meta.fuel_rods) >= 1 && Number(profile.meta.fuel_rods) <= 4) $('rods').value = profile.meta.fuel_rods;

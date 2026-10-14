@@ -54,7 +54,19 @@ Placeholders in any value, filled from the test settings: `$MAX` (reactor max ou
 | out1 | reactor.set_fissionrate (0-100) | | |
 | out2 | reactor.set_turbineoutput (0-100) | | |
 
-Other device pins usable via `pin`: `reactor.shutdown`, `reactor.meltdown_warning` (1/0), `battery.charge` (kW·min), `battery.power_value_out`, `battery.load_value_out`, `battery.disable_output`, `battery1.x` (a single battery). `battery.x` means all batteries. With several batteries, each sends its value separately in the same tick, so the last one wins on that pin.
+Any box pin can be rewired with `pin` lines. Any device pin can go to either box, and you can wire whatever you want. Devices:
+| device.pin | what (in game) |
+|---|---|
+| `reactor.load_value_out/power_value_out/temperature_out/fuel_out/fuel_percentage_left/meltdown_warning` | reactor outputs |
+| `reactor.set_fissionrate/set_turbineoutput/shutdown` | reactor inputs |
+| `junction.load_value_out` / `junction.power_value_out` | **main junction box** (whole reactor grid: total load incl. battery charging / total supply incl. battery output) |
+| `battery.charge_%/charge/charge_rate/power_value_out/load_value_out` | battery outputs (`battery1.x` = one battery; `battery.x` = all of them, the last one wins on a shared pin) |
+| `battery.set_rate/disable_output` | battery inputs |
+| `nav.velocity_x_out` / `nav.velocity_y_out` | **nav terminal** outputs (-100..100) that drive the engines / ballast pumps. Engine kW = (\|velocity_x_out\|/100)^1.5 × engine max, starting 1 tick later. Pump kW = \|flow\|/100 × pump max. **They predict engine and pump load.** |
+| `nav.current_velocity_x/y`, `nav.current_position_y` | nav terminal: speed (km/h) and depth |
+| `engines.load_value_out`, `pumps.load_value_out`, `guns.load_value_out`, `sonar.load_value_out` | power drawn by that group. In game: a relay or junction box that feeds only that group, wired from its `load_value_out` |
+
+Recorded devices (`nav`, `engines`, `pumps`, `guns`, `sonar`, and any other `device.pin` column in the test file) replay what the PowerLogger mod recorded each tick, formatted like the game sends it. They are open-loop: your circuit can read them but not change them. If a test file lacks a column, the log shows a WARNING and that pin stays silent. The `synthetic_*` files have them all.
 
 ## 5. Components (type | pins | props with defaults | timing)
 Timing: **U** = outputs every tick in its Update (needs fresh inputs; adds 0-1 tick of latency). **R** = outputs instantly when it receives a signal.
@@ -95,7 +107,8 @@ Number output format: shortest float32 text (`0.1`, `0.33333334`, `1E-05`). Unpa
   - `set_rate` is **rounded to 10 % steps** (banker's rounding). Every battery wired to the pin gets the same rate.
   - **Charging and discharging happen at once:** if `set_rate` > 0 during a shortfall, the batteries cover their own charging load and lose 5 % on the round trip (`battery_self_drain_kwh`). Set the rate to 0 when short.
   - Battery charging is part of `load_value_out` (reactor and junction). Ship demand = load − charging, and charging = charge_rate % × `$BATT_KW` / 100. A reactor box that follows the raw load will also chase the battery charging. See `circuits/example_battery.circ`: the battery box computes demand and sends it to the reactor box over a `link`.
-  - Battery: 2000 kW·min, 500 kW recharge, 1000 kW out, 95 % efficient. Supercapacitor: 20 kW·min, 1000 kW recharge (squared curve: 50 % rate draws 25 %), effectively unlimited output, 10 % efficient.
+  - Battery: 2000 kW·min, 500 kW recharge, 1000 kW out, 95 % efficient.
+  - Supercapacitors power the **guns** (railgun/coilgun). They are not a reactor buffer: their charging is part of demand and shows up on `guns.load_value_out`. Gun fire is a big, sudden load, so watch that pin.
 
 ### Battery math (the AI must design this; batteries have no brain of their own)
 Goal: batteries absorb the reactor's surplus and cover its shortfalls. They must therefore stay **partly charged**: never full (no room to absorb) and never empty (nothing to cover with).
@@ -155,6 +168,13 @@ Key lines (`k=v`):
 3. Write `circuits/<name>.circ`, then `check`, then `run --profile all`. Read the table and the worst log, change one thing, repeat.
 4. Test with batteries when asked (`--batteries 2`; add `box battery`). Two boxes give two .txt files. Battery goal: high `score_battery`. That means high `surplus_into_batteries_pct` and `shortfall_covered_by_batteries_pct`, `battery_self_drain_kwh` near 0, `battery_full_s` = `battery_empty_s` = 0, and `battery_soc_end_pct` not below the start. Always include `synthetic_longhaul` (40 min, quiet stretches plus bursts above the reactor max): it exposes missing charge management.
 5. Report the table vs the baseline, plus the exported .txt path(s). Exported files load in game with the Blueprints mod. The box pins are labelled with what to wire them to in game.
+
+### Predicting spikes
+The reactor turbine can only move 5 %/s, so every load step it hasn't anticipated becomes a voltage dip or surge until it catches up (or the batteries cover it). Ideas:
+- **Pilot's intent:** `nav.velocity_x_out` ramps toward the pilot's input at ~15.6 units/s. While it is still ramping, engine load will keep rising or falling for seconds. Start moving the turbine early (rate of change → lead).
+- **Engine load:** predicted engine kW = (|velocity_x_out|/100)^1.5 × engine max. Engine max = `engines.load_value_out` at full throttle; the `synthetic_*` headers list it.
+- **Guns:** `guns.load_value_out` jumps when supercapacitors start charging. Let batteries take those bursts rather than chasing them with the reactor.
+- **Main junction box:** `junction.load_value_out` − battery charging = the whole ship's demand, the same tick it changes.
 
 Tips:
 - Feed-forward on turbine (`turbine = load/$MAX*100`) plus feedback on temperature (target ~50 = 5000 on in3) is the usual base.

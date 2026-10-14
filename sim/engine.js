@@ -48,6 +48,13 @@
     return Object.keys(out).length ? out : null;
   }
 
+  const RECORDED = ['nav', 'engines', 'pumps', 'guns', 'sonar'];
+  function fmtChannel(pin, v) {
+    if (/load_value_out|power_value_out/.test(pin)) return String(C.roundEven(v));   // (int)Math.Round
+    if (/^current_/.test(pin)) return v.toFixed(4);                                  // nav terminal "0.0000"
+    return C.fmtF(v);                                                                // float.ToString()
+  }
+
   class Sim {
     constructor(model, cfg) {
       cfg = cfg || {};
@@ -56,7 +63,7 @@
       this.rand = rng(cfg.seed || 12345);
       this.profile = cfg.profile || { points: [{ t: 0, demand: 2000 }], duration: 600 };
       this.pIdx = 0;
-      this.items = []; this.pending = []; this.wifis = [];
+      this.items = []; this.pending = []; this.wifis = []; this.recorded = {};
       this.warnings = [];
       // ---- reactor ----
       const fuelType = cfg.fuelType || (this.profile.meta || {}).fuel_type || 'uranium'; this.fuelType = fuelType; // test file's rod type unless overridden
@@ -176,6 +183,12 @@
       if (name === 'junction') return [this.junction];
       if (name === 'battery') return this.batteries;
       const m = /^battery(\d+)$/.exec(name); if (m) return this.batteries[+m[1] - 1] ? [this.batteries[+m[1] - 1]] : [];
+      // recorded devices: test-file columns named "<device>.<pin>" (nav terminal, engines, pumps, guns, sonar, ...)
+      const chans = (this.profile.channels || []).filter(c => c.startsWith(name + '.'));
+      if (chans.length || RECORDED.includes(name)) {
+        if (!this.recorded[name]) this.recorded[name] = this.mkItem(name, { recordedDevice: true });
+        return [this.recorded[name]];
+      }
       return null;
     }
     wireHarness(model) {
@@ -190,6 +203,7 @@
           if (!ds) { this.warnings.push(`unknown device "${dev}" in pin ${box.model.name}.${p}`); continue; }
           const full = /^in\d$/.test(p) ? 'signal_' + p : /^out\d$/.test(p) ? 'signal_' + p : p;
           for (const d of ds) this.wire(this.conn(box, full), this.conn(d, dpin));
+          if (ds[0] && ds[0].recordedDevice && !(this.profile.channels || []).includes(ep)) this.warnings.push(`test file has no "${ep}" column: ${box.model.name}.${p} gets no signal (record it with the PowerLogger mod)`);
         }
       }
       let wifiCh = 9000;
@@ -377,6 +391,15 @@
     }
     send(item, pin, v) { const c = item.conns[pin]; if (c) this.itemSend(item, { v, steps: 0, src: null }, c); }
 
+    // recorded devices replay their test-file value every tick, formatted like the game does
+    updateRecorded() {
+      const pt = this.profile.points[this.pIdx]; if (!pt || !pt.ch) return;
+      for (const [name, it] of Object.entries(this.recorded)) for (const pin of Object.keys(it.conns)) {
+        const v = pt.ch[name + '.' + pin]; if (v === undefined) continue;
+        this.send(it, pin, fmtChannel(pin, v));
+      }
+    }
+
     // ---------- junction box / batteries (Update) ----------
     updateJunction(dt) {
       const J = this.junction, g = this.grid;
@@ -407,6 +430,7 @@
       this.updatePower();
       // delayed (stepsTaken > 10) signals from the previous frame
       if (this.pending.length) { const p = this.pending; this.pending = []; for (const e of p) this.connSend(e.conn, e.sig); }
+      this.updateRecorded();
       this.updateReactor(dt);
       this.updateJunction(dt);
       for (const b of this.batteries) this.updateBattery(b);
@@ -526,11 +550,14 @@
       if (line.startsWith('#')) { const m = /^#\s*([\w.]+)\s*[=:]\s*(.*)$/.exec(line); if (m) prof.meta[m[1]] = m[2].trim(); continue; }
       const parts = line.split(',');
       if (!cols) { if (/[a-z]/i.test(parts[0])) { cols = parts.map(s => s.trim().toLowerCase()); continue; } cols = ['t', 'demand']; }
-      const row = {}; cols.forEach((c, i) => row[c] = Number(parts[i]));
+      const row = {}; cols.forEach((c, i) => row[c] = parts[i] === undefined || parts[i].trim() === '' ? NaN : Number(parts[i]));
       const demand = Number.isFinite(row.demand) ? row.demand : row.load;
-      if (Number.isFinite(row.t) && Number.isFinite(demand)) prof.points.push({ t: row.t, demand: Math.max(0, demand), turbine: row.turbine, out: row.reactor_out });
+      if (!Number.isFinite(row.t) || !Number.isFinite(demand)) continue;
+      const ch = {}; for (const c of cols) if (c.includes('.') && Number.isFinite(row[c])) ch[c] = row[c];
+      prof.points.push({ t: row.t, demand: Math.max(0, demand), turbine: row.turbine, out: row.reactor_out, ch });
     }
-    if (!prof.points.length) prof.points.push({ t: 0, demand: 0 });
+    prof.channels = cols ? cols.filter(c => c.includes('.')) : [];
+    if (!prof.points.length) prof.points.push({ t: 0, demand: 0, ch: {} });
     const t0 = prof.points[0].t; for (const p of prof.points) p.t -= t0;
     prof.duration = Number(prof.meta.duration) || (prof.points[prof.points.length - 1].t + 1);
     // reactor max output: saved directly, else auto-calculated from Output(kW) = (Turbine/100) * MaxOutput

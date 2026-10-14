@@ -49,6 +49,7 @@
   }
 
   const RECORDED = ['nav', 'engines', 'pumps', 'guns', 'sonar'];
+  const FUEL_IDS = { fuelrod: 'uranium', thoriumfuelrod: 'thorium', fulguriumfuelrod: 'fulgurium', fulguriumfuelrodvolatile: 'volatile' };
   function fmtChannel(pin, v) {
     if (/load_value_out|power_value_out/.test(pin)) return String(C.roundEven(v));   // (int)Math.Round
     if (/^current_/.test(pin)) return v.toFixed(4);                                  // nav terminal "0.0000"
@@ -68,18 +69,19 @@
       // ---- reactor ----
       const fuelType = cfg.fuelType || (this.profile.meta || {}).fuel_type || 'uranium'; this.fuelType = fuelType; // test file's rod type unless overridden
       const rodType = FUEL[fuelType] || FUEL.uranium;
-      const rodCount = cfg.rods == null ? (Number((this.profile.meta || {}).fuel_rods) || 1) : cfg.rods; // test file's rod count unless overridden
+      const p0 = (this.profile.points || [])[0] || {};
+      const rodCount = cfg.rods != null ? cfg.rods : p0.rods !== undefined ? p0.rods : (Number((this.profile.meta || {}).fuel_rods) || 1); // starting rods: setting, else the test file
       this.reactor = this.mkItem('reactor', {
         maxPower: cfg.reactorMaxKW || this.profile.reactorMaxKW || 5000, fuelRate: cfg.fuelConsumptionRate || 0.2,
         meltdownDelay: 120, fireDelay: 20, dos: clamp(cfg.skill || 0, 0, 1),
         fission: 0, turbine: 0, temp: 0, tf: 0, tt: 0, autoTemp: false, powerOn: true, load: 0, cpc: 0, cto: 0,
         availFuel: 0, prevAvailFuel: 0, sigF: null, sigT: null, lastF: -1e9, lastT: -1e9, melt: 0, fire: 0, boost: 0,
-        cond: 100, minOut: 0, maxOut: 0, optT: [0, 0], allT: [0, 0], optTemp: [40, 60], allTemp: [30, 70], optF: [0, 0], allF: [0, 0],
+        cond: 100, wearDelay: 120 + this.rand() * 600, minOut: 0, maxOut: 0, optT: [0, 0], allT: [0, 0], optTemp: [40, 60], allTemp: [30, 70], optF: [0, 0], allF: [0, 0],
         rods: Array.from({ length: rodCount }, () => ({ fuel: (cfg.rodFuel || rodType.fuel), cond: rodType.cond, max: rodType.cond })),
       });
       this.reactor.availFuel = this.rodFuel();
       // ---- junction box ----
-      this.junction = this.mkItem('junction', { cond: 100, overloadV: 2, prevP: 0, pSig: null, prevL: 0, lSig: null, cooldown: 0, breaks: 0 });
+      this.junction = this.mkItem('junction', { cond: 100, wearDelay: 120 + this.rand() * 600, overloadV: 2, prevP: 0, pSig: null, prevL: 0, lSig: null, cooldown: 0, breaks: 0 });
       // ---- batteries ----
       this.batteries = [];
       const bc = cfg.batteries || {};
@@ -101,6 +103,7 @@
         this.boxes.push(this.buildBox(bm));
       }
       this.wireHarness(model || { links: [] });
+      this.wear = cfg.wear !== false; // vanilla: reactor and junction box wear down unless repaired (cfg.repairBelow = crew repair threshold %)
       this.metrics = new Metrics(this);
       if ((cfg.start || 'warm') === 'warm') this.warmStart();
       if (cfg.vanilla) this.reactor.autoTemp = true; // baseline: the game's own automatic control, no circuit
@@ -318,6 +321,8 @@
       }
       const fCtl = R.sigF !== null && R.lastF > T - 1, tCtl = R.sigT !== null && R.lastT > T - 1;
       this.metrics.ctl(fCtl, tCtl);
+      // round-start fast sync: first 5 s of a round, AutoTemp on, no player user, no signal control
+      if (T < 5 && R.powerOn && R.autoTemp && !fCtl && !tCtl) this.autoTemp(100, f(STEP * 10));
       const mx = R.maxPower;
       if (fCtl) R.tf = adjustNoOvershoot(R.tf, R.sigF, f(dt * 5)); else R.sigF = null;
       if (tCtl) R.tt = adjustNoOvershoot(R.tt, R.sigT, f(dt * 5)); else R.sigT = null;
@@ -359,6 +364,14 @@
       } else R.fire = Math.max(0, f(R.fire - dt));
       // fuel rods update after the reactor: OnContaining adds their fuel to AvailableFuel for next tick
       R.availFuel = this.rodFuel();
+      // Repairable (updates after Reactor): wear while running; lower condition makes the fire/meltdown timers up to 2x faster
+      if (this.wear && R.temp > 0.1) this.deteriorate(R, 0.125, dt);
+      this.metrics.reactorCondMin = Math.min(this.metrics.reactorCondMin, R.cond);
+    }
+    deteriorate(it, speed, dt) {
+      if (it.wearDelay > 0) { it.wearDelay -= dt; return; }
+      if (it.cond > 10) it.cond = Math.max(10, f(it.cond - f(speed * dt)));
+      if (this.cfg.repairBelow > 0 && it.cond < this.cfg.repairBelow) { it.cond = 100; it.wearDelay = 120 + this.rand() * 600; this.metrics.ev(`${it.name} repaired by crew (was below ${this.cfg.repairBelow}%)`); }
     }
     autoTemp(speed, dt) {
       const R = this.reactor;
@@ -377,19 +390,28 @@
       this.metrics.meltdownAt = this.time; this.metrics.ev('MELTDOWN (temperature above ' + R.allTemp[1].toFixed(0) + ' for too long)');
     }
     // Game start state: like Reactor.PowerUpImmediately() (vanilla autotemp pre-heats), then automatic control is switched OFF.
+    // Warm start = the sub was saved mid-round running steadily at the starting load (what a campaign round starts from):
+    // temperature 50, turbine at the ideal output, fission giving exactly enough heat. If AutoTemp is on, the game's
+    // round-start fast sync then runs for 5 s. (The old PowerUpImmediately() warm-up is only used by outposts/NPC subs.)
     warmStart() {
-      const R = this.reactor, saved = R.rods.map(r => r.cond);
-      R.powerOn = true; R.autoTemp = true; R.load = this.demandAt(0); R.cto = R.load / R.maxPower * 100; R.prevAvailFuel = R.availFuel;
-      const dt = STEP * 10; const mute = this.send; this.send = () => { };
-      for (let i = 0; i < 100; i++) { this.updateReactor(dt); this.autoTemp(100, dt); R.load = this.demandAt(0); }
-      // settle with the real grid for 30 s so output matches the starting load
-      for (let i = 0; i < 1800; i++) { this.updatePower(); this.updateReactor(STEP); this.autoTemp(2, STEP); }
-      this.send = mute;
-      R.autoTemp = false; R.sigF = R.sigT = null; R.melt = 0; R.fire = 0;
-      R.rods.forEach((r, i) => r.cond = saved[i]); R.availFuel = this.rodFuel();
-      for (const b of this.batteries) b.charge = b.prevCharge = b.capacity * clamp((this.cfg.batteries || {}).startCharge == null ? 0.5 : this.cfg.batteries.startCharge, 0, 1);
+      const R = this.reactor, load = this.demandAt(0);
+      R.load = load; R.cto = f(cl(load / R.maxPower * 100, 0, 100)); R.tt = R.turbine = R.cto;
+      R.temp = 50; R.prevAvailFuel = R.availFuel;
+      R.tf = R.fission = R.availFuel > 0 ? f(cl((50 + R.turbine) / (R.availFuel / 100 * 2), 0, Math.min(100, R.availFuel))) : 0;
+      R.temp = R.availFuel > 0 ? cl(f(R.fission * (R.availFuel / 100) * 2 - R.turbine), 0, 100) : 0;
     }
     send(item, pin, v) { const c = item.conns[pin]; if (c) this.itemSend(item, { v, steps: 0, src: null }, c); }
+
+    // rods added/removed during the recorded round (test-file "rods" column): new rods are fresh, removed ones are the most used
+    updateRods() {
+      const pt = this.profile.points[this.pIdx]; if (!pt || pt.rods === undefined || this.cfg.lockRods) return;
+      const R = this.reactor, want = Math.max(0, Math.min(4, Math.round(pt.rods)));
+      if (want === R.rods.length) return;
+      const from = R.rods.length, t = FUEL[this.fuelType] || FUEL.uranium;
+      while (R.rods.length < want) R.rods.push({ fuel: t.fuel, cond: t.cond, max: t.cond });
+      while (R.rods.length > want) { let k = 0; R.rods.forEach((r, i) => { if (r.cond < R.rods[k].cond) k = i; }); R.rods.splice(k, 1); }
+      this.metrics.ev(`rods ${from} -> ${want} (as in the recorded round)`);
+    }
 
     // recorded devices replay their test-file value every tick, formatted like the game does
     updateRecorded() {
@@ -407,6 +429,7 @@
       if (J.prevP !== trunc(p) || J.pSig === null) { J.prevP = trunc(C.roundEven(p)); J.pSig = String(J.prevP); }
       if (J.prevL !== trunc(l) || J.lSig === null) { J.prevL = trunc(C.roundEven(l)); J.lSig = String(J.prevL); }
       this.send(J, 'power_value_out', J.pSig); this.send(J, 'load_value_out', J.lSig);
+      if (this.wear && g.voltage > 0.1) this.deteriorate(J, 0.1, dt);
       // UpdateOvervoltage (OverloadVoltage 2.0): 1%/frame chance of random damage while overloaded
       if (g.voltage > Math.max(J.overloadV, 1) && this.time >= 5) {
         this.metrics.overloadT += dt;
@@ -427,10 +450,12 @@
     // ---------- one frame ----------
     step() {
       const dt = STEP;
+      if (this.cfg.beforeTick) this.cfg.beforeTick(this); // used by sim/verify.js to drive the reactor from a recorded game trace
       this.updatePower();
       // delayed (stepsTaken > 10) signals from the previous frame
       if (this.pending.length) { const p = this.pending; this.pending = []; for (const e of p) this.connSend(e.conn, e.sig); }
       this.updateRecorded();
+      this.updateRods();
       this.updateReactor(dt);
       this.updateJunction(dt);
       for (const b of this.batteries) this.updateBattery(b);
@@ -453,7 +478,7 @@
     constructor(sim) { this.sim = sim; this.reset(); }
     reset() {
       Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, eRSurplus: 0, eRShort: 0, eAbsorbed: 0, eCovered: 0, eChargeInShort: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
-        overloadT: 0, junctionBreaks: 0, fires: 0, meltdownAt: null, tempMax: 0, tAboveOpt: 0, tCritical: 0, noCtlF: 0, noCtlT: 0, events: [], timeline: [], nextTl: 0, outAbs: 0, battMin: Infinity, battMax: -Infinity, lowRun: 0, worstLow: 0 });
+        overloadT: 0, junctionBreaks: 0, reactorCondMin: 100, fires: 0, meltdownAt: null, tempMax: 0, tAboveOpt: 0, tCritical: 0, noCtlF: 0, noCtlT: 0, events: [], timeline: [], nextTl: 0, outAbs: 0, battMin: Infinity, battMax: -Infinity, lowRun: 0, worstLow: 0 });
       if (this.sim.reactor) this.fuelStart = this.sim.reactor.rods.reduce((a, r) => a + r.cond, 0);
       Object.assign(this, { socSum: 0, tFull: 0, tEmpty: 0, tLow20: 0, tHigh90: 0, eLostFull: 0, eLostEmpty: 0, fullRun: 0, emptyRun: 0 });
       this.chargeStart = (this.sim.batteries || []).reduce((a, b) => a + b.charge, 0);
@@ -508,6 +533,7 @@
         brownout_s_v_lt_0_9: +this.tLow90.toFixed(1), blackout_s_v_lt_0_5: +this.tLow50.toFixed(1), worst_brownout_s: +Math.max(this.worstLow, this.lowRun).toFixed(1), overvolt_s_v_gt_1_1: +this.tHigh110.toFixed(1),
         junction_overload_s_v_gt_2: +this.overloadT.toFixed(1), junction_breaks: this.junctionBreaks,
         temp_max: +this.tempMax.toFixed(1), temp_above_optimal_s: +this.tAboveOpt.toFixed(1), temp_critical_s: +this.tCritical.toFixed(1), fires: this.fires, meltdown_at_s: this.meltdownAt === null ? null : +this.meltdownAt.toFixed(1),
+        reactor_condition_min_pct: +this.reactorCondMin.toFixed(1), // worn reactor: fire/meltdown timers run up to 2x faster
         no_fission_signal_s: +this.noCtlF.toFixed(1), no_turbine_signal_s: +this.noCtlT.toFixed(1),
         battery_charge_min_pct: s.batteries.length ? +this.battMin.toFixed(1) : null, battery_charge_max_pct: s.batteries.length ? +this.battMax.toFixed(1) : null,
         battery_out_kwh: +kwh(this.eBattOut).toFixed(2), battery_in_kwh: +kwh(this.eBattIn).toFixed(2),
@@ -554,7 +580,7 @@
       const demand = Number.isFinite(row.demand) ? row.demand : row.load;
       if (!Number.isFinite(row.t) || !Number.isFinite(demand)) continue;
       const ch = {}; for (const c of cols) if (c.includes('.') && Number.isFinite(row[c])) ch[c] = row[c];
-      prof.points.push({ t: row.t, demand: Math.max(0, demand), turbine: row.turbine, out: row.reactor_out, ch });
+      prof.points.push({ t: row.t, demand: Math.max(0, demand), turbine: row.turbine, out: row.reactor_out, rods: Number.isFinite(row.rods) ? row.rods : undefined, ch });
     }
     prof.channels = cols ? cols.filter(c => c.includes('.')) : [];
     if (!prof.points.length) prof.points.push({ t: 0, demand: 0, ch: {} });
@@ -567,5 +593,5 @@
     return prof;
   }
 
-  return { Sim, parseProfile, DEFAULT_PINS, DEVICE_OUTS, DEVICE_INS, FUEL, BATT, STEP };
+  return { Sim, parseProfile, FUEL_IDS, DEFAULT_PINS, DEVICE_OUTS, DEVICE_INS, FUEL, BATT, STEP };
 });

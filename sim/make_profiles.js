@@ -12,7 +12,7 @@ const STEER = Math.pow(1 / (1 - 0.2), 2) * 10; // Steering default adjust speed 
 
 function ship(name, o) {
   const r = rng(o.seed), dt = 1 / 60;
-  const cols = ['demand', 'nav.velocity_x_out', 'nav.velocity_y_out', 'engines.load_value_out', 'pumps.load_value_out', 'guns.load_value_out', 'sonar.load_value_out'];
+  const cols = ['demand', 'rods', 'nav.velocity_x_out', 'nav.velocity_y_out', 'engines.load_value_out', 'pumps.load_value_out', 'guns.load_value_out', 'sonar.load_value_out'];
   const L = ['# BaroPowerLog v2 (synthetic ship model)', `# sub=${o.sub}`, `# reactor_max_kw=${o.maxKW}`, `# duration=${o.dur}`, `# fuel_rods=${o.rods || 2}`, `# fuel_type=${o.fuel || 'uranium'}`,
     `# engines kW=${o.engineKW} pumps kW=${o.pumpKW} base kW=${o.base}`, 't,' + cols.join(',')];
   let inX = 0, inY = 0, vx = 0, vy = 0, prevVx = 0, nextX = 0, nextY = 0, gun = 0, gunEnd = 0, nextGun = o.gunEvery ? 20 : Infinity, sonar = 0, nextPing = 0, last = null, lastT = -99, base = o.base;
@@ -30,9 +30,10 @@ function ship(name, o) {
     if (o.sonarKW && t >= nextPing) { sonar = sonar ? 0 : o.sonarKW; nextPing = t + (sonar ? 1 : 6 + r() * 6); }
     if (o.baseFn) base = o.baseFn(t, r);
     const demand = base + engines + pumps + gun + sonar;
-    const row = [demand, vx, vy, engines, pumps, gun, sonar];
-    const changed = !last || row.some((v, k) => Math.abs(v - last[k]) >= (k === 1 || k === 2 ? 0.5 : 2));
-    if (changed || t - lastT >= 5) { L.push(t.toFixed(3) + ',' + row.map((v, k) => (k === 1 || k === 2) ? v.toFixed(4) : v.toFixed(1)).join(',')); last = row; lastT = t; }
+    const rods = o.rodsAt ? o.rodsAt(t) : (o.rods || 2);
+    const row = [demand, rods, vx, vy, engines, pumps, gun, sonar];
+    const changed = !last || row.some((v, k) => Math.abs(v - last[k]) >= (k === 1 ? 1 : k === 2 || k === 3 ? 0.5 : 2));
+    if (changed || t - lastT >= 5) { L.push(t.toFixed(3) + ',' + row.map((v, k) => k === 1 ? String(v) : (k === 2 || k === 3) ? v.toFixed(4) : v.toFixed(1)).join(',')); last = row; lastT = t; }
   }
   fs.writeFileSync(path.join(out, name + '.csv'), L.join('\n') + '\n');
 }
@@ -51,4 +52,8 @@ ship('synthetic_ramps', { seed: 3, sub: 'synthetic', maxKW: 4000, dur: 900, base
 //            (only stored battery energy can cover those) -> tests battery state-of-charge management
 ship('synthetic_longhaul', { seed: 4, sub: 'synthetic', maxKW: 3000, dur: 2400, base: 700, engineKW: 1900, pumpKW: 400, gunKW: 1300, gunEvery: 40, sonarKW: 250, fuel: 'thorium',
   pilot: (r) => { const q = r(); return q < 0.4 ? { x: 0, hold: 120 + r() * 200 } : q < 0.75 ? { x: 50 + r() * 30, hold: 40 + r() * 100 } : { x: 100, hold: 30 + r() * 60 }; } });
+// rod swap: 5200 kW reactor on 1 rod, 3 more rods put in at 2:00, back to 2 at 7:00 (vanilla automatic control overheats and catches fire)
+ship('synthetic_rodswap', { seed: 5, sub: 'synthetic', maxKW: 5200, dur: 600, base: 1200, engineKW: 2200, pumpKW: 500, gunKW: 1000, gunEvery: 30, sonarKW: 250, rods: 1,
+  rodsAt: (t) => t < 120 ? 1 : t < 420 ? 4 : 2,
+  pilot: (r) => ({ x: r() < 0.3 ? 0 : 40 + r() * 60, hold: 10 + r() * 30 }) });
 console.log('wrote synthetic profiles to load_profiles/');

@@ -16,9 +16,19 @@ Records how much power the main submarine asks for and writes one CSV per round.
   - `t`
   - `demand`: grid load minus battery charging. Gun supercapacitor charging stays in. This is what the simulator replays.
   - `load`, `power`, `voltage`: the main junction box (the reactor's grid).
-  - `reactor_out`, `turbine`, `fission`, `temp`, `fuel`, `batt_in`, `batt_out`.
+  - `reactor_out`, `turbine`, `fission`, `temp`, `fuel`, `rods` (rods in the reactor; the simulator adds or removes rods when it changes), `batt_in`, `batt_out`.
   - `nav.velocity_x_out`, `nav.velocity_y_out`, `nav.current_velocity_x`, `nav.current_velocity_y`, `nav.current_position_y`: the nav terminal's output pins.
   - `engines.load_value_out`, `pumps.load_value_out`, `guns.load_value_out`, `sonar.load_value_out`: kW per device group.
 - Every `device.pin` column becomes a pin the simulated circuit can wire to, so circuits can predict power spikes from the nav terminal, engines, guns and so on.
+
+## Reactor trace (checking the simulator against the game)
+`reactortrace.lua` also writes `<sub>_roundNNN_reactor.csv`. It records the reactor 10× per second with all its internal state: temperature, fission, turbine and their targets, the ideal turbine output, load and output, available fuel, every rod's condition, AutoTemp, power, condition, the meltdown and fire timers, the operator skill factor and the optimal ranges. Events are logged too: rods added/removed, AutoTemp/power toggled, fire started, meltdown.
+
+To test something, for example 4 fuel rods in a 5200 kW reactor on automatic:
+1. Play it.
+2. Copy the `_reactor.csv` into the simulator's `traces/` folder.
+3. Run `node sim/cli.js verify <file>`.
+
+`verify` replays the trace through the simulator's reactor and prints the error for each value, the first moment the temperature differs by more than 5, and the game's events next to the simulator's. Type `reactortrace` in the console to turn it off or on.
 
 Copy the CSVs into the simulator's `load_profiles/` folder. Then run `node sim/build_web.js` so they appear on the master page, or load them with the page's "Load CSV…" button.

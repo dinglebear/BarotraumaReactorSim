@@ -9,6 +9,7 @@
 --   demand                  kW the ship's devices ask for (battery charging excluded; gun supercapacitors included)
 --   load, power, voltage    main junction box: load_value_out, power_value_out, power/load
 --   reactor_out, turbine, fission, temp, fuel   reactor (fuel = sum of rod condition %)
+--   rods                    fuel rods in the reactor right now (the simulator adds/removes rods when this changes)
 --   batt_in, batt_out       kW into / out of the batteries on the reactor grid
 --   nav.velocity_x_out, nav.velocity_y_out      nav terminal outputs (-100..100) -> engines / ballast pumps
 --   nav.current_velocity_x, nav.current_velocity_y, nav.current_position_y      nav terminal outputs (km/h, depth m)
@@ -24,7 +25,7 @@ local PL = {
     sigThreshold = 0.5,      -- signal change that counts as "changed" (signals are -100..100)
     rescanInterval = 10,     -- re-find devices (repairs, new items)
 }
-local COLS = { "demand", "load", "power", "reactor_out", "turbine", "fission", "temp", "fuel", "voltage", "batt_in", "batt_out",
+local COLS = { "demand", "load", "power", "reactor_out", "turbine", "fission", "temp", "fuel", "rods", "voltage", "batt_in", "batt_out",
     "nav.velocity_x_out", "nav.velocity_y_out", "nav.current_velocity_x", "nav.current_velocity_y", "nav.current_position_y",
     "engines.load_value_out", "pumps.load_value_out", "guns.load_value_out", "sonar.load_value_out" }
 local KW = { demand = true, load = true, power = true, reactor_out = true, batt_in = true, batt_out = true,
@@ -101,8 +102,8 @@ local function sample()
     v.reactor_out = 0
     for _, rr in ipairs(dev.reactors) do v.reactor_out = v.reactor_out + (-rr.CurrPowerConsumption) end
     v.turbine, v.fission, v.temp = r.TurbineOutput, r.FissionRate, r.Temperature
-    v.fuel = 0
-    pcall(function() for rod in r.Item.OwnInventory.AllItems do v.fuel = v.fuel + rod.ConditionPercentage end end)
+    v.fuel, v.rods = 0, 0
+    pcall(function() for rod in r.Item.OwnInventory.AllItems do v.fuel = v.fuel + rod.ConditionPercentage; v.rods = v.rods + 1 end end)
     -- nav terminal outputs (same values the game sends on its pins)
     local st = dev.steering
     if st ~= nil then
@@ -142,6 +143,7 @@ end
 local function fmt(c, n)
     if n == nil then return "" end
     if KW[c] then return string.format("%.1f", n) end
+    if c == "rods" then return tostring(n) end
     return string.format("%.4f", n)
 end
 

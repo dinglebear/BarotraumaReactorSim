@@ -26,3 +26,20 @@ const s1 = new E.Sim(P.substitute(circ, 3000), { profile: prof, reactorMaxKW: 30
 while (!s1.done) for (let i = 0; i < 7 && !s1.done; i++) s1.step();
 assert.strictEqual(JSON.stringify(s1.metrics.report()), JSON.stringify(a));
 console.log('all tests passed');
+// verify: a trace recorded from the simulator itself must replay with ~zero error
+{
+  const V = require('./verify');
+  const p2 = E.parseProfile(fs.readFileSync(path.join(ROOT, 'load_profiles/synthetic_combat.csv'), 'utf8'), 'c'); p2.duration = 90;
+  const s = new E.Sim({ name: 'x', boxes: [], links: [] }, { profile: p2, rods: 4, start: 'cold', vanilla: true, wear: false });
+  const cols = ['t', 'temp', 'fission', 'turbine', 'target_fission', 'target_turbine', 'correct_turbine', 'load', 'output', 'max_kw', 'avail_fuel', 'rods', 'rod_cond', 'autotemp', 'power_on', 'condition', 'meltdown_timer', 'fire_timer', 'dos', 'event'];
+  const L = ['# ReactorTrace v1', cols.join(',')];
+  for (let i = 0; !s.done; i++) {
+    const R = s.reactor;
+    if (i % 6 === 0) L.push([s.time, R.temp, R.fission, R.turbine, R.tf, R.tt, R.cto, R.load, -R.cpc, R.maxPower, R.availFuel, R.rods.length, R.rods.map(r => 'fuelrod:' + r.cond).join(' '), 1, 1, R.cond, R.melt, R.fire, R.dos, ''].join(','));
+    s.step();
+  }
+  const out = V.verify(L.join('\n'));
+  const tempRms = Number(/\ntemp\t([\d.]+)/.exec(out)[1]);
+  assert(tempRms < 0.5, 'verify replay error too high:\n' + out);
+}
+console.log('verify self-check passed');

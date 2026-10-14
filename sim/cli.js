@@ -91,6 +91,8 @@ const COMMANDS = {
     const s = new E.Sim(P.substitute(m, P.placeholders(cfg)), cfg);
     console.log(`ok: ${m.boxes.map(b => `${b.name}(${b.components.length} comps, ${b.wires.length} wires)`).join(' ')}` + (s.warnings.length ? '\n' + s.warnings.join('\n') : ''));
   },
+  // verify <trace.csv>: replay a ReactorTrace recorded in game and show where the simulator differs
+  verify(a) { const f = resolve(a._[0], ['load_profiles', 'traces']); process.stdout.write(require('./verify').verify(read(f))); },
   profiles() { for (const p of listProfiles({})) { const pr = E.parseProfile(read(p), path.basename(p)); const d = pr.points.map(x => x.demand); console.log(`${path.basename(p, '.csv')} dur=${pr.duration.toFixed(0)}s max_kw=${pr.reactorMaxKW || '?'} sub=${pr.meta.sub || '?'} demand=${Math.min(...d).toFixed(0)}..${Math.max(...d).toFixed(0)}`); } },
 };
 

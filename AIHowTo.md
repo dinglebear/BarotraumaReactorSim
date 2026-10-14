@@ -9,7 +9,7 @@ node sim/cli.js run <circuit> --profile <name>      # one test, prints the full 
 node sim/cli.js compare a,b,vanilla --profile all   # side-by-side table (vanilla = game's own auto control)
 node sim/cli.js check <circuit>                     # fast syntax/wiring check, no run
 ```
-Other: `decompile <file.txt>` (in-game file -> .circ text), `build <circuit>` (export only), `profiles` (list test files).
+Other: `decompile <file.txt>` (in-game file -> .circ text), `build <circuit>` (export only), `profiles` (list test files), `verify <trace.csv>` (replay a reactor trace recorded in game and show where the simulator differs; traces go in `traces/`).
 Flags: `--batteries N` (0 = off), `--btype battery|supercapacitor`, `--max KW`, `--rods N`, `--fuel uranium|thorium|fulgurium|volatile`, `--link wire|wifi`, `--start warm|cold`, `--duration S`, `--timeline` (also write a 1 Hz CSV), `--battery file.txt`.
 Defaults come from `sim.config.json` (the web page's "Save settings" writes this file). The test file supplies the reactor max output and the rod count unless overridden.
 
@@ -99,6 +99,9 @@ Number output format: shortest float32 text (`0.1`, `0.33333334`, `1E-05`). Unpa
 - CTO (ideal turbine) = load/max×100, smoothed. It is not sent out; compute it from in1.
 - Fuel burn per rod: `fission/100 * 0.2` condition/s, for EVERY rod present. Fewer rods = less burn; more fuel = more heat per % fission. **Fuel efficiency = keep fission as low as the needed heat allows.**
 - Danger: temp > 60 for 20 s starts a fire (repeats). Temp > 70 runs the meltdown timer (120 s → meltdown). Temp < 40 is outside the optimal range (no ±3 % bonus).
+- **Wear** (as in game): the reactor loses 0.125 condition/s while running, after a random 120-720 s delay, down to 10 %. The fire and meltdown timers run `lerp(2x, 1x, condition)` faster, so a worn reactor catches fire after ~10.5 s above 60 and melts down after ~63 s above 70. `reactor_condition_min_pct` is in the log. The junction box wears too (0.1/s).
+- **Rods can change mid-round.** A test file's `rods` column adds or removes rods when the player did. Heat = fission × fuel/100 × 2 jumps at once (1 → 4 uranium rods = 4× heat), while fission can only fall ~5 %/s. Watch `fuel_out` (in4) and cut fission the moment it jumps. `synthetic_rodswap`: 5200 kW, 1 rod, 4 rods at 2:00 (the game's own automatic control overheats and starts a fire), 2 rods at 7:00.
+- Warm start = sub saved mid-round in a steady state (temp 50, turbine = load). With AutoTemp on, the game's round-start fast sync also runs for the first 5 s.
 - Grid: voltage = supply/load. < 0.5 devices shut off, < 0.9 brownout, > 2 junction boxes take random damage.
 - Batteries (exactly as in game, all on the reactor's grid):
   - **Shortfall is automatic.** When reactor supply < load, batteries discharge to cover the gap with no signal needed. They share it in proportion to max output, give less below 10 % charge, and stop when empty. `disable_output` (any value except "0") turns this off.

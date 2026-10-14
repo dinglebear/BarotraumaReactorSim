@@ -126,6 +126,25 @@ const COMMANDS = {
     process.stdout.write(A.pinsText(res));
     if (a.write || !fs.existsSync(f.replace(/\.txt$/, '.pins'))) { const pf = f.replace(/\.(txt|circ)$/, '.pins'); if (fs.existsSync(pf)) fs.writeFileSync(pf + '.bak', read(pf)); fs.writeFileSync(pf, A.pinsText(res)); console.log('saved ' + rel(pf)); }
   },
+  // ship <sub name or .sub file> [--circuit name] [--battery-circuit name] [--duration s] [--no-fights] [--breach s] [--summary]
+  // practice round on a whole sub (ships/vanilla/*.sub, ships/custom/*.sub); the circuit is wired into its reactor/junction/batteries/nav
+  ship(a) {
+    const zlib = require('zlib'), SF = require('./subfile'), SH = require('./ship');
+    const name = a._[0] || 'Dugong', f = [name, `ships/vanilla/${name}.sub`, `ships/custom/${name}.sub`].map(x => path.isAbsolute(x) ? x : path.join(ROOT, x)).find(x => fs.existsSync(x) && fs.statSync(x).isFile());
+    if (!f) throw new Error(`no sub "${name}" (looked in ships/vanilla and ships/custom)`);
+    const buf = fs.readFileSync(f), ship = SF.parseSub((buf[0] === 0x1f && buf[1] === 0x8b ? zlib.gunzipSync(buf) : buf).toString('utf8'));
+    if (a.summary) { console.log(SF.summary(ship)); return; }
+    const cfg = loadConfig(a);
+    const sim = new SH.ShipSim(ship, { duration: Number(a.duration) || 600, rods: cfg.rods, fuelType: cfg.fuelType, start: cfg.start, seed: cfg.seed,
+      scenario: { fights: !a['no-fights'], breachAt: a.breach != null ? Number(a.breach) : null } });
+    let model = null;
+    if (a.circuit) model = loadModel(resolve(a.circuit, CIRC_DIRS), a['battery-circuit'] && resolve(a['battery-circuit'], CIRC_DIRS));
+    if (model) { const sum = k => sim.batteries.reduce((x, b) => x + b[k], 0); sim.attachCircuit(P.substitute(model, { MAX: sim.reactor.maxPower, BATT_N: sim.batteries.length, BATT_KW: sum('maxRecharge'), BATT_OUT: sum('maxOut'), BATT_CAP: sum('capacity') })); }
+    sim.cfg.circuitName = model ? model.name : 'crew_autotemp';
+    const r = sim.runToEnd(); r.profile = ship.name + '_practice'; r.warnings = sim.warnings;
+    const out = path.join(ROOT, 'logs', `${r.circuit}__${r.profile}.log`); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, P.fmtReport(r));
+    process.stdout.write(P.fmtReport(r)); console.log('log: ' + rel(out));
+  },
   // verify <trace.csv>: replay a ReactorTrace recorded in game and show where the simulator differs
   verify(a) { const f = resolve(a._[0], ['traces', 'load_profiles']); process.stdout.write(require('./verify').verify(read(f), { from: a.from != null ? Number(a.from) : null, mode: a.physics ? 'physics' : a.autotemp ? 'autotemp' : null, debug: a.debug ? String(a.debug).split('-').map(Number) : null })); },
   profiles() { for (const p of listProfiles({})) { const pr = E.parseProfile(read(p), path.basename(p)); const d = pr.points.map(x => x.demand); console.log(`${path.basename(p, '.csv')} dur=${pr.duration.toFixed(0)}s max_kw=${pr.reactorMaxKW || '?'} sub=${pr.meta.sub || '?'} demand=${Math.min(...d).toFixed(0)}..${Math.max(...d).toFixed(0)}`); } },

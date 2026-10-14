@@ -233,3 +233,21 @@ Compare with: `node sim/cli.js compare vanilla,basic_reactor,lammert_arc_hts,ove
 - a **Circuit box** tab that draws each box with live signal values. Its Edit mode is a visual editor: add/move/delete components, wire pins, set properties and box pin connections, then Apply & test. The result is saved as the "Edited: my_circuit" entry; positions go into the .circ as `@x,y` and into the exported .txt;
 - an editor for the circuit text;
 - saving of the in-game .txt files and the log.
+
+## 11. Whole-sub practice rounds
+`node sim/cli.js ship <Dugong|Humpback|Typhon2|path.sub> [--circuit name] [--battery-circuit name] [--duration s] [--no-fights] [--breach s]`. Add `--summary` to only list what the sub has.
+
+The sub mock (`sim/subfile.js` reads the `.sub`, `sim/ship.js` simulates it) runs every electrical item of a real sub with that sub's own settings and wiring:
+- reactor, batteries, supercapacitors, junction boxes, relays (start closed), engines, pumps, nav terminal/sonar;
+- turrets and discharge coils on their supercapacitor grids;
+- lights, oxygen generator, fabricators, doors, detectors and buttons;
+- standalone logic components, and the sub's own circuit boxes.
+
+How the round plays:
+- Power is solved per grid. Relays join grids when closed.
+- No water or crew. A scenario plays the round: a pilot, fights (gunners fire, sonar goes active), and an optional hull breach (the water detectors in that room read 100 %).
+- Without `--circuit`, the crew's automatic control runs the reactor.
+- With `--circuit`, the circuit's box pins are wired to the sub's real devices: `reactor.*`, `junction.*` (the main junction box), `battery.*` (all ship batteries), `nav.*` (the nav terminal), `const.N`.
+- `$MAX`/`$BATT_*` are filled from the sub. The log has the same metrics as a test-file run.
+
+Each sub sets its own reactor fire/meltdown delays, junction-box overload voltage (1.7) and battery sizes. Test-file headers carry them too (`reactor_fire_delay`, `junction_overload_voltage`, `ship_batteries`).

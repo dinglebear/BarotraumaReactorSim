@@ -196,8 +196,12 @@
         const b = getBox(); const def = C.byAlias(t[2]);
         if (!def) throw new Error(`line ${ln}: unknown component type "${t[2]}". Types: ${C.aliases().join(' ')}`);
         if (b.components.find(c => c.id === t[1])) throw new Error(`line ${ln}: duplicate id ${t[1]}`);
-        const props = {}; for (const kv of t.slice(3)) { const i = kv.indexOf('='); props[C.propName(def, kv.slice(0, i))] = kv.slice(i + 1); }
-        b.components.push({ id: t[1], item: def.item, cls: def.cls, props, pos: null });
+        const props = {}; let pos = null;
+        for (const kv of t.slice(3)) {
+          const at = /^@(-?[\d.]+),(-?[\d.]+)$/.exec(kv); if (at) { pos = [Number(at[1]), Number(at[2])]; continue; } // @x,y = position in the box
+          const i = kv.indexOf('='); props[C.propName(def, kv.slice(0, i))] = kv.slice(i + 1);
+        }
+        b.components.push({ id: t[1], item: def.item, cls: def.cls, props, pos });
       }
       else if (k === 'w') {
         const b = getBox(); const from = ep(t[1], b, ln); let col = 'redwire';
@@ -212,7 +216,7 @@
   }
   function newBox(name) { return { name, pins: null, components: [], wires: [], labels: [], inLabels: {}, outLabels: {}, inPos: null, outPos: null }; }
 
-  function toCirc(model) {
+  function toCirc(model, opts) { // opts.positions: keep component positions (@x,y), e.g. from the visual editor
     const L = [`name ${model.name}`];
     if (model.meta) { const m = Object.entries(model.meta); if (m.length) L.push('set ' + m.map(([a, b]) => `${a}=${b}`).join(' ')); }
     const qv = v => /[\s"#]/.test(v) || v === '' ? '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n') + '"' : v;
@@ -225,7 +229,7 @@
       for (const c of b.components) {
         const def = C.byItem(c.item);
         const props = Object.entries(c.props).filter(([k, v]) => !def || def.defaults[k] === undefined || String(def.defaults[k]) !== String(v));
-        L.push(`c ${ids[c.id]} ${def ? def.alias : c.item}` + props.map(([k, v]) => ` ${k}=${qv(v)}`).join(''));
+        L.push(`c ${ids[c.id]} ${def ? def.alias : c.item}` + props.map(([k, v]) => ` ${k}=${qv(v)}`).join('') + (opts && opts.positions && c.pos ? ` @${Math.round(c.pos[0])},${Math.round(c.pos[1])}` : ''));
       }
       const groups = new Map();
       for (const w of b.wires) {
@@ -245,5 +249,5 @@
     if (/<CircuitBox/.test(text)) { const b = parseTxt(text, boxName); return { name: boxName || 'imported', boxes: [b], links: [], meta: {} }; }
     return parseCirc(text);
   }
-  return { parseTxt, toTxt, parseCirc, toCirc, load, shortPin, longPin };
+  return { parseTxt, toTxt, parseCirc, toCirc, load, shortPin, longPin, autoLayout };
 });

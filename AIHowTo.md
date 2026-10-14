@@ -227,7 +227,9 @@ Compare with: `node sim/cli.js compare vanilla,basic_reactor,lammert_arc_hts,ove
 
 ## 10. Web bench (for the human)
 `web/index.html` is the master page. Rebuild it with `node sim/build_web.js` after adding circuits or profiles. It has:
-- master settings: batteries on/off, reactor max output, test file, circuit;
+- master settings: test file, reactor max output, rods, batteries (the sub's own or set by hand);
+- a **reactor circuit** and a separate **battery circuit** dropdown. Any circuit's battery box can pair with any reactor circuit;
 - live charts at x1/x5/x10/x25/Max speed (all speeds give the same result);
+- a **Circuit box** tab that draws each box with live signal values. Its Edit mode is a visual editor: add/move/delete components, wire pins, set properties and box pin connections, then Apply & test. The result is saved as the "Edited: my_circuit" entry; positions go into the .circ as `@x,y` and into the exported .txt;
 - an editor for the circuit text;
 - saving of the in-game .txt files and the log.

@@ -147,6 +147,7 @@
     }
     // Connection.SendSignal
     connSend(conn, sig) {
+      conn.last = sig.v; // last value through this pin (shown by the web bench's circuit view)
       for (const r of conn.wires) {
         if (r.item === conn.item || (sig.src && sig.src.lsr[sig.src.lsr.length - 1] === r)) continue;
         if (sig.src) sig.src.lsr.push(r);
@@ -154,7 +155,7 @@
       }
       for (const t of conn.cb) t(sig);
     }
-    deliver(conn, sig) { const h = conn.item.recv; if (h) h(conn.pin, sig); }
+    deliver(conn, sig) { conn.last = sig.v; const h = conn.item.recv; if (h) h(conn.pin, sig); }
 
     // ---------- circuit box ----------
     buildBox(bm) {

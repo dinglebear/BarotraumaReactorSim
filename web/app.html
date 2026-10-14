@@ -81,6 +81,35 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
 .filecard h3 { font: 600 13px var(--f-mono) }
 .filecard pre { margin: 0; max-height: 160px; overflow: auto; font: 11px/1.4 var(--f-mono); color: var(--muted); white-space: pre; background: var(--sunk); padding: 8px; border-radius: 4px }
 .clock { font: 500 15px var(--f-mono); font-variant-numeric: tabular-nums; min-width: 9ch }
+/* circuit box view / editor */
+.edbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.edbar select { width: auto; max-width: 220px }
+.edgrid { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 10px; min-width: 0 }
+@media (max-width: 760px) { .edgrid { grid-template-columns: minmax(0, 1fr) } }
+.edwrap { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--sunk); height: 620px; overflow: hidden; touch-action: none }
+.edwrap svg { width: 100%; height: 100%; display: block; cursor: grab; user-select: none }
+.edwrap svg.panning { cursor: grabbing }
+.edwrap .zoom { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px }
+.edwrap .zoom button { padding: 3px 9px; font-family: var(--f-mono) }
+.insp { border: 1px solid var(--line); border-radius: 4px; padding: 10px; display: grid; gap: 8px; align-content: start; font-size: 13px; min-width: 0; max-height: 620px; overflow: auto }
+.insp h3 { font: 600 14px var(--f-display) }
+.insp label { display: grid; gap: 3px; font-size: 12px; color: var(--muted) }
+.insp .val { font: 12px var(--f-mono); background: var(--sunk); padding: 4px 6px; border-radius: 4px; word-break: break-all; color: var(--ink) }
+.cb-comp rect.body { fill: var(--panel); stroke: var(--line); stroke-width: 2 }
+.cb-comp rect.head { fill: var(--ink) }
+.cb-comp.sel rect.body { stroke: var(--accent); stroke-width: 5 }
+.cb-io rect.body { fill: var(--panel); stroke: var(--muted); stroke-width: 2; stroke-dasharray: 8 6 }
+.cb-pin { fill: var(--panel); stroke: var(--muted); stroke-width: 3; cursor: crosshair }
+.cb-pin.wired { fill: var(--muted) }
+.cb-pin.pend { fill: var(--accent); stroke: var(--accent) }
+.cb-pin.sel { stroke: var(--accent); stroke-width: 6 }
+.cb-wire { fill: none; stroke-width: 4; pointer-events: none }
+.cb-wirehit { fill: none; stroke: transparent; stroke-width: 18; cursor: pointer }
+.cb-wire.sel { stroke-width: 8 }
+.cb-t { font-family: var(--f-mono); fill: var(--ink) }
+.cb-h { font-family: var(--f-display); font-weight: 600; fill: var(--panel) }
+.cb-v { font-family: var(--f-mono); fill: var(--accent) }
+.cb-m { font-family: var(--f-mono); fill: var(--muted) }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
 </style>
 
@@ -116,25 +145,29 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
         <legend>Reactor</legend>
         <label class="row">Max output (kW)<input type="number" id="maxKW" min="100" step="100"></label>
         <label class="check"><input type="checkbox" id="maxAuto" checked> Use the value saved in the test file</label>
-        <label class="row">Fuel rods<select id="rods"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+        <label class="row">Fuel rods<select id="rods"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
         <label class="row">Rod type<select id="fuelType"><option value="uranium">Uranium (80)</option><option value="thorium">Thorium (100)</option><option value="fulgurium">Fulgurium (150)</option><option value="volatile">Volatile fulg. (400)</option></select></label>
         <label class="row">Start state<select id="start"><option value="warm">Warm (round start)</option><option value="cold">Cold (0 °)</option></select></label>
+        <p class="hint">Test files only supply the sub's power demand. Rods and rod type are yours to pick; rods don't run out, but the fuel burned is counted.</p>
       </fieldset>
       <fieldset>
         <legend>Batteries</legend>
         <label class="check"><input type="checkbox" id="battOn"> Allow batteries (adds a 2nd circuit box)</label>
+        <label class="check"><input type="checkbox" id="battShip" checked> Use the sub's own batteries (from the test file)</label>
+        <p class="hint" id="battInfo"></p>
         <label class="row">Count<input type="number" id="battN" min="1" max="8" value="2"></label>
         <label class="row">Type<select id="battType"><option value="battery">Battery</option><option value="supercapacitor">Supercapacitor (meant for guns)</option></select></label>
         <label class="row">Start charge %<input type="number" id="battStart" min="0" max="100" value="50"></label>
         <label class="row">Start charge rate %<input type="number" id="battRate" min="0" max="100" step="10" value="0"></label>
-        <p class="hint">Batteries cover any shortfall on their own. To soak up surplus (overvoltage), the battery box has to raise <code>set_rate</code>.</p>
+        <p class="hint">Batteries cover any shortfall on their own. A full battery can't absorb anything: to soak up surplus (overvoltage), the battery circuit has to raise <code>set_rate</code>, so keep the charge near 80 %.</p>
         <label class="row">Box link<select id="linkMode"><option value="wire">Wire</option><option value="wifi">Wifi components</option></select></label>
+        <label class="row wide">Battery circuit<select id="battCirc" aria-label="Battery circuit"></select></label>
       </fieldset>
       <fieldset>
-        <legend>Circuit</legend>
-        <select id="circSel" aria-label="Circuit"></select>
+        <legend>Reactor circuit</legend>
+        <select id="circSel" aria-label="Reactor circuit"></select>
         <label class="btn filebtn">Load .circ / .txt…<input type="file" id="circFile" accept=".circ,.txt" multiple></label>
-        <p class="hint">For two in-game files, select both (<code>name_reactor.txt</code> and <code>name_battery.txt</code>).</p>
+        <p class="hint">For two in-game files, select both (<code>name_reactor.txt</code> and <code>name_battery.txt</code>). Build your own in the <b>Circuit box</b> tab.</p>
       </fieldset>
     </aside>
 
@@ -145,7 +178,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
         <div class="panel tile"><span class="k">Temperature</span><span class="v" id="tT">–</span><span class="s" id="sT">optimal 40–60</span></div>
         <div class="panel tile"><span class="k">Fission → target</span><span class="v" id="tF">–</span><span class="s" id="sF"></span></div>
         <div class="panel tile"><span class="k">Turbine → target</span><span class="v" id="tU">–</span><span class="s" id="sU"></span></div>
-        <div class="panel tile"><span class="k">Fuel left</span><span class="v" id="tFu">–</span><span class="s" id="sFu"></span></div>
+        <div class="panel tile"><span class="k">Fuel used</span><span class="v" id="tFu">–</span><span class="s" id="sFu"></span></div>
         <div class="panel tile" id="tileB"><span class="k">Batteries</span><span class="v" id="tB">off</span><span class="s" id="sB"></span></div>
       </section>
 
@@ -160,6 +193,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       <section class="panel">
         <div class="tabs" role="tablist">
           <button role="tab" data-tab="log" aria-selected="true">Log</button>
+          <button role="tab" data-tab="box" aria-selected="false">Circuit box</button>
           <button role="tab" data-tab="circ" aria-selected="false">Circuit (.circ)</button>
           <button role="tab" data-tab="files" aria-selected="false">In-game files</button>
         </div>
@@ -167,6 +201,21 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
           <div id="status" class="msg">Pick a test file and a circuit, then press Start.</div>
           <pre class="log" id="log">No run yet.</pre>
           <div class="bar"><button id="btnSaveLog" data-dl>Save log</button><button id="btnSaveTl" data-dl>Save timeline CSV</button><button id="btnCopyLog">Copy log</button></div>
+        </div>
+        <div class="tabpane" data-pane="box" hidden>
+          <div class="edbar">
+            <div class="seg" id="edBox" role="group" aria-label="Which circuit box"><button data-b="reactor" aria-pressed="true">Reactor box</button><button data-b="battery" aria-pressed="false">Battery box</button></div>
+            <label class="check"><input type="checkbox" id="edEdit"> Edit</label>
+            <select id="edAddType" aria-label="Component to add"></select><button id="edAdd">Add component</button>
+            <button id="edNew" title="Start this box from scratch (the default pin wiring stays)">New empty box</button>
+            <button id="edApply" class="primary">Apply &amp; test</button><button id="edRevert">Revert</button>
+            <span id="edMsg" class="hint"></span>
+          </div>
+          <div class="edgrid">
+            <div class="edwrap" id="edWrap"><svg id="edSvg" tabindex="0" aria-label="Circuit box diagram"></svg>
+              <div class="zoom"><button id="edZin" aria-label="Zoom in">+</button><button id="edZout" aria-label="Zoom out">−</button><button id="edFit">Fit</button></div></div>
+            <div class="insp" id="edInsp"></div>
+          </div>
         </div>
         <div class="tabpane" data-pane="circ" hidden>
           <p class="hint">Edit the compact circuit text and press Apply. <code>$MAX</code> (reactor kW) and <code>$BATT_KW</code> / <code>$BATT_OUT</code> / <code>$BATT_N</code> (battery totals) are filled in from the settings. Syntax is in AIHowTo.md.</p>
@@ -202,19 +251,30 @@ function refreshLists() {
   const groups = [['vanilla', 'Vanilla automatic control (baseline)']];
   for (const k of Object.keys(circuits).sort()) groups.push([k, (circuits[k].group ? circuits[k].group + ': ' : '') + k]);
   fillSelect($('circSel'), groups, store.get('circuit', null) || 'example_feedforward');
+  refreshBattList();
+}
+// battery circuits: the battery box of any circuit that has one (or the reactor circuit's own)
+function hasBatteryBox(key) { const c = circuits[key]; if (!c) return false; if (c.battery) return true; if (c.circ != null) return /^\s*box\s+battery\b/m.test(c.circ); return false; }
+function refreshBattList(keep) {
+  const rk = $('circSel').value, prev = keep || $('battCirc').value || store.get('battCircuit', null);
+  const opts = [['none', 'None: batteries only cover shortfalls']];
+  if (hasBatteryBox(rk)) opts.push(['same', 'The reactor circuit\'s own battery box']);
+  for (const k of Object.keys(circuits).sort()) if (k !== rk && hasBatteryBox(k)) opts.push(['b:' + k, (circuits[k].group ? circuits[k].group + ': ' : '') + k]);
+  const want = opts.some(o => o[0] === prev) ? prev : hasBatteryBox(rk) ? 'same' : 'none';
+  fillSelect($('battCirc'), opts, want);
 }
 function config() {
   return {
     reactorMaxKW: Number($('maxKW').value) || 5000, rods: Number($('rods').value), fuelType: $('fuelType').value, start: $('start').value,
     linkMode: $('linkMode').value, seed: 12345,
-    batteries: { enabled: $('battOn').checked, count: Math.max(1, Number($('battN').value) || 1), type: $('battType').value, startCharge: (Number($('battStart').value) || 0) / 100, startRate: Number($('battRate').value) || 0 },
+    batteries: { enabled: $('battOn').checked, ship: $('battShip').checked, count: Math.max(1, Number($('battN').value) || 1), type: $('battType').value, startCharge: (Number($('battStart').value) || 0) / 100, startRate: Number($('battRate').value) || 0 },
   };
 }
-function saveSettings() { const c = config(); store.set('settings', { ...c, maxAuto: $('maxAuto').checked }); store.set('profile', $('profileSel').value); store.set('circuit', $('circSel').value); }
+function saveSettings() { const c = config(); store.set('settings', { ...c, maxAuto: $('maxAuto').checked }); store.set('profile', $('profileSel').value); store.set('circuit', $('circSel').value); store.set('battCircuit', $('battCirc').value); }
 function loadSettings() {
   const s = store.get('settings', null); if (!s) return;
   $('maxKW').value = s.reactorMaxKW; $('maxAuto').checked = s.maxAuto !== false; $('rods').value = s.rods; $('fuelType').value = s.fuelType; $('start').value = s.start; $('linkMode').value = s.linkMode;
-  $('battOn').checked = !!s.batteries.enabled; $('battN').value = s.batteries.count; $('battType').value = s.batteries.type; $('battStart').value = Math.round(s.batteries.startCharge * 100); $('battRate').value = s.batteries.startRate || 0;
+  $('battShip').checked = s.batteries.ship !== false; $('battOn').checked = !!s.batteries.enabled; $('battN').value = s.batteries.count; $('battType').value = s.batteries.type; $('battStart').value = Math.round(s.batteries.startCharge * 100); $('battRate').value = s.batteries.startRate || 0;
 }
 function selectProfile() {
   const key = $('profileSel').value; if (!key) return;
@@ -223,15 +283,36 @@ function selectProfile() {
   $('profileInfo').textContent = `${profile.meta.sub || 'unknown sub'} · ${fmtClock(profile.duration)} · demand ${Math.round(Math.min(...d))}–${Math.round(Math.max(...d))} kW · max output ${profile.reactorMaxKW ? profile.reactorMaxKW + ' kW' : 'not saved'}` + (profile.channels.length ? ` · recorded pins you can wire: ${profile.channels.join(', ')}` : '');
   if ($('maxAuto').checked && profile.reactorMaxKW) $('maxKW').value = profile.reactorMaxKW;
   if (!$('maxKW').value) $('maxKW').value = 5000;
-  if (profile.meta.fuel_rods && Number(profile.meta.fuel_rods) >= 1 && Number(profile.meta.fuel_rods) <= 4) $('rods').value = profile.meta.fuel_rods;
-  if (profile.meta.fuel_type && [...$('fuelType').options].some(o => o.value === profile.meta.fuel_type)) $('fuelType').value = profile.meta.fuel_type;
+  battInfo();
+}
+function battInfo() {
+  const sb = profile && profile.meta.ship_batteries, ship = $('battShip').checked;
+  $('battInfo').textContent = sb ? `This sub has ${sb.replace(/\s*\(/, ' batteries (').replace(/\)$/, ')')}.` + (ship ? '' : ' Not used: count and type below apply.') : 'This test file doesn\'t list the sub\'s batteries; count and type below apply.';
+  $('battN').disabled = $('battType').disabled = ship && !!sb;
+}
+function entryModel(key) {
+  const c = circuits[key]; if (!c) return null;
+  const m = c.circ != null ? F.parseCirc(c.circ) : P.loadModel(c.main, c.mainName, c.battery, c.pins);
+  if (c.pinsFound) for (const b of m.boxes) if (c.pinsFound[b.name]) b.pins = c.pinsFound[b.name];
+  return m;
+}
+// the model under test: the reactor circuit's reactor box + the chosen battery circuit's battery box (+ links between them)
+function composeModel() {
+  const rk = $('circSel').value, bsel = $('battCirc').value;
+  const A = rk === 'vanilla' ? { name: 'vanilla_autotemp', boxes: [], links: [], meta: {} } : entryModel(rk);
+  const B = bsel === 'same' ? A : bsel.startsWith('b:') ? entryModel(bsel.slice(2)) : null;
+  const boxes = A.boxes.filter(b => b.name !== 'battery'), bb = B && B.boxes.find(b => b.name === 'battery');
+  if (bb) boxes.push(bb);
+  const names = new Set(boxes.map(b => b.name)), links = [];
+  for (const src of [A, B]) if (src) for (const l of src.links || []) if (names.has(l.from.split('.')[0]) && names.has(l.to.split('.')[0]) && !links.some(x => x.from === l.from && x.to === l.to)) links.push(l);
+  return { name: A.name + (bb && B !== A ? '+' + B.name : ''), boxes, links, meta: A.meta || {} };
 }
 function selectCircuit() {
   const key = $('circSel').value;
-  if (key === 'vanilla') { $('circText').value = '# Vanilla automatic control: no circuit box, the reactor\'s own AutoTemp runs it.\n'; return; }
-  const c = circuits[key];
-  try { $('circText').value = c.circ != null ? c.circ : F.toCirc(P.loadModel(c.main, c.mainName, c.battery, c.pins)); }
-  catch (e) { $('circText').value = ''; status('Could not read circuit: ' + e.message, true); }
+  try {
+    const m = composeModel();
+    $('circText').value = (key === 'vanilla' ? '# Vanilla automatic control: the reactor\'s own AutoTemp runs it (no reactor box).\n' : '') + (m.boxes.length ? F.toCirc(m, { positions: true }) : '');
+  } catch (e) { $('circText').value = ''; status('Could not read circuit: ' + e.message, true); }
 }
 
 // ---------- pin finder ----------
@@ -255,9 +336,9 @@ async function findPins(force) {
   const res = s.value;
   if (c) c.pinsChecked = true;
   if ((res.initialWorks && !force) || res.cost >= res.initialCost - 0.01) { if (force) status(`Pins checked: ${res.log[res.log.length - 1]}. Nothing better found.`); return; }
-  for (const b of m.boxes) if (res.pins[b.name]) b.pins = res.pins[b.name];
-  const text = res.log.map(l => '# autopins: ' + l).join('\n') + (res.changed.length ? '\n# autopins changed: ' + res.changed.join(', ') : '') + '\n' + F.toCirc(m);
-  $('circText').value = text; if (c) { c.circ = text; }
+  if (c) c.pinsFound = res.pins;
+  selectCircuit();
+  $('circText').value = res.log.map(l => '# autopins: ' + l).join('\n') + (res.changed.length ? '\n# autopins changed: ' + res.changed.join(', ') : '') + '\n' + $('circText').value;
   build();
   status(`Pins found by trial and error (${res.changed.length} moved, ${res.tried} test runs): ${res.changed.join(', ')}. See the Circuit tab.`);
 }
@@ -269,7 +350,8 @@ function build() {
   const cfg = config(); const key = $('circSel').value;
   cfg.profile = profile; cfg.vanilla = key === 'vanilla';
   try {
-    model = cfg.vanilla ? { name: 'vanilla_autotemp', boxes: [], links: [] } : F.parseCirc($('circText').value);
+    model = /^\s*(#[^\n]*\n?\s*)*$/.test($('circText').value) ? { name: 'vanilla_autotemp', boxes: [], links: [], meta: {} } : F.parseCirc($('circText').value);
+    if (cfg.vanilla) { model.boxes = model.boxes.filter(b => b.name !== 'reactor'); model.name = model.boxes.length ? 'vanilla+' + model.name : 'vanilla_autotemp'; }
     if (!cfg.vanilla && !model.boxes.length) throw new Error('the circuit has no components');
     cfg.circuitName = model.name;
     sim = new E.Sim(P.substitute(model, P.placeholders(cfg)), cfg);
@@ -278,7 +360,7 @@ function build() {
     status(`Ready: ${model.name} on ${profile.name} with a ${cfg.reactorMaxKW} kW reactor.${w}`, !!w);
     $('log').textContent = 'Running produces the log here.';
   } catch (e) { sim = null; status('Circuit error: ' + e.message, true); }
-  renderFiles(); render(); draw();
+  renderFiles(); render(); draw(); edSync();
 }
 function status(t, err) { const s = $('status'); s.textContent = t; s.className = 'msg' + (err ? ' err' : ''); }
 function setRunLabel() { $('btnRun').textContent = running ? 'Pause' : (sim && sim.time > 0 && !finished ? 'Resume' : 'Start'); }
@@ -301,7 +383,7 @@ function finish() {
   report = sim.metrics.report();
   $('log').textContent = P.fmtReport(report);
   status(`Finished: reliability ${report.score_reliability}/100` + (report.score_battery != null ? `, batteries ${report.score_battery}/100 (avg charge ${report.battery_soc_avg_pct}%)` : '') + `, ${report.kwh_per_rod_adjusted ?? report.kwh_per_rod ?? '–'} kWh per fuel rod, ${report.unmet_pct}% demand unmet.`);
-  showTab('log');
+  if (document.querySelector('[role=tab][aria-selected=true]').dataset.tab !== 'box') showTab('log');
 }
 
 // ---------- readouts ----------
@@ -319,7 +401,8 @@ function render() {
   setTile('tT', n.temp.toFixed(1), 'sT', R.cond <= 0 ? '<span class="pill bad">MELTDOWN</span>' : `optimal ${R.optTemp[0]}–${R.optTemp[1]} · meltdown timer ${R.melt.toFixed(0)}s`, tc);
   setTile('tF', `${n.fission.toFixed(1)}%`, 'sF', `→ ${n.tf.toFixed(1)}% ${n.fCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
   setTile('tU', `${n.turbine.toFixed(1)}%`, 'sU', `→ ${n.tt.toFixed(1)}% · ideal ${n.cto.toFixed(1)}% ${n.tCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
-  setTile('tFu', `${n.fuel.toFixed(1)}%`, 'sFu', `${R.rods.length} rod${R.rods.length > 1 ? 's' : ''} · used ${sim.metrics.fuel.toFixed(1)}`);
+  setTile('tFu', `${sim.metrics.fuel.toFixed(1)}`, 'sFu', `rod condition · ${R.rods.length} ${sim.fuelType} rod${R.rods.length > 1 ? 's' : ''}`);
+  edLive();
   if (sim.batteries.length) setTile('tB', `${n.batt.toFixed(1)}%`, 'sB', `charging ${Math.round(n.battIn)} · giving ${Math.round(n.battOut)} kW`, n.batt < 10 || n.batt > 95 ? 'warn' : '');
   else setTile('tB', 'off', 'sB', 'enable in settings');
 }
@@ -382,16 +465,266 @@ function renderFiles() {
   syncDl();
 }
 function syncDl() { document.querySelectorAll('[data-dl]').forEach(b => b.hidden = !downloads); }
-function showTab(name) { document.querySelectorAll('[role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name)); document.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== name); }
+function showTab(name) { document.querySelectorAll('[role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name)); document.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== name); if (name === 'box') { ED.view = null; edRender(); } }
+
+// ---------- circuit box: view + visual editor ----------
+// Draws a box the way the in-game editor lays it out (input node left, components, output node right) and lets the
+// user build circuits: add/move/delete components, click an output pin then an input pin to wire, set properties and
+// what each box pin connects to. "Apply & test" turns the drawing into .circ text and runs it.
+const C = self.BaroComponents;
+const ED = { model: null, box: 'reactor', sel: null, pend: null, view: null, dirty: false, drag: null, liveAt: 0 };
+const CW = 290, HEAD = 40, ROW = 30, IOW = 380, NS = 'http://www.w3.org/2000/svg';
+const NAMES = { and: 'AND', or: 'OR', xor: 'XOR', add: 'Adder', sub: 'Subtract', mul: 'Multiply', div: 'Divide', mod: 'Modulo', pow: 'Exponentiation', round: 'Round', ceil: 'Ceil', floor: 'Floor', factorial: 'Factorial', abs: 'Abs', sqrt: 'Square root', sin: 'Sin', cos: 'Cos', tan: 'Tan', asin: 'Asin', acos: 'Acos', atan: 'Atan', not: 'NOT', greater: 'Greater than', equals: 'Equals', check: 'Signal check', mem: 'Memory', delay: 'Delay', osc: 'Oscillator', relay: 'Relay', concat: 'Concatenation', color: 'Color', regex: 'RegEx find', mux: 'Multiplexer', demux: 'Demultiplexer', wifi: 'Wifi' };
+const WIRE_COLORS = { redwire: '#d0453a', bluewire: '#3a7bd0', greenwire: '#3aa65a', orangewire: '#e08a2c', yellowwire: '#d4b52a', blackwire: '#777', brownwire: '#9a6b3c', wire: '#9aa' };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const edBox = () => ED.model && ED.model.boxes.find(b => b.name === ED.box);
+const defOf = c => C.byItem(c.item);
+const pinShort = p => p.replace(/^signal_/, '');
+function edSync(force) { // take the circuit under test into the editor unless the user has unsaved edits
+  if (ED.dirty && !force) { edRender(); return; }
+  ED.model = clone(model && model.boxes.length ? model : { name: 'my_circuit', boxes: [], links: [], meta: {} });
+  for (const b of ED.model.boxes) F.autoLayout(b);
+  ED.dirty = false; ED.sel = ED.pend = null;
+  if (!edBox() && ED.model.boxes.length) ED.box = ED.model.boxes[0].name;
+  edSetBoxButtons(); ED.view = null; edRender();
+}
+function edSetBoxButtons() { document.querySelectorAll('#edBox button').forEach(x => x.setAttribute('aria-pressed', x.dataset.b === ED.box)); }
+function edMsg(t) { $('edMsg').textContent = t || (ED.dirty ? 'Unsaved changes: press Apply & test.' : ''); }
+// geometry
+function compSize(c) { const d = defOf(c); const n = Math.max(d ? d.ins.length : 1, d ? d.outs.length : 1); return [CW, HEAD + n * ROW + 10 + propLines(c).length * 24]; }
+function propLines(c) { const d = defOf(c); return Object.entries(c.props).filter(([k, v]) => !d || String(d.defaults[k]) !== String(v)).slice(0, 3).map(([k, v]) => `${k}=${String(v).length > 18 ? String(v).slice(0, 17) + '…' : v}`); }
+function ioPlace(b) {
+  const xs = b.components.map(c => c.pos[0]), ys = b.components.map(c => -c.pos[1]);
+  const minX = xs.length ? Math.min(...xs) : 0, maxX = xs.length ? Math.max(...xs) + CW : 600, cy = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
+  return { inX: minX - IOW - 160, outX: maxX + 160, top: cy - 5 * ROW * 1.6 };
+}
+function pinXY(b, end) { // end = {c, pin}
+  const io = ioPlace(b), m = /^signal_(in|out)(\d)$/.exec(end.pin);
+  if (end.c === null && m) { const i = Number(m[2]), y = io.top + 40 + i * ROW * 1.6; return m[1] === 'in' ? [io.inX + IOW, y] : [io.outX, y]; }
+  const c = b.components.find(x => x.id === end.c); if (!c) return [0, 0];
+  const d = defOf(c), x = c.pos[0], y = -c.pos[1], pl = propLines(c).length * 24;
+  const ii = d ? d.ins.indexOf(end.pin) : -1; if (ii >= 0) return [x, y + HEAD + pl + ii * ROW + ROW / 2 + 4];
+  const oi = d ? d.outs.indexOf(end.pin) : -1; return [x + CW, y + HEAD + pl + Math.max(0, oi) * ROW + ROW / 2 + 4];
+}
+// live values from the running simulation (only while the drawing matches what is running)
+function liveConn(b, end) {
+  if (!sim || ED.dirty) return undefined;
+  const sb = sim.boxes.find(x => x.model.name === b.name); if (!sb) return undefined;
+  const it = end.c === null ? sb : sb.compById[end.c]; const cn = it && it.conns[end.pin];
+  return cn ? cn.last : undefined;
+}
+function boxPinLabel(b, pin) { // what a box pin is wired to
+  const sp = F.shortPin(pin), pins = b.pins || E.DEFAULT_PINS[b.name] || {};
+  const link = (ED.model.links || []).find(l => l.from === b.name + '.' + sp || l.to === b.name + '.' + sp);
+  if (link) return 'link ' + (link.from === b.name + '.' + sp ? '→ ' + link.to : '← ' + link.from);
+  return pins[sp] && pins[sp] !== 'none' ? pins[sp] : ((pin.includes('_in') ? b.inLabels : b.outLabels)[pin] || '');
+}
+function edRender() {
+  const svg = $('edSvg'); if (!svg) return;
+  const b = edBox(); edMsg(); edInspector();
+  if (!b) { svg.innerHTML = `<text x="20" y="40" class="cb-m" font-size="14">${ED.box === 'battery' ? 'No battery box. Pick a battery circuit, or press "New empty box" to build one.' : 'No reactor box (vanilla). Press "New empty box" to build one.'}</text>`; svg.removeAttribute('viewBox'); return; }
+  if (!ED.view) edFit();
+  const v = ED.view, o = [], io = ioPlace(b), wiredPins = new Set();
+  for (const w of b.wires) { wiredPins.add((w.from.c ?? 'BOX') + '|' + w.from.pin); wiredPins.add((w.to.c ?? 'BOX') + '|' + w.to.pin); }
+  const pinDot = (x, y, c, pin, role) => {
+    const key = (c ?? 'BOX') + '|' + pin, pend = ED.pend && ED.pend.c === c && ED.pend.pin === pin, sel = ED.sel && ED.sel.kind === 'pin' && ED.sel.c === c && ED.sel.pin === pin;
+    return `<circle class="cb-pin${wiredPins.has(key) ? ' wired' : ''}${pend ? ' pend' : ''}${sel ? ' sel' : ''}" cx="${x}" cy="${y}" r="9" data-k="pin" data-c="${c ?? ''}" data-pin="${pin}" data-role="${role}"/>`;
+  };
+  const val = (x, y, vv, anchor) => vv === undefined ? '' : `<text class="cb-v" x="${x}" y="${y}" font-size="17" text-anchor="${anchor}">${esc(String(vv).slice(0, 12))}</text>`;
+  // input / output nodes
+  for (const side of ['in', 'out']) {
+    const x = side === 'in' ? io.inX : io.outX, y0 = io.top, h = 40 + 10 * ROW * 1.6;
+    o.push(`<g class="cb-io"><rect class="body" x="${x}" y="${y0}" width="${IOW}" height="${h}" rx="10"/><text class="cb-m" x="${x + 14}" y="${y0 + 26}" font-size="20">${side === 'in' ? 'INPUTS (from the sub)' : 'OUTPUTS (to the sub)'}</text>`);
+    for (let i = 0; i < 10; i++) {
+      const pin = `signal_${side}${i}`, [px, py] = pinXY(b, { c: null, pin }), lab = boxPinLabel(b, pin);
+      o.push(`<text class="cb-t" x="${side === 'in' ? px - 18 : px + 18}" y="${py + 6}" font-size="18" text-anchor="${side === 'in' ? 'end' : 'start'}">${side}${i}</text>`);
+      if (lab) o.push(`<text class="cb-m" x="${side === 'in' ? x + 12 : x + IOW - 12}" y="${py + 6}" font-size="17" text-anchor="${side === 'in' ? 'start' : 'end'}">${esc(lab.length > 30 ? lab.slice(0, 29) + '…' : lab)}</text>`);
+      o.push(pinDot(px, py, null, pin, side === 'in' ? 'src' : 'dst'));
+      o.push(val(side === 'in' ? px + 14 : px - 14, py - 12, liveConn(b, { c: null, pin }), side === 'in' ? 'start' : 'end'));
+    }
+    o.push('</g>');
+  }
+  // wires (under components)
+  const wo = [];
+  b.wires.forEach((w, i) => {
+    const [x1, y1] = pinXY(b, w.from), [x2, y2] = pinXY(b, w.to), dx = Math.max(60, Math.abs(x2 - x1) / 2);
+    const d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`, sel = ED.sel && ED.sel.kind === 'wire' && ED.sel.i === i;
+    wo.push(`<path class="cb-wire${sel ? ' sel' : ''}" d="${d}" stroke="${WIRE_COLORS[w.prefab] || WIRE_COLORS.redwire}"/><path class="cb-wirehit" d="${d}" data-k="wire" data-i="${i}"/>`);
+  });
+  // components
+  for (const c of b.components) {
+    const d = defOf(c), [w, h] = compSize(c), x = c.pos[0], y = -c.pos[1], sel = ED.sel && ED.sel.kind === 'comp' && ED.sel.id === c.id, pl = propLines(c);
+    o.push(`<g class="cb-comp${sel ? ' sel' : ''}"><rect class="body" x="${x}" y="${y}" width="${w}" height="${h}" rx="8" data-k="comp" data-id="${esc(c.id)}"/><rect class="head" x="${x}" y="${y}" width="${w}" height="${HEAD - 6}" rx="8" data-k="comp" data-id="${esc(c.id)}"/>`
+      + `<text class="cb-h" x="${x + 12}" y="${y + 24}" font-size="20" pointer-events="none">${esc((d ? NAMES[d.alias] || d.alias : c.item) + ' · ' + c.id)}</text>`);
+    pl.forEach((t, k) => o.push(`<text class="cb-m" x="${x + 12}" y="${y + HEAD + 14 + k * 24}" font-size="17" pointer-events="none">${esc(t)}</text>`));
+    for (const pin of (d ? d.ins : [])) { const [px, py] = pinXY(b, { c: c.id, pin }); o.push(pinDot(px, py, c.id, pin, 'dst'), `<text class="cb-t" x="${px + 14}" y="${py + 6}" font-size="17" pointer-events="none">${pinShort(pin)}</text>`, val(px - 12, py - 10, liveConn(b, { c: c.id, pin }), 'end')); }
+    for (const pin of (d ? d.outs : [])) { const [px, py] = pinXY(b, { c: c.id, pin }); o.push(pinDot(px, py, c.id, pin, 'src'), `<text class="cb-t" x="${px - 14}" y="${py + 6}" font-size="17" text-anchor="end" pointer-events="none">${pinShort(pin)}</text>`, val(px + 12, py - 10, liveConn(b, { c: c.id, pin }), 'start')); }
+    o.push('</g>');
+  }
+  svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
+  svg.innerHTML = wo.join('') + o.join('');
+}
+function edFit(overview) { // whole box; but open at a readable zoom (text >= ~9 px), starting from the inputs
+  const b = edBox(), wrap = $('edWrap'), W = wrap.clientWidth || 800, H = wrap.clientHeight || 560;
+  if (!b) { ED.view = { x: 0, y: 0, w: W, h: H }; return; }
+  const io = ioPlace(b); let x0 = io.inX - 40, x1 = io.outX + IOW + 40, y0 = io.top - 40, y1 = io.top + 40 + 10 * ROW * 1.6 + 40;
+  for (const c of b.components) { const [w, h] = compSize(c); y0 = Math.min(y0, -c.pos[1] - 40); y1 = Math.max(y1, -c.pos[1] + h + 40); }
+  const k = Math.max((x1 - x0) / W, (y1 - y0) / H), kMax = 1.9;
+  if (overview || k <= kMax) ED.view = { x: (x0 + x1) / 2 - W * k / 2, y: (y0 + y1) / 2 - H * k / 2, w: W * k, h: H * k };
+  else ED.view = { x: x0, y: Math.max(y0, (y0 + y1) / 2 - H * kMax / 2), w: W * kMax, h: H * kMax };
+}
+function edZoom(f, cx, cy) { const v = ED.view; if (!v) return; cx = cx ?? v.x + v.w / 2; cy = cy ?? v.y + v.h / 2; v.x = cx - (cx - v.x) * f; v.y = cy - (cy - v.y) * f; v.w *= f; v.h *= f; edRender(); }
+function svgPt(e) { const svg = $('edSvg'), r = svg.getBoundingClientRect(), v = ED.view; return [v.x + (e.clientX - r.left) / r.width * v.w, v.y + (e.clientY - r.top) / r.height * v.h]; }
+function edChanged(msg) { ED.dirty = true; edRender(); if (msg) edMsg(msg); }
+const editing = () => $('edEdit').checked;
+// inspector
+function edInspector() {
+  const el = $('edInsp'), b = edBox(), s = ED.sel, ro = !editing();
+  if (!b || !s) {
+    el.innerHTML = `<h3>${ED.box === 'battery' ? 'Battery box' : 'Reactor box'}</h3><p class="hint">Click a component, wire or pin to see it. Numbers in green are the live signals while the test runs.</p>`
+      + `<p class="hint"><b>To build:</b> tick <b>Edit</b>. Add components from the list, drag them by the title bar, then click an output pin (right side) and an input pin (left side) to wire them. Click a box pin on the INPUTS / OUTPUTS panels to choose what it connects to. Delete removes the selection. <b>Apply &amp; test</b> runs it.</p>`
+      + `<p class="hint">Wire to <code>nav.velocity_x_out</code> (nav terminal / sonar monitor) to predict engine spikes. A full battery can't absorb anything: keep it near 80 %.</p>`;
+    return;
+  }
+  if (s.kind === 'comp') {
+    const c = b.components.find(x => x.id === s.id); if (!c) { ED.sel = null; return edInspector(); }
+    const d = defOf(c), keys = [...new Set([...Object.keys(d ? d.defaults : {}), ...Object.keys(c.props)])];
+    el.innerHTML = `<h3>${esc((d ? NAMES[d.alias] || d.alias : c.item))} · ${esc(c.id)}</h3><p class="hint">${esc(d ? d.cls : '')}</p>`
+      + keys.map(k => `<label>${esc(k)}<input type="text" data-prop="${esc(k)}" value="${esc(c.props[k] ?? (d ? d.defaults[k] : ''))}" ${ro ? 'disabled' : ''}></label>`).join('')
+      + (ro ? '' : '<button id="edDel">Delete component</button>');
+    el.querySelectorAll('[data-prop]').forEach(inp => inp.onchange = () => { c.props[inp.dataset.prop] = inp.value; edChanged(); });
+  } else if (s.kind === 'wire') {
+    const w = b.wires[s.i]; if (!w) { ED.sel = null; return edInspector(); }
+    const nm = e => e.c === null ? F.shortPin(e.pin) + ' (box)' : e.c + '.' + pinShort(e.pin);
+    el.innerHTML = `<h3>Wire</h3><div class="val">${esc(nm(w.from))} → ${esc(nm(w.to))}</div>`
+      + `<label>Color<select id="edWcol" ${ro ? 'disabled' : ''}>${Object.keys(WIRE_COLORS).map(k => `<option ${k === w.prefab ? 'selected' : ''}>${k}</option>`).join('')}</select></label>` + (ro ? '' : '<button id="edDel">Delete wire</button>');
+    const wc = $('edWcol'); if (wc) wc.onchange = () => { w.prefab = wc.value; edChanged(); };
+  } else if (s.kind === 'pin') {
+    const isBox = s.c === null, live = liveConn(b, { c: s.c, pin: s.pin });
+    let h = `<h3>${isBox ? 'Box pin ' + F.shortPin(s.pin) : esc(s.c) + '.' + pinShort(s.pin)}</h3>` + (live !== undefined ? `<label>Last signal<div class="val">${esc(live)}</div></label>` : '');
+    if (isBox) {
+      const sp = F.shortPin(s.pin), isIn = sp.startsWith('in'), other = b.name === 'reactor' ? 'battery' : 'reactor';
+      const cur = (() => { const l = (ED.model.links || []).find(l => l.from === b.name + '.' + sp || l.to === b.name + '.' + sp); if (l) return 'link:' + (l.from === b.name + '.' + sp ? l.to : l.from); const p = (b.pins || E.DEFAULT_PINS[b.name] || {})[sp]; return p || 'none'; })();
+      const opts = ['none'];
+      if (isIn) {
+        for (const [dev, pins] of Object.entries(E.DEVICE_OUTS)) for (const p of pins) opts.push(dev + '.' + p);
+        opts.push('const.1', 'const.0'); for (const ch of (profile ? profile.channels : [])) opts.push(ch);
+        for (const ch of ['nav.velocity_x_out', 'nav.velocity_y_out', 'engines.load_value_out', 'guns.load_value_out']) if (!opts.includes(ch)) opts.push(ch);
+        for (let i = 0; i < 10; i++) opts.push(`link:${other}.out${i}`);
+      } else {
+        for (const [dev, pins] of Object.entries(E.DEVICE_INS)) for (const p of pins) opts.push(dev + '.' + p);
+        for (let i = 0; i < 10; i++) opts.push(`link:${other}.in${i}`);
+      }
+      if (!opts.includes(cur)) opts.push(cur);
+      h += `<label>Connected to<select id="edPinMap" ${ro ? 'disabled' : ''}>${opts.map(o => `<option ${o === cur ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`
+        + `<p class="hint">${isIn ? 'What this input reads in game. <code>const.1</code> = a lever that is on. <code>link:</code> = a wire from the other box.' : 'What this output drives in game. Never wire logic to <code>shutdown</code>: any value turns the reactor off for good.'}</p>`;
+      el.innerHTML = h;
+      const sel = $('edPinMap'); if (sel) sel.onchange = () => {
+        const v = sel.value, me = b.name + '.' + sp;
+        ED.model.links = (ED.model.links || []).filter(l => l.from !== me && l.to !== me);
+        if (!b.pins) b.pins = Object.assign({}, E.DEFAULT_PINS[b.name] || {});
+        if (v.startsWith('link:')) { delete b.pins[sp]; ED.model.links.push(isIn ? { from: v.slice(5), to: me } : { from: me, to: v.slice(5) }); }
+        else b.pins[sp] = v;
+        edChanged();
+      };
+      return;
+    }
+    el.innerHTML = h + '<p class="hint">Click another pin to wire them (in Edit mode).</p>';
+  }
+  const del = $('edDel'); if (del) del.onclick = edDelete;
+}
+function edDelete() {
+  const b = edBox(), s = ED.sel; if (!b || !s || !editing()) return;
+  if (s.kind === 'comp') { b.components = b.components.filter(c => c.id !== s.id); b.wires = b.wires.filter(w => w.from.c !== s.id && w.to.c !== s.id); }
+  else if (s.kind === 'wire') b.wires.splice(s.i, 1);
+  else return;
+  ED.sel = null; edChanged();
+}
+function edPinClick(c, pin, role) {
+  const b = edBox();
+  if (!editing() || !ED.pend) { ED.sel = { kind: 'pin', c, pin }; if (editing()) ED.pend = { c, pin, role }; edRender(); return; }
+  const a = ED.pend; ED.pend = null;
+  if (a.role === role || (a.c === c && a.pin === pin)) { ED.pend = { c, pin, role }; ED.sel = { kind: 'pin', c, pin }; edRender(); return; }
+  const from = role === 'src' ? { c, pin } : { c: a.c, pin: a.pin }, to = role === 'src' ? { c: a.c, pin: a.pin } : { c, pin };
+  if (b.wires.some(w => w.from.c === from.c && w.from.pin === from.pin && w.to.c === to.c && w.to.pin === to.pin)) { edRender(); return; }
+  b.wires.push({ from, to, prefab: 'redwire' }); ED.sel = { kind: 'wire', i: b.wires.length - 1 }; edChanged('Wired.');
+}
+function edAdd() {
+  if (!editing()) { $('edEdit').checked = true; }
+  let b = edBox(); if (!b) { edNewBox(); b = edBox(); }
+  const d = C.byAlias($('edAddType').value); if (!d) return;
+  let n = 1; while (b.components.some(c => c.id === d.alias + n)) n++;
+  const v = ED.view || { x: 0, y: 0, w: 800, h: 560 };
+  const nc = { id: d.alias + n, item: d.item, cls: d.cls, props: {}, pos: [Math.round(v.x + v.w / 2 - CW / 2), -Math.round(v.y + v.h / 4)] };
+  const [nw, nh] = compSize(nc), hit = c => { const [w, h] = compSize(c); return nc.pos[0] < c.pos[0] + w + 30 && c.pos[0] < nc.pos[0] + nw + 30 && -nc.pos[1] < -c.pos[1] + h + 30 && -c.pos[1] < -nc.pos[1] + nh + 30; };
+  for (let k = 0; k < 60 && b.components.some(hit); k++) { nc.pos[1] -= 60; if (k % 8 === 7) { nc.pos[0] += CW + 60; nc.pos[1] += 480; } } // next free spot
+  b.components.push(nc);
+  ED.sel = { kind: 'comp', id: d.alias + n }; edChanged(`Added ${NAMES[d.alias] || d.alias}. Drag it by its title bar.`);
+}
+function edNewBox() {
+  if (!ED.model) ED.model = { name: 'my_circuit', boxes: [], links: [], meta: {} };
+  if (ED.box === 'battery' && !$('battOn').checked) { $('battOn').checked = true; }
+  const nb = { name: ED.box, pins: Object.assign({}, E.DEFAULT_PINS[ED.box] || {}), components: [], wires: [], labels: [], inLabels: {}, outLabels: {}, inPos: null, outPos: null };
+  ED.model.boxes = ED.model.boxes.filter(b => b.name !== ED.box).concat([nb]);
+  ED.model.links = (ED.model.links || []).filter(l => !l.from.startsWith(ED.box + '.') && !l.to.startsWith(ED.box + '.'));
+  ED.model.boxes.sort((a, b) => a.name === 'reactor' ? -1 : 1);
+  $('edEdit').checked = true; ED.sel = ED.pend = null; ED.view = null; edChanged('Empty box with the default pin wiring. Add components and wire them.');
+}
+function edApply() {
+  if (!ED.model || !ED.model.boxes.length) return;
+  if (!ED.model.name || ED.model.name === 'vanilla_autotemp') ED.model.name = 'my_circuit';
+  const text = F.toCirc(ED.model, { positions: true });
+  try { F.parseCirc(text); } catch (e) { edMsg('Problem: ' + e.message); return; }
+  ED.dirty = false; saveCustom(text); selectCircuit(); build(); showTab('box'); status('Your circuit is loaded: press Start to test it.');
+}
+function edLive() { if (!ED.dirty && !$('edSvg').closest('[hidden]') && performance.now() - ED.liveAt > 250) { ED.liveAt = performance.now(); edRender(); } }
+// pointer handling: drag components, pan the view, click pins/wires
+(() => {
+  const svg = $('edSvg');
+  svg.addEventListener('pointerdown', e => {
+    const t = e.target, k = t.dataset.k; svg.focus();
+    if (k === 'pin') { edPinClick(t.dataset.c === '' ? null : t.dataset.c, t.dataset.pin, t.dataset.role); return; }
+    if (k === 'wire') { ED.sel = { kind: 'wire', i: Number(t.dataset.i) }; edRender(); return; }
+    const [px, py] = svgPt(e);
+    if (k === 'comp') {
+      const c = edBox().components.find(x => x.id === t.dataset.id); ED.sel = { kind: 'comp', id: c.id };
+      if (editing()) ED.drag = { kind: 'comp', c, ox: px - c.pos[0], oy: py + c.pos[1], moved: false };
+      edRender(); svg.setPointerCapture(e.pointerId); return;
+    }
+    ED.drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, vx: ED.view.x, vy: ED.view.y, moved: false }; svg.classList.add('panning'); svg.setPointerCapture(e.pointerId);
+  });
+  svg.addEventListener('pointermove', e => {
+    const d = ED.drag; if (!d) return;
+    if (d.kind === 'comp') { const [px, py] = svgPt(e); d.c.pos = [Math.round(px - d.ox), -Math.round(py - d.oy)]; d.moved = true; ED.dirty = true; edRender(); }
+    else { const r = svg.getBoundingClientRect(); ED.view.x = d.vx - (e.clientX - d.sx) / r.width * ED.view.w; ED.view.y = d.vy - (e.clientY - d.sy) / r.height * ED.view.h; d.moved = true; svg.setAttribute('viewBox', `${ED.view.x} ${ED.view.y} ${ED.view.w} ${ED.view.h}`); }
+  });
+  const end = () => { if (ED.drag && ED.drag.kind === 'pan' && !ED.drag.moved) { ED.sel = null; ED.pend = null; edRender(); } ED.drag = null; svg.classList.remove('panning'); };
+  svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+  svg.addEventListener('wheel', e => { e.preventDefault(); const [px, py] = svgPt(e); edZoom(e.deltaY > 0 ? 1.15 : 1 / 1.15, px, py); }, { passive: false });
+  svg.addEventListener('keydown', e => { if ((e.key === 'Delete' || e.key === 'Backspace') && editing()) { e.preventDefault(); edDelete(); } if (e.key === 'Escape') { ED.pend = null; ED.sel = null; edRender(); } });
+  fillSelect($('edAddType'), C.CAT.filter(d => d.alias !== 'color').map(d => [d.alias, `${NAMES[d.alias] || d.alias} (${d.alias})`]), 'add');
+  $('edAdd').onclick = edAdd; $('edNew').onclick = edNewBox; $('edApply').onclick = edApply; $('edRevert').onclick = () => edSync(true);
+  $('edZin').onclick = () => edZoom(1 / 1.25); $('edZout').onclick = () => edZoom(1.25); $('edFit').onclick = () => { edFit(true); edRender(); };
+  $('edEdit').onchange = () => { ED.pend = null; edRender(); };
+  $('edBox').onclick = e => { const bt = e.target.closest('button'); if (!bt) return; ED.box = bt.dataset.b; ED.sel = ED.pend = null; ED.view = null; edSetBoxButtons(); edRender(); };
+})();
 
 // ---------- events ----------
 $('btnRun').onclick = () => { if (!sim) build(); if (!sim) return; if (finished) build(); running = !running; setRunLabel(); if (running) { lastTs = performance.now(); requestAnimationFrame(loop); } };
 $('btnReset').onclick = build;
-$('btnApply').onclick = build;
+$('btnApply').onclick = () => { saveCustom($('circText').value); build(); };
+// edits (text or visual) become the "Edited" circuit, so the dropdowns show what is being tested
+function saveCustom(text) {
+  circuits['my_circuit'] = { circ: text, group: 'Edited' };
+  store.set('custom', text); store.set('circuit', 'my_circuit'); refreshLists(); $('circSel').value = 'my_circuit'; refreshBattList(/^\s*box\s+battery\b/m.test(text) ? 'same' : 'none');
+}
 $('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return; speed = b.dataset.s; carry = 0; document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x === b)); store.set('speed', speed); };
 document.querySelector('.tabs').onclick = e => { const b = e.target.closest('[role=tab]'); if (b) showTab(b.dataset.tab); };
 $('profileSel').onchange = () => { selectProfile(); build(); };
-$('circSel').onchange = () => { selectCircuit(); build(); autoCheckPins(); };
+$('circSel').onchange = () => { refreshBattList(hasBatteryBox($('circSel').value) ? 'same' : null); if ($('battCirc').value !== 'none') $('battOn').checked = true; selectCircuit(); build(); autoCheckPins(); };
+$('battCirc').onchange = () => { if ($('battCirc').value !== 'none') $('battOn').checked = true; selectCircuit(); build(); };
+$('battShip').onchange = () => { battInfo(); build(); };
 $('btnPins').onclick = () => findPins(true);
 function autoCheckPins() { const c = circuits[$('circSel').value]; if (c && c.main != null && !c.pinsChecked) findPins(false); }
 for (const id of ['maxKW', 'rods', 'fuelType', 'start', 'battOn', 'battN', 'battType', 'battStart', 'battRate', 'linkMode']) $(id).onchange = () => { if (id === 'maxKW') $('maxAuto').checked = false; build(); };
@@ -411,7 +744,7 @@ $('circFile').onchange = async e => {
     key = fs[ri].name.replace(/(_reactor)?\.txt$/i, ''); entry = { main: texts[ri], mainName: fs[ri].name, battery: bi >= 0 ? texts[bi] : null, group: 'Loaded' };
     if (bi >= 0) $('battOn').checked = true;
   }
-  circuits[key] = entry; refreshLists(); $('circSel').value = key; selectCircuit(); build(); autoCheckPins(); e.target.value = '';
+  circuits[key] = entry; refreshLists(); $('circSel').value = key; refreshBattList(hasBatteryBox(key) ? 'same' : null); selectCircuit(); build(); autoCheckPins(); e.target.value = '';
 };
 $('btnSaveLog').onclick = () => report && save(`${report.circuit}__${report.profile}.log.txt`, P.fmtReport(report));
 $('btnSaveTl').onclick = () => sim && save(`${sim.cfg.circuitName}__${sim.profile.name}.timeline.csv`, P.timelineCsv(sim.metrics.timeline));
@@ -422,6 +755,7 @@ window.addEventListener('resize', draw);
 if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
 
 // ---------- boot ----------
+{ const t = store.get('custom', null); if (t) circuits['my_circuit'] = { circ: t, group: 'Edited' }; }
 loadSettings(); refreshLists(); selectProfile(); selectCircuit();
 const sp = store.get('speed', '1'); document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x.dataset.s === sp)); speed = sp;
 build(); autoCheckPins();

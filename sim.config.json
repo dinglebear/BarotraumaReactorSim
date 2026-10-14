@@ -1,0 +1,7 @@
+{
+  "start": "warm",
+  "fuelType": "uranium",
+  "linkMode": "wire",
+  "seed": 12345,
+  "batteries": { "enabled": false, "count": 2, "type": "battery", "startCharge": 0.5 }
+}

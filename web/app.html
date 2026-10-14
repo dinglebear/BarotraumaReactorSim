@@ -1,0 +1,398 @@
+<title>Reactor Circuit Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: engineering console. Settings rail on the left, live instruments + charts on the right, circuit/log drawer below. */
+:root {
+  --bg: #e9eef0; --panel: #fbfcfc; --sunk: #dfe6e9; --ink: #13222b; --muted: #57707b; --line: #c6d2d7;
+  --accent: #0a7069; --accent-ink: #ffffff; --amber: #b86e00; --bad: #b93225; --good: #2b7a3d;
+  --c-demand: #6b7f88; --c-supply: #0a7069; --c-volt: #b86e00; --c-temp: #c2412d; --c-fission: #6b4fb3; --c-turbine: #1f78b4; --c-batt: #2b7a3d;
+  --f-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
+  --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
+  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
+  --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
+  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 40px }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0 }
+.wrap { max-width: 1400px; margin: 0 auto; display: grid; gap: 14px }
+header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; justify-content: space-between }
+.brand h1 { font-size: 26px; font-weight: 700; letter-spacing: .02em }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+button, .btn { font: 600 13px var(--f-body); border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: var(--r); padding: 7px 12px; cursor: pointer }
+button:hover { border-color: var(--accent) }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+button:disabled { opacity: .5; cursor: default }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden }
+.seg button { border: 0; border-radius: 0; padding: 7px 10px; font-family: var(--f-mono); font-weight: 500 }
+.seg button + button { border-left: 1px solid var(--line) }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg) }
+.grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 14px; align-items: start }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r) }
+aside.panel { padding: 4px 0 }
+fieldset { border: 0; border-bottom: 1px solid var(--line); margin: 0; padding: 12px 16px 14px; display: grid; gap: 9px; min-width: 0 }
+fieldset:last-child { border-bottom: 0 }
+legend { float: left; width: 100%; font: 600 11px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); padding: 0; margin-bottom: 2px }
+label.row { display: grid; grid-template-columns: 1fr 132px; align-items: center; gap: 8px; font-size: 13px }
+label.row.wide { grid-template-columns: 1fr }
+input[type=number], input[type=text], select { width: 100%; font: 13px var(--f-mono); color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0 }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 500 }
+.hint { color: var(--muted); font-size: 12px; margin: 0 }
+.filebtn { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; text-align: center }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+main { display: grid; gap: 14px; min-width: 0 }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px }
+.tile { padding: 10px 12px; display: grid; gap: 2px; min-width: 0 }
+.tile .k { font: 600 10.5px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
+.tile .v { font: 500 24px var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tile .s { font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.pill { display: inline-block; font: 600 10.5px var(--f-body); letter-spacing: .04em; padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor; vertical-align: middle }
+.ok { color: var(--good) } .warn { color: var(--amber) } .bad { color: var(--bad) } .mut { color: var(--muted) }
+.chartbox { padding: 10px 12px 6px }
+.chartbox .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-bottom: 4px }
+.chartbox .legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px }
+canvas { display: block; width: 100%; height: 470px }
+.progress { height: 4px; background: var(--sunk); border-radius: 2px; overflow: hidden }
+.progress > div { height: 100%; width: 0; background: var(--accent) }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); padding: 0 8px; overflow-x: auto }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 12px; color: var(--muted) }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
+.tabpane { padding: 12px; display: grid; gap: 10px; min-width: 0 }
+textarea { width: 100%; min-height: 300px; resize: vertical; font: 12.5px/1.5 var(--f-mono); color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 10px; tab-size: 2 }
+pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f-mono); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 10px; white-space: pre-wrap; word-break: break-word }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.msg { font-size: 13px; padding: 8px 10px; border-radius: 4px; background: var(--sunk); border-left: 3px solid var(--accent) }
+.msg.err { border-left-color: var(--bad) }
+.filecard { border: 1px solid var(--line); border-radius: 4px; padding: 10px; display: grid; gap: 8px; min-width: 0 }
+.filecard h3 { font: 600 13px var(--f-mono) }
+.filecard pre { margin: 0; max-height: 160px; overflow: auto; font: 11px/1.4 var(--f-mono); color: var(--muted); white-space: pre; background: var(--sunk); padding: 8px; border-radius: 4px }
+.clock { font: 500 15px var(--f-mono); font-variant-numeric: tabular-nums; min-width: 9ch }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Reactor Circuit Bench</h1>
+      <p>Barotrauma reactor, grid and circuit boxes at 60 ticks/s. Automatic control is off: the circuit runs the reactor.</p>
+    </div>
+    <div class="controls" role="group" aria-label="Simulation controls">
+      <button id="btnRun" class="primary">Start</button>
+      <button id="btnReset">Reset</button>
+      <div class="seg" id="speed" role="group" aria-label="Speed">
+        <button data-s="1" aria-pressed="true">x1</button><button data-s="5" aria-pressed="false">x5</button><button data-s="10" aria-pressed="false">x10</button><button data-s="25" aria-pressed="false">x25</button><button data-s="max" aria-pressed="false">Max</button>
+      </div>
+      <span class="clock" id="clock">00:00 / 00:00</span>
+    </div>
+  </header>
+  <div class="progress" aria-hidden="true"><div id="prog"></div></div>
+
+  <div class="grid">
+    <aside class="panel" aria-label="Master settings">
+      <fieldset>
+        <legend>Test file (power demand)</legend>
+        <select id="profileSel" aria-label="Load profile"></select>
+        <div class="two">
+          <label class="btn filebtn">Load CSV…<input type="file" id="profileFile" accept=".csv,.txt"></label>
+          <button id="btnCfg" title="Save these settings as sim.config.json for the command-line runner">Save settings</button>
+        </div>
+        <p class="hint" id="profileInfo"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Reactor</legend>
+        <label class="row">Max output (kW)<input type="number" id="maxKW" min="100" step="100"></label>
+        <label class="check"><input type="checkbox" id="maxAuto" checked> Use the value saved in the test file</label>
+        <label class="row">Fuel rods<select id="rods"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+        <label class="row">Rod type<select id="fuelType"><option value="uranium">Uranium (80)</option><option value="thorium">Thorium (100)</option><option value="fulgurium">Fulgurium (150)</option><option value="volatile">Volatile fulg. (400)</option></select></label>
+        <label class="row">Start state<select id="start"><option value="warm">Warm (round start)</option><option value="cold">Cold (0 °)</option></select></label>
+      </fieldset>
+      <fieldset>
+        <legend>Batteries</legend>
+        <label class="check"><input type="checkbox" id="battOn"> Allow batteries (adds a 2nd circuit box)</label>
+        <label class="row">Count<input type="number" id="battN" min="1" max="8" value="2"></label>
+        <label class="row">Type<select id="battType"><option value="battery">Battery</option><option value="supercapacitor">Supercapacitor</option></select></label>
+        <label class="row">Start charge %<input type="number" id="battStart" min="0" max="100" value="50"></label>
+        <label class="row">Box link<select id="linkMode"><option value="wire">Wire</option><option value="wifi">Wifi components</option></select></label>
+      </fieldset>
+      <fieldset>
+        <legend>Circuit</legend>
+        <select id="circSel" aria-label="Circuit"></select>
+        <label class="btn filebtn">Load .circ / .txt…<input type="file" id="circFile" accept=".circ,.txt" multiple></label>
+        <p class="hint">For two in-game files, select both (<code>name_reactor.txt</code> and <code>name_battery.txt</code>).</p>
+      </fieldset>
+    </aside>
+
+    <main>
+      <section class="tiles" aria-label="Live readings">
+        <div class="panel tile"><span class="k">Voltage</span><span class="v" id="tV">–</span><span class="s" id="sV">grid power ÷ load</span></div>
+        <div class="panel tile"><span class="k">Supply / demand</span><span class="v" id="tP">–</span><span class="s" id="sP">kW</span></div>
+        <div class="panel tile"><span class="k">Temperature</span><span class="v" id="tT">–</span><span class="s" id="sT">optimal 40–60</span></div>
+        <div class="panel tile"><span class="k">Fission → target</span><span class="v" id="tF">–</span><span class="s" id="sF"></span></div>
+        <div class="panel tile"><span class="k">Turbine → target</span><span class="v" id="tU">–</span><span class="s" id="sU"></span></div>
+        <div class="panel tile"><span class="k">Fuel left</span><span class="v" id="tFu">–</span><span class="s" id="sFu"></span></div>
+        <div class="panel tile" id="tileB"><span class="k">Batteries</span><span class="v" id="tB">off</span><span class="s" id="sB"></span></div>
+      </section>
+
+      <section class="panel chartbox" aria-label="Charts">
+        <div class="legend">
+          <span><i style="background:var(--c-demand)"></i>Demand kW</span><span><i style="background:var(--c-supply)"></i>Supply kW</span><span><i style="background:var(--c-batt)"></i>Battery out kW</span>
+          <span><i style="background:var(--c-volt)"></i>Voltage</span><span><i style="background:var(--c-temp)"></i>Temperature</span><span><i style="background:var(--c-fission)"></i>Fission %</span><span><i style="background:var(--c-turbine)"></i>Turbine %</span>
+        </div>
+        <canvas id="chart" role="img" aria-label="Power, voltage and reactor charts over time"></canvas>
+      </section>
+
+      <section class="panel">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="log" aria-selected="true">Log</button>
+          <button role="tab" data-tab="circ" aria-selected="false">Circuit (.circ)</button>
+          <button role="tab" data-tab="files" aria-selected="false">In-game files</button>
+        </div>
+        <div class="tabpane" data-pane="log">
+          <div id="status" class="msg">Pick a test file and a circuit, then press Start.</div>
+          <pre class="log" id="log">No run yet.</pre>
+          <div class="bar"><button id="btnSaveLog" data-dl>Save log</button><button id="btnSaveTl" data-dl>Save timeline CSV</button><button id="btnCopyLog">Copy log</button></div>
+        </div>
+        <div class="tabpane" data-pane="circ" hidden>
+          <p class="hint">Edit the compact circuit text and press Apply. <code>$MAX</code> is replaced by the reactor max output. Syntax is in AIHowTo.md.</p>
+          <textarea id="circText" spellcheck="false" aria-label="Circuit source"></textarea>
+          <div class="bar"><button id="btnApply" class="primary">Apply &amp; reset</button><button id="btnSaveCirc" data-dl>Save .circ</button><span id="circMsg" class="hint"></span></div>
+        </div>
+        <div class="tabpane" data-pane="files" hidden>
+          <p class="hint">Blueprints-format files: load them in game with the Blueprints mod. Box pins are labelled with what to wire them to.</p>
+          <div id="fileCards" style="display:grid;gap:10px"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>/*__SIM__*/</script>
+<script type="application/json" id="lib">/*__LIB__*/</script>
+<script>
+(() => {
+'use strict';
+const E = self.BaroEngine, F = self.BaroFormat, P = self.BaroProject;
+const LIB = JSON.parse(document.getElementById('lib').textContent);
+const $ = id => document.getElementById(id);
+const store = { get(k, d) { try { const v = localStorage.getItem('rcb.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('rcb.' + k, JSON.stringify(v)); } catch (e) { } } };
+let downloads = null;
+let profiles = Object.assign({}, LIB.profiles), circuits = Object.assign({}, LIB.circuits);
+let sim = null, model = null, running = false, speed = '1', carry = 0, lastTs = 0, finished = false, report = null, lagging = false, profile = null;
+
+// ---------- settings ----------
+function fillSelect(sel, entries, value) { sel.innerHTML = ''; for (const [v, label] of entries) { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); } if (value && entries.some(e => e[0] === value)) sel.value = value; }
+function refreshLists() {
+  fillSelect($('profileSel'), Object.keys(profiles).sort().map(k => [k, k]), store.get('profile', null) || $('profileSel').value);
+  const groups = [['vanilla', 'Vanilla automatic control (baseline)']];
+  for (const k of Object.keys(circuits).sort()) groups.push([k, (circuits[k].group ? circuits[k].group + ': ' : '') + k]);
+  fillSelect($('circSel'), groups, store.get('circuit', null) || 'example_feedforward');
+}
+function config() {
+  return {
+    reactorMaxKW: Number($('maxKW').value) || 5000, rods: Number($('rods').value), fuelType: $('fuelType').value, start: $('start').value,
+    linkMode: $('linkMode').value, seed: 12345,
+    batteries: { enabled: $('battOn').checked, count: Math.max(1, Number($('battN').value) || 1), type: $('battType').value, startCharge: (Number($('battStart').value) || 0) / 100 },
+  };
+}
+function saveSettings() { const c = config(); store.set('settings', { ...c, maxAuto: $('maxAuto').checked }); store.set('profile', $('profileSel').value); store.set('circuit', $('circSel').value); }
+function loadSettings() {
+  const s = store.get('settings', null); if (!s) return;
+  $('maxKW').value = s.reactorMaxKW; $('maxAuto').checked = s.maxAuto !== false; $('rods').value = s.rods; $('fuelType').value = s.fuelType; $('start').value = s.start; $('linkMode').value = s.linkMode;
+  $('battOn').checked = !!s.batteries.enabled; $('battN').value = s.batteries.count; $('battType').value = s.batteries.type; $('battStart').value = Math.round(s.batteries.startCharge * 100);
+}
+function selectProfile() {
+  const key = $('profileSel').value; if (!key) return;
+  profile = E.parseProfile(profiles[key], key);
+  const d = profile.points.map(p => p.demand);
+  $('profileInfo').textContent = `${profile.meta.sub || 'unknown sub'} · ${fmtClock(profile.duration)} · demand ${Math.round(Math.min(...d))}–${Math.round(Math.max(...d))} kW · max output ${profile.reactorMaxKW ? profile.reactorMaxKW + ' kW' : 'not saved'}`;
+  if ($('maxAuto').checked && profile.reactorMaxKW) $('maxKW').value = profile.reactorMaxKW;
+  if (!$('maxKW').value) $('maxKW').value = 5000;
+  if (profile.meta.fuel_rods && Number(profile.meta.fuel_rods) >= 1 && Number(profile.meta.fuel_rods) <= 4) $('rods').value = profile.meta.fuel_rods;
+}
+function selectCircuit() {
+  const key = $('circSel').value;
+  if (key === 'vanilla') { $('circText').value = '# Vanilla automatic control: no circuit box, the reactor\'s own AutoTemp runs it.\n'; return; }
+  const c = circuits[key];
+  try { $('circText').value = c.circ != null ? c.circ : F.toCirc(P.loadModel(c.main, c.mainName, c.battery, c.pins)); }
+  catch (e) { $('circText').value = ''; status('Could not read circuit: ' + e.message, true); }
+}
+
+// ---------- sim lifecycle ----------
+function build() {
+  running = false; finished = false; report = null; carry = 0; setRunLabel();
+  saveSettings();
+  const cfg = config(); const key = $('circSel').value;
+  cfg.profile = profile; cfg.vanilla = key === 'vanilla';
+  try {
+    model = cfg.vanilla ? { name: 'vanilla_autotemp', boxes: [], links: [] } : F.parseCirc($('circText').value);
+    if (!cfg.vanilla && !model.boxes.length) throw new Error('the circuit has no components');
+    cfg.circuitName = model.name;
+    sim = new E.Sim(P.substitute(model, cfg.reactorMaxKW), cfg);
+    $('circMsg').textContent = model.boxes.length ? `${model.boxes.map(b => `${b.name}: ${b.components.length} components, ${b.wires.length} wires`).join(' · ')}` : '';
+    const w = sim.warnings.length ? ' Warnings: ' + sim.warnings.join('; ') : '';
+    status(`Ready: ${model.name} on ${profile.name} with a ${cfg.reactorMaxKW} kW reactor.${w}`, !!w);
+    $('log').textContent = 'Running produces the log here.';
+  } catch (e) { sim = null; status('Circuit error: ' + e.message, true); }
+  renderFiles(); render(); draw();
+}
+function status(t, err) { const s = $('status'); s.textContent = t; s.className = 'msg' + (err ? ' err' : ''); }
+function setRunLabel() { $('btnRun').textContent = running ? 'Pause' : (sim && sim.time > 0 && !finished ? 'Resume' : 'Start'); }
+function loop(ts) {
+  if (!running || !sim) return;
+  const dt = Math.min((ts - lastTs) / 1000, 0.25); lastTs = ts;
+  const t0 = performance.now(); let n = 0;
+  if (speed === 'max') { while (!sim.done && performance.now() - t0 < 14) { for (let i = 0; i < 200 && !sim.done; i++) { sim.step(); n++; } } lagging = false; }
+  else {
+    carry += Number(speed) * dt * 60;
+    while (carry >= 1 && !sim.done) { sim.step(); carry--; n++; if ((n & 63) === 0 && performance.now() - t0 > 14) break; }
+    lagging = carry > Number(speed) * 6; if (lagging) carry = 0;
+  }
+  if (sim.done) finish();
+  render(); draw();
+  if (running) requestAnimationFrame(loop);
+}
+function finish() {
+  running = false; finished = true; setRunLabel();
+  report = sim.metrics.report();
+  $('log').textContent = P.fmtReport(report);
+  status(`Finished: reliability ${report.score_reliability}/100, ${report.kwh_per_rod ?? '–'} kWh per fuel rod, ${report.unmet_pct}% demand unmet.`);
+  showTab('log');
+}
+
+// ---------- readouts ----------
+const fmtClock = t => { t = Math.max(0, t); const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; };
+function setTile(id, v, sid, s, cls) { const el = $(id); el.textContent = v; el.className = 'v ' + (cls || ''); if (sid) $(sid).innerHTML = s; }
+function render() {
+  if (!sim) return;
+  const n = sim.snapshot(), R = sim.reactor;
+  $('clock').textContent = `${fmtClock(n.t)} / ${fmtClock(sim.profile.duration)}` + (lagging ? ' · behind' : '');
+  $('prog').style.width = Math.min(100, n.t / sim.profile.duration * 100) + '%';
+  const v = n.voltage, vc = v < 0.5 ? 'bad' : v < 0.9 || v > 1.5 ? 'warn' : v > 1.1 ? 'warn' : 'ok';
+  setTile('tV', v.toFixed(2), 'sV', `<span class="pill ${vc}">${v < 0.5 ? 'BLACKOUT' : v < 0.9 ? 'BROWNOUT' : v > 2 ? 'OVERLOAD' : v > 1.1 ? 'OVERVOLT' : 'STABLE'}</span>`, vc);
+  setTile('tP', `${Math.round(n.power)}`, 'sP', `of ${Math.round(n.load)} kW load · demand ${Math.round(n.demand)}`);
+  const tc = n.temp > R.allTemp[1] ? 'bad' : n.temp > R.optTemp[1] || n.temp < R.optTemp[0] ? 'warn' : 'ok';
+  setTile('tT', n.temp.toFixed(1), 'sT', R.cond <= 0 ? '<span class="pill bad">MELTDOWN</span>' : `optimal ${R.optTemp[0]}–${R.optTemp[1]} · meltdown timer ${R.melt.toFixed(0)}s`, tc);
+  setTile('tF', `${n.fission.toFixed(1)}%`, 'sF', `→ ${n.tf.toFixed(1)}% ${n.fCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
+  setTile('tU', `${n.turbine.toFixed(1)}%`, 'sU', `→ ${n.tt.toFixed(1)}% · ideal ${n.cto.toFixed(1)}% ${n.tCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
+  setTile('tFu', `${n.fuel.toFixed(1)}%`, 'sFu', `${R.rods.length} rod${R.rods.length > 1 ? 's' : ''} · used ${sim.metrics.fuel.toFixed(1)}`);
+  if (sim.batteries.length) setTile('tB', `${n.batt.toFixed(1)}%`, 'sB', `in ${Math.round(n.battIn)} · out ${Math.round(n.battOut)} kW`);
+  else setTile('tB', 'off', 'sB', 'enable in settings');
+}
+
+// ---------- chart ----------
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function draw() {
+  const cv = $('chart'), ctx = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight; if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const tl = sim ? sim.metrics.timeline : [], dur = sim ? sim.profile.duration : 600;
+  const L = 52, Rr = 12, gap = 16, top = 6, bottom = 22, ph = (H - top - bottom - gap * 2) / 3;
+  const ink = css('--muted'), line = css('--line'), font = '11px ' + css('--f-mono');
+  const x = t => L + (W - L - Rr) * t / dur;
+  const maxKW = sim ? Math.max(sim.reactor.maxPower, ...tl.map(p => Math.max(p.demand, p.power))) : 5000;
+  const panels = [
+    { y0: top, name: 'kW', min: 0, max: Math.ceil(maxKW / 1000) * 1000, ticks: 4, series: [['demand', '--c-demand'], ['power', '--c-supply'], ['battOut', '--c-batt']] },
+    { y0: top + ph + gap, name: 'V', min: 0, max: 2, ticks: 4, band: [0.9, 1.1], series: [['voltage', '--c-volt']] },
+    { y0: top + 2 * (ph + gap), name: '%', min: 0, max: 100, ticks: 4, band: sim ? [sim.reactor.optTemp[0], sim.reactor.optTemp[1]] : [40, 60], series: [['temp', '--c-temp'], ['fission', '--c-fission'], ['turbine', '--c-turbine']] },
+  ];
+  ctx.font = font; ctx.textBaseline = 'middle';
+  for (const p of panels) {
+    const y = v => p.y0 + ph - (Math.min(Math.max(v, p.min), p.max) - p.min) / (p.max - p.min) * ph;
+    if (p.band) { ctx.fillStyle = line; ctx.globalAlpha = .35; ctx.fillRect(L, y(p.band[1]), W - L - Rr, y(p.band[0]) - y(p.band[1])); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.fillStyle = ink; ctx.textAlign = 'right';
+    for (let i = 0; i <= p.ticks; i++) { const v = p.min + (p.max - p.min) * i / p.ticks, yy = Math.round(y(v)) + .5; ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(W - Rr, yy); ctx.stroke(); ctx.fillText(p.name === 'kW' ? (v >= 1000 ? (v / 1000) + 'k' : v) : (p.name === 'V' ? v.toFixed(1) : v), L - 6, yy); }
+    ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
+    for (const [key, col] of p.series) {
+      if (!tl.length || tl[0][key] == null) continue;
+      ctx.strokeStyle = css(col); ctx.beginPath();
+      tl.forEach((pt, i) => { const xx = x(pt.t), yy = y(pt[key]); if (i) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); });
+      ctx.stroke();
+    }
+  }
+  ctx.fillStyle = ink; ctx.textAlign = 'center';
+  const step = dur > 1800 ? 300 : dur > 600 ? 120 : 60;
+  for (let t = 0; t <= dur; t += step) ctx.fillText(fmtClock(t), x(t), H - 9);
+  if (sim && sim.time > 0) { ctx.strokeStyle = css('--accent'); ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x(sim.time) + .5, top); ctx.lineTo(x(sim.time) + .5, H - bottom); ctx.stroke(); ctx.setLineDash([]); }
+}
+
+// ---------- files / downloads ----------
+async function save(filename, data) {
+  if (!downloads) { status('Saving files is not available in this view. Use Copy instead.', true); return; }
+  try { await downloads.save({ filename, data }); } catch (e) { if (e && e.code !== 'declined') status('Could not save ' + filename + ': ' + (e.message || e.code), true); }
+}
+async function copy(text, what) { try { await navigator.clipboard.writeText(text); status(`Copied ${what}.`); } catch (e) { status('Copy was blocked here. Select the text and copy it manually.', true); } }
+function renderFiles() {
+  const box = $('fileCards'); box.innerHTML = '';
+  if (!model || !model.boxes.length) { box.innerHTML = '<p class="hint">The vanilla baseline has no circuit files.</p>'; return; }
+  let files; try { files = P.exportBoxes(model, config().reactorMaxKW); } catch (e) { box.textContent = e.message; return; }
+  for (const f of files) {
+    const card = document.createElement('div'); card.className = 'filecard';
+    const h = document.createElement('h3'); h.textContent = f.filename;
+    const pre = document.createElement('pre'); pre.textContent = f.text.split('\n').filter(l => /<Component|<ConnectionLabelOverride/.test(l)).map(l => l.trim().replace(/"?<<<STRING(START|END)>>>"?/g, '"')).join('\n');
+    const bar = document.createElement('div'); bar.className = 'bar';
+    const b1 = document.createElement('button'); b1.textContent = 'Save'; b1.dataset.dl = ''; b1.onclick = () => save(f.filename, f.text);
+    const b2 = document.createElement('button'); b2.textContent = 'Copy'; b2.onclick = () => copy(f.text, f.filename);
+    bar.append(b1, b2); card.append(h, pre, bar); box.appendChild(card);
+  }
+  syncDl();
+}
+function syncDl() { document.querySelectorAll('[data-dl]').forEach(b => b.hidden = !downloads); }
+function showTab(name) { document.querySelectorAll('[role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name)); document.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== name); }
+
+// ---------- events ----------
+$('btnRun').onclick = () => { if (!sim) build(); if (!sim) return; if (finished) build(); running = !running; setRunLabel(); if (running) { lastTs = performance.now(); requestAnimationFrame(loop); } };
+$('btnReset').onclick = build;
+$('btnApply').onclick = build;
+$('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return; speed = b.dataset.s; carry = 0; document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x === b)); store.set('speed', speed); };
+document.querySelector('.tabs').onclick = e => { const b = e.target.closest('[role=tab]'); if (b) showTab(b.dataset.tab); };
+$('profileSel').onchange = () => { selectProfile(); build(); };
+$('circSel').onchange = () => { selectCircuit(); build(); };
+for (const id of ['maxKW', 'rods', 'fuelType', 'start', 'battOn', 'battN', 'battType', 'battStart', 'linkMode']) $(id).onchange = () => { if (id === 'maxKW') $('maxAuto').checked = false; build(); };
+$('maxAuto').onchange = () => { selectProfile(); build(); };
+$('profileFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const key = f.name.replace(/\.(csv|txt)$/i, ''); profiles[key] = await f.text(); refreshLists(); $('profileSel').value = key; selectProfile(); build(); e.target.value = '';
+};
+$('circFile').onchange = async e => {
+  const fs = [...e.target.files]; if (!fs.length) return;
+  const texts = await Promise.all(fs.map(f => f.text()));
+  const circ = fs.findIndex(f => /\.circ$/i.test(f.name));
+  let key, entry;
+  if (circ >= 0) { key = fs[circ].name.replace(/\.circ$/i, ''); entry = { circ: texts[circ], group: 'Loaded' }; }
+  else {
+    const bi = fs.findIndex(f => /_battery\.txt$/i.test(f.name)), ri = fs.findIndex((f, i) => i !== bi);
+    key = fs[ri].name.replace(/(_reactor)?\.txt$/i, ''); entry = { main: texts[ri], mainName: fs[ri].name, battery: bi >= 0 ? texts[bi] : null, group: 'Loaded' };
+    if (bi >= 0) $('battOn').checked = true;
+  }
+  circuits[key] = entry; refreshLists(); $('circSel').value = key; selectCircuit(); build(); e.target.value = '';
+};
+$('btnSaveLog').onclick = () => report && save(`${report.circuit}__${report.profile}.log.txt`, P.fmtReport(report));
+$('btnSaveTl').onclick = () => sim && save(`${sim.cfg.circuitName}__${sim.profile.name}.timeline.csv`, P.timelineCsv(sim.metrics.timeline));
+$('btnCopyLog').onclick = () => copy($('log').textContent, 'the log');
+$('btnSaveCirc').onclick = () => save(`${(model && model.name) || 'circuit'}.circ.txt`, $('circText').value);
+$('btnCfg').onclick = () => { const c = config(); save('sim.config.json', JSON.stringify(c, null, 2)); };
+window.addEventListener('resize', draw);
+if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+
+// ---------- boot ----------
+loadSettings(); refreshLists(); selectProfile(); selectCircuit();
+const sp = store.get('speed', '1'); document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x.dataset.s === sp)); speed = sp;
+build();
+syncDl();
+Promise.resolve(window.claude && window.claude.use ? window.claude.use('downloads') : null).then(d => { downloads = d; syncDl(); }).catch(() => { });
+})();
+</script>

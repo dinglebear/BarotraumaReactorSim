@@ -1,0 +1,27 @@
+# Example with batteries: reactor box = feed-forward, battery box charges when below 80%.
+name example_battery
+box reactor
+c tdiv div
+c tmax mem Value=$MAX
+c tpct mul
+c k100 mem Value=100
+c fadd add
+c k50 mem Value=50
+c fmul mul
+c fdiv div ClampMin=0 ClampMax=100
+w in1 tdiv.1
+w tmax.out tdiv.2
+w tdiv.out tpct.1
+w k100.out tpct.2
+w tpct.out out2 fadd.1
+w k50.out fadd.2 fmul.2
+w fadd.out fmul.1
+w fmul.out fdiv.1
+w in4 fdiv.2
+w fdiv.out out1
+box battery
+c low greater Output=40 FalseOutput=0   # 80 > charge% -> charge at 40%
+c k80 mem Value=80
+w k80.out low.1
+w in1 low.2
+w low.out out1

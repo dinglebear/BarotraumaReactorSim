@@ -1,0 +1,1574 @@
+<title>Reactor Circuit Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: engineering console. Settings rail on the left, live instruments + charts on the right, circuit/log drawer below. */
+:root {
+  --bg: #e9eef0; --panel: #fbfcfc; --sunk: #dfe6e9; --ink: #13222b; --muted: #57707b; --line: #c6d2d7;
+  --accent: #0a7069; --accent-ink: #ffffff; --amber: #b86e00; --bad: #b93225; --good: #2b7a3d;
+  --c-demand: #6b7f88; --c-supply: #0a7069; --c-volt: #b86e00; --c-temp: #c2412d; --c-fission: #6b4fb3; --c-turbine: #1f78b4; --c-batt: #2b7a3d;
+  --f-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
+  --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
+  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
+  --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
+  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 40px }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0 }
+.wrap { max-width: 1400px; margin: 0 auto; display: grid; gap: 14px }
+header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; justify-content: space-between }
+.brand h1 { font-size: 26px; font-weight: 700; letter-spacing: .02em }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+button, .btn { font: 600 13px var(--f-body); border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: var(--r); padding: 7px 12px; cursor: pointer }
+button:hover { border-color: var(--accent) }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+button:disabled { opacity: .5; cursor: default }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden }
+.seg button { border: 0; border-radius: 0; padding: 7px 10px; font-family: var(--f-mono); font-weight: 500 }
+.seg button + button { border-left: 1px solid var(--line) }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg) }
+.grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 14px; align-items: start }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r) }
+aside.panel { padding: 4px 0 }
+fieldset { border: 0; border-bottom: 1px solid var(--line); margin: 0; padding: 12px 16px 14px; display: grid; gap: 9px; min-width: 0 }
+fieldset:last-child { border-bottom: 0 }
+legend { float: left; width: 100%; font: 600 11px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); padding: 0; margin-bottom: 2px }
+label.row { display: grid; grid-template-columns: 1fr 132px; align-items: center; gap: 8px; font-size: 13px }
+label.row.wide { grid-template-columns: 1fr }
+input[type=number], input[type=text], select { width: 100%; font: 13px var(--f-mono); color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0 }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 500 }
+.hint { color: var(--muted); font-size: 12px; margin: 0 }
+.filebtn { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; text-align: center }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+main { display: grid; gap: 14px; min-width: 0 }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px }
+.tile { padding: 10px 12px; display: grid; gap: 2px; min-width: 0 }
+.tile .k { font: 600 10.5px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
+.tile .v { font: 500 24px var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tile .s { font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.pill { display: inline-block; font: 600 10.5px var(--f-body); letter-spacing: .04em; padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor; vertical-align: middle }
+.ok { color: var(--good) } .warn { color: var(--amber) } .bad { color: var(--bad) } .mut { color: var(--muted) }
+.chartbox { padding: 10px 12px 6px }
+.chartbox .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-bottom: 4px }
+.chartbox .legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px }
+canvas { display: block; width: 100%; height: 470px }
+.progress { height: 4px; background: var(--sunk); border-radius: 2px; overflow: hidden }
+.progress > div { height: 100%; width: 0; background: var(--accent) }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); padding: 0 8px; overflow-x: auto }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 12px; color: var(--muted) }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
+.tabpane { padding: 12px; display: grid; gap: 10px; min-width: 0 }
+textarea { width: 100%; min-height: 300px; resize: vertical; font: 12.5px/1.5 var(--f-mono); color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 10px; tab-size: 2 }
+pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f-mono); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 10px; white-space: pre-wrap; word-break: break-word }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.msg { font-size: 13px; padding: 8px 10px; border-radius: 4px; background: var(--sunk); border-left: 3px solid var(--accent) }
+.msg.err { border-left-color: var(--bad) }
+.filecard { border: 1px solid var(--line); border-radius: 4px; padding: 10px; display: grid; gap: 8px; min-width: 0 }
+.filecard h3 { font: 600 13px var(--f-mono) }
+.filecard pre { margin: 0; max-height: 160px; overflow: auto; font: 11px/1.4 var(--f-mono); color: var(--muted); white-space: pre; background: var(--sunk); padding: 8px; border-radius: 4px }
+.clock { font: 500 15px var(--f-mono); font-variant-numeric: tabular-nums; min-width: 9ch }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Reactor Circuit Bench</h1>
+      <p>Barotrauma reactor, grid and circuit boxes at 60 ticks/s. Automatic control is off: the circuit runs the reactor.</p>
+    </div>
+    <div class="controls" role="group" aria-label="Simulation controls">
+      <button id="btnRun" class="primary">Start</button>
+      <button id="btnReset">Reset</button>
+      <div class="seg" id="speed" role="group" aria-label="Speed">
+        <button data-s="1" aria-pressed="true">x1</button><button data-s="5" aria-pressed="false">x5</button><button data-s="10" aria-pressed="false">x10</button><button data-s="25" aria-pressed="false">x25</button><button data-s="max" aria-pressed="false">Max</button>
+      </div>
+      <span class="clock" id="clock">00:00 / 00:00</span>
+    </div>
+  </header>
+  <div class="progress" aria-hidden="true"><div id="prog"></div></div>
+
+  <div class="grid">
+    <aside class="panel" aria-label="Master settings">
+      <fieldset>
+        <legend>Test file (power demand)</legend>
+        <select id="profileSel" aria-label="Load profile"></select>
+        <div class="two">
+          <label class="btn filebtn">Load CSV…<input type="file" id="profileFile" accept=".csv,.txt"></label>
+          <button id="btnCfg" title="Save these settings as sim.config.json for the command-line runner">Save settings</button>
+        </div>
+        <p class="hint" id="profileInfo"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Reactor</legend>
+        <label class="row">Max output (kW)<input type="number" id="maxKW" min="100" step="100"></label>
+        <label class="check"><input type="checkbox" id="maxAuto" checked> Use the value saved in the test file</label>
+        <label class="row">Fuel rods<select id="rods"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+        <label class="row">Rod type<select id="fuelType"><option value="uranium">Uranium (80)</option><option value="thorium">Thorium (100)</option><option value="fulgurium">Fulgurium (150)</option><option value="volatile">Volatile fulg. (400)</option></select></label>
+        <label class="row">Start state<select id="start"><option value="warm">Warm (round start)</option><option value="cold">Cold (0 °)</option></select></label>
+      </fieldset>
+      <fieldset>
+        <legend>Batteries</legend>
+        <label class="check"><input type="checkbox" id="battOn"> Allow batteries (adds a 2nd circuit box)</label>
+        <label class="row">Count<input type="number" id="battN" min="1" max="8" value="2"></label>
+        <label class="row">Type<select id="battType"><option value="battery">Battery</option><option value="supercapacitor">Supercapacitor</option></select></label>
+        <label class="row">Start charge %<input type="number" id="battStart" min="0" max="100" value="50"></label>
+        <label class="row">Box link<select id="linkMode"><option value="wire">Wire</option><option value="wifi">Wifi components</option></select></label>
+      </fieldset>
+      <fieldset>
+        <legend>Circuit</legend>
+        <select id="circSel" aria-label="Circuit"></select>
+        <label class="btn filebtn">Load .circ / .txt…<input type="file" id="circFile" accept=".circ,.txt" multiple></label>
+        <p class="hint">For two in-game files, select both (<code>name_reactor.txt</code> and <code>name_battery.txt</code>).</p>
+      </fieldset>
+    </aside>
+
+    <main>
+      <section class="tiles" aria-label="Live readings">
+        <div class="panel tile"><span class="k">Voltage</span><span class="v" id="tV">–</span><span class="s" id="sV">grid power ÷ load</span></div>
+        <div class="panel tile"><span class="k">Supply / demand</span><span class="v" id="tP">–</span><span class="s" id="sP">kW</span></div>
+        <div class="panel tile"><span class="k">Temperature</span><span class="v" id="tT">–</span><span class="s" id="sT">optimal 40–60</span></div>
+        <div class="panel tile"><span class="k">Fission → target</span><span class="v" id="tF">–</span><span class="s" id="sF"></span></div>
+        <div class="panel tile"><span class="k">Turbine → target</span><span class="v" id="tU">–</span><span class="s" id="sU"></span></div>
+        <div class="panel tile"><span class="k">Fuel left</span><span class="v" id="tFu">–</span><span class="s" id="sFu"></span></div>
+        <div class="panel tile" id="tileB"><span class="k">Batteries</span><span class="v" id="tB">off</span><span class="s" id="sB"></span></div>
+      </section>
+
+      <section class="panel chartbox" aria-label="Charts">
+        <div class="legend">
+          <span><i style="background:var(--c-demand)"></i>Demand kW</span><span><i style="background:var(--c-supply)"></i>Supply kW</span><span><i style="background:var(--c-batt)"></i>Battery out kW</span>
+          <span><i style="background:var(--c-volt)"></i>Voltage</span><span><i style="background:var(--c-temp)"></i>Temperature</span><span><i style="background:var(--c-fission)"></i>Fission %</span><span><i style="background:var(--c-turbine)"></i>Turbine %</span>
+        </div>
+        <canvas id="chart" role="img" aria-label="Power, voltage and reactor charts over time"></canvas>
+      </section>
+
+      <section class="panel">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="log" aria-selected="true">Log</button>
+          <button role="tab" data-tab="circ" aria-selected="false">Circuit (.circ)</button>
+          <button role="tab" data-tab="files" aria-selected="false">In-game files</button>
+        </div>
+        <div class="tabpane" data-pane="log">
+          <div id="status" class="msg">Pick a test file and a circuit, then press Start.</div>
+          <pre class="log" id="log">No run yet.</pre>
+          <div class="bar"><button id="btnSaveLog" data-dl>Save log</button><button id="btnSaveTl" data-dl>Save timeline CSV</button><button id="btnCopyLog">Copy log</button></div>
+        </div>
+        <div class="tabpane" data-pane="circ" hidden>
+          <p class="hint">Edit the compact circuit text and press Apply. <code>$MAX</code> is replaced by the reactor max output. Syntax is in AIHowTo.md.</p>
+          <textarea id="circText" spellcheck="false" aria-label="Circuit source"></textarea>
+          <div class="bar"><button id="btnApply" class="primary">Apply &amp; reset</button><button id="btnSaveCirc" data-dl>Save .circ</button><span id="circMsg" class="hint"></span></div>
+        </div>
+        <div class="tabpane" data-pane="files" hidden>
+          <p class="hint">Blueprints-format files: load them in game with the Blueprints mod. Box pins are labelled with what to wire them to.</p>
+          <div id="fileCards" style="display:grid;gap:10px"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>// Circuit components: catalog (names/defaults/pins for file I/O) + runtime behaviour.
+// Behaviour mirrors Barotrauma's SharedSource/Items/Components/Signal/*.cs (see reference/BAROTRAUMA_MECHANICS.md).
+// Runtime contract: comp.recv(pin, sig) is called the instant a signal arrives (same frame, recursive like the game);
+// comp.update(dt) is called once per 1/60 s frame. comp.send(pin, valueOrSig) emits.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.BaroComponents = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+  const f32 = Math.fround;
+
+  // ---- C# number parsing / formatting (InvariantCulture) ----
+  function parseF(s) { // float.TryParse(NumberStyles.Float) -> {ok, v}
+    if (s == null) return { ok: false, v: 0 };
+    const t = String(s).trim();
+    if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return { ok: true, v: f32(Number(t)) };
+    const m = /^([+-]?)(Infinity|∞)$/i.exec(t); if (m) return { ok: true, v: m[1] === '-' ? -Infinity : Infinity };
+    if (/^[+-]?NaN$/i.test(t)) return { ok: true, v: NaN };
+    return { ok: false, v: 0 };
+  }
+  function parseI(s) { const t = String(s).trim(); if (!/^[+-]?\d+$/.test(t)) return { ok: false, v: 0 }; const v = Number(t); return (v > 2147483647 || v < -2147483648) ? { ok: false, v: 0 } : { ok: true, v }; }
+  function shortest(x, maxP, round) { for (let p = 1; p <= maxP; p++) { const s = x.toPrecision(p); if (round(Number(s)) === x) return s; } return x.toPrecision(maxP); }
+  // .NET Core "G" (shortest round-trip). sciAbove: 9 for float, 15 for double.
+  function fmtG(x, isFloat) {
+    if (Number.isNaN(x)) return 'NaN';
+    if (x === Infinity) return 'Infinity'; if (x === -Infinity) return '-Infinity';
+    if (x === 0) return Object.is(x, -0) ? '-0' : '0';
+    const s = shortest(Math.abs(x), isFloat ? 9 : 17, isFloat ? f32 : (v => v));
+    const m = /^(\d)(?:\.(\d+))?(?:e([+-]\d+))?$/.exec(Number(s).toExponential());
+    const digits = (m[1] + (m[2] || '')).replace(/0+$/, '') || '0', exp = Number(m[3] || 0);
+    const digPos = exp + 1, sign = x < 0 ? '-' : '';
+    if (digPos > Math.max(digits.length, isFloat ? 9 : 17) || digPos < -3) {
+      const e = exp; return sign + digits[0] + (digits.length > 1 ? '.' + digits.slice(1) : '') + 'E' + (e < 0 ? '-' : '+') + String(Math.abs(e)).padStart(2, '0');
+    }
+    if (digPos <= 0) return sign + '0.' + '0'.repeat(-digPos) + digits;
+    if (digPos >= digits.length) return sign + digits + '0'.repeat(digPos - digits.length);
+    return sign + digits.slice(0, digPos) + '.' + digits.slice(digPos);
+  }
+  const fmtF = x => fmtG(f32(x), true), fmtD = x => fmtG(x, false);
+  const roundEven = x => { const r = Math.round(x); return (Math.abs(x % 1) === 0.5 && r % 2 !== 0) ? r - 1 : r; };
+  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+  const nearlyEq = (a, b, eps = 1e-4) => { // MathUtils.NearlyEqual
+    if (a === b) return true; const d = Math.abs(a - b), s = Math.abs(a) + Math.abs(b);
+    if (a === 0 || b === 0 || s < eps) return d < eps; return d / s < eps;
+  };
+  const bool = v => String(v).toLowerCase() === 'true';
+  const STEP = 1 / 60;
+
+  // ---- catalog ----
+  // alias: what you type in .circ; item: in-game identifier; cls: Class attr; defaults: InGameEditable props saved in .txt
+  const CAT = [];
+  function def(alias, item, cls, defaults, ins, outs, make, extra) { const d = Object.assign({ alias, item, cls, defaults, ins, outs, make }, extra || {}); CAT.push(d); return d; }
+  const boolDefs = { TimeFrame: '0', Output: '1', FalseOutput: '0' };
+  const arithDefs = { ClampMax: '999999', ClampMin: '-999999', TimeFrame: '0' };
+  const IN12 = ['signal_in1', 'signal_in2'], OUT = ['signal_out'];
+
+  // Boolean (And/Or/Xor): Update() each frame; output if state true (or false output non-empty).
+  function makeBool(test) {
+    return (c) => {
+      const tf = () => Math.max(0, parseF(c.p.TimeFrame).v);
+      const init = Math.max(tf() * 2, 0.1); c.t = [init, init];
+      c.recv = (pin, s) => {
+        if (pin === 'signal_in1' || pin === 'signal_in2') { if (s.v === '0') return; c.t[pin === 'signal_in1' ? 0 : 1] = 0; }
+        else if (pin === 'set_output') c.p.Output = s.v;
+      };
+      c.update = (dt) => {
+        let n = 0; const T = tf();
+        for (let i = 0; i < 2; i++) { if (c.t[i] <= T) n++; c.t[i] += dt; }
+        const out = test(n) ? c.p.Output : c.p.FalseOutput;
+        if (out == null || out === '') return;
+        c.send('signal_out', out);
+      };
+    };
+  }
+  def('and', 'andcomponent', 'AndComponent', boolDefs, [...IN12, 'set_output'], OUT, makeBool(n => n >= 2));
+  def('or', 'orcomponent', 'OrComponent', boolDefs, [...IN12, 'set_output'], OUT, makeBool(n => n > 0));
+  def('xor', 'xorcomponent', 'XorComponent', boolDefs, [...IN12, 'set_output'], OUT, makeBool(n => n === 1));
+
+  // Arithmetic: Update() each frame; needs BOTH inputs received within TimeFrame (0 = since last update).
+  function makeArith(calc) {
+    return (c) => {
+      const tf = () => Math.max(0, parseF(c.p.TimeFrame).v);
+      const init = Math.max(tf() * 2, 0.1); c.t = [init, init]; c.r = [0, 0];
+      c.recv = (pin, s) => {
+        if (pin === 'signal_in1') { c.r[0] = parseF(s.v).v; c.t[0] = 0; }
+        else if (pin === 'signal_in2') { c.r[1] = parseF(s.v).v; c.t[1] = 0; }
+      };
+      c.update = (dt) => {
+        let early = false; const T = tf();
+        for (let i = 0; i < 2; i++) { if (c.t[i] > T) early = true; c.t[i] += dt; }
+        if (early) return;
+        const o = calc(c.r[0], c.r[1]);
+        if (!Number.isFinite(o)) return; // MathUtils.IsValid
+        c.send('signal_out', fmtF(clamp(o, parseF(c.p.ClampMin).v, parseF(c.p.ClampMax).v)));
+      };
+    };
+  }
+  def('add', 'addercomponent', 'AdderComponent', arithDefs, IN12, OUT, makeArith((a, b) => f32(a + b)));
+  def('sub', 'subtractcomponent', 'SubtractComponent', arithDefs, IN12, OUT, makeArith((a, b) => f32(a - b)));
+  def('mul', 'multiplycomponent', 'MultiplyComponent', arithDefs, IN12, OUT, makeArith((a, b) => f32(a * b)));
+  def('div', 'dividecomponent', 'DivideComponent', arithDefs, IN12, OUT, makeArith((a, b) => nearlyEq(b, 0) ? NaN : f32(a / b)));
+
+  // Instant (ReceiveSignal) single-input math
+  def('mod', 'modulocomponent', 'ModuloComponent', { Modulus: '1' }, ['signal_in', 'set_modulus'], OUT, (c) => {
+    const setM = v => { c.m = nearlyEq(v, 0) ? 1 : v; }; setM(parseF(c.p.Modulus).v);
+    c.recv = (pin, s) => {
+      if (pin === 'set_modulus' || pin === 'modulus') setM(parseF(s.v).v);
+      else if (pin === 'signal_in') { const v = parseF(s.v).v; c.fwd(s, 'signal_out', fmtF(f32(v % c.m))); }
+    };
+  });
+  def('pow', 'powcomponent', 'ExponentiationComponent', { Exponent: '1' }, ['signal_in', 'set_exponent'], OUT, (c) => {
+    c.e = parseF(c.p.Exponent).v;
+    c.recv = (pin, s) => {
+      if (pin === 'set_exponent' || pin === 'exponent') c.e = parseF(s.v).v;
+      else if (pin === 'signal_in') c.fwd(s, 'signal_out', fmtF(f32(Math.pow(parseF(s.v).v, c.e))));
+    };
+  });
+  const FN = {
+    round: v => { v = f32(roundEven(v)); return v === 0 ? 0 : v; }, ceil: v => { v = Math.ceil(v); return v === 0 ? 0 : v; }, floor: v => Math.floor(v),
+    factorial: v => { let n = Math.trunc(Math.min(v, 20)), r = 1n; for (let i = n; i > 0; i--) r *= BigInt(i); return f32(Number(r)); },
+    abs: v => Math.abs(v), sqrt: v => v < 0 ? null : f32(Math.sqrt(v)),
+  };
+  for (const [a, item] of [['round', 'roundcomponent'], ['ceil', 'ceilcomponent'], ['floor', 'floorcomponent'], ['factorial', 'factorialcomponent'], ['abs', 'abscomponent'], ['sqrt', 'squarerootcomponent']])
+    def(a, item, 'FunctionComponent', {}, ['signal_in'], OUT, (c) => {
+      c.recv = (pin, s) => { if (pin !== 'signal_in') return; const p = parseF(s.v); if (!p.ok) return; const r = FN[a](p.v); if (r === null) return; c.fwd(s, 'signal_out', fmtF(r)); };
+    });
+  const D2R = Math.PI / 180;
+  for (const [a, item] of [['sin', 'sincomponent'], ['cos', 'coscomponent'], ['tan', 'tancomponent'], ['asin', 'asincomponent'], ['acos', 'acoscomponent'], ['atan', 'atancomponent']])
+    def(a, item, 'TrigonometricFunctionComponent', { UseRadians: 'false' }, a === 'atan' ? ['signal_in', 'signal_in_x', 'signal_in_y'] : ['signal_in'], OUT, (c) => {
+      const rad = () => bool(c.p.UseRadians); c.r = [NaN, NaN]; c.t = [0, 0];
+      c.recv = (pin, s) => {
+        let v = parseF(s.v).v;
+        if (a === 'sin') v = f32(Math.sin(rad() ? v : f32(v * D2R)));
+        else if (a === 'cos') v = f32(Math.cos(rad() ? v : f32(v * D2R)));
+        else if (a === 'tan') { if (!rad()) v = f32(v * D2R); if (!nearlyEq(v % Math.PI, Math.PI / 2)) v = f32(Math.tan(v)); }
+        else if (a === 'asin' || a === 'acos') { if (v >= -1 && v <= 1) { const g = f32((a === 'asin' ? Math.asin : Math.acos)(v)); v = rad() ? g : f32(g / D2R); } }
+        else if (a === 'atan') {
+          if (pin === 'signal_in_x') { c.t[0] = 0; c.r[0] = v; return; }
+          if (pin === 'signal_in_y') { c.t[1] = 0; c.r[1] = v; return; }
+          const g = f32(Math.atan(v)); v = rad() ? g : f32(g / D2R);
+        }
+        c.fwd(s, 'signal_out', fmtF(v));
+      };
+      if (a === 'atan') c.update = (dt) => {
+        for (let i = 0; i < 2; i++) { c.t[i] += dt; if (c.t[i] > 0.1) c.r[i] = NaN; }
+        if (!Number.isNaN(c.r[0]) && !Number.isNaN(c.r[1])) { let g = f32(Math.atan2(c.r[1], c.r[0])); if (!rad()) g = f32(g / D2R); c.send('signal_out', fmtF(g)); }
+      };
+    });
+
+  // Not: instant; with ContinuousOutput also outputs "1" each frame nothing was received.
+  def('not', 'notcomponent', 'NotComponent', { ContinuousOutput: 'false' }, ['signal_in'], OUT, (c) => {
+    c.got = false;
+    c.recv = (pin, s) => { if (pin !== 'signal_in') return; c.fwd(s, 'signal_out', (s.v === '0' || s.v === '') ? '1' : '0'); c.got = true; };
+    c.update = () => { if (!bool(c.p.ContinuousOutput)) return; if (!c.got) c.send('signal_out', '1'); c.got = false; };
+  });
+
+  // Greater / Equals: Update() each frame while ANY input is fresh (within TimeFrame).
+  function makeCmp(isGreater) {
+    return (c) => {
+      const tf = () => Math.max(0, parseF(c.p.TimeFrame).v);
+      const init = Math.max(tf() * 2, 0.1); c.t = [init, init]; c.r = isGreater ? [0, 0] : [undefined, undefined];
+      c.recv = (pin, s) => {
+        if (pin === 'signal_in1' || pin === 'signal_in2') { const i = pin === 'signal_in1' ? 0 : 1; c.r[i] = isGreater ? parseF(s.v).v : s.v; c.t[i] = 0; }
+        else if (pin === 'set_output') c.p.Output = s.v;
+      };
+      c.update = (dt) => {
+        let send = false; const T = tf();
+        for (let i = 0; i < 2; i++) { if (c.t[i] <= T) send = true; c.t[i] += dt; }
+        if (!send) return;
+        const out = (isGreater ? c.r[0] > c.r[1] : c.r[0] === c.r[1]) ? c.p.Output : c.p.FalseOutput;
+        if (out == null || out === '') return;
+        c.send('signal_out', out);
+      };
+    };
+  }
+  def('greater', 'greatercomponent', 'GreaterComponent', boolDefs, [...IN12, 'set_output'], OUT, makeCmp(true));
+  def('equals', 'equalscomponent', 'EqualsComponent', boolDefs, [...IN12, 'set_output'], OUT, makeCmp(false));
+
+  def('check', 'signalcheckcomponent', 'SignalCheckComponent', { Output: '1', FalseOutput: '0', TargetSignal: '' }, ['signal_in', 'set_output', 'set_targetsignal'], OUT, (c) => {
+    c.recv = (pin, s) => {
+      if (pin === 'signal_in') { const o = s.v === c.p.TargetSignal ? c.p.Output : c.p.FalseOutput; if (o == null || o === '') return; c.fwd(s, 'signal_out', o); }
+      else if (pin === 'set_output') c.p.Output = s.v;
+      else if (pin === 'set_targetsignal') c.p.TargetSignal = s.v;
+    };
+  });
+
+  // Memory: outputs its value every frame. Writeable is an [Editable] prop (not in-game editable), default true.
+  def('mem', 'memorycomponent', 'MemoryComponent', { Value: '' }, ['signal_in', 'signal_store', 'lock_state'], OUT, (c) => {
+    c.w = c.p.Writeable === undefined ? true : bool(c.p.Writeable);
+    c.recv = (pin, s) => {
+      if (pin === 'signal_in') { if (c.w) c.p.Value = String(s.v).slice(0, 200); }
+      else if (pin === 'signal_store' || pin === 'lock_state') c.w = s.v === '1';
+    };
+    c.update = () => c.send('signal_out', c.p.Value);
+  });
+
+  // Delay: tick based queue (delayTicks = (int)(Delay / (1/60))). Note: Delay 0 never outputs (queue size 0 quirk).
+  def('delay', 'delaycomponent', 'DelayComponent', { Delay: '1', ResetWhenSignalReceived: 'false', ResetWhenDifferentSignalReceived: 'false' }, ['signal_in', 'set_delay'], OUT, (c) => {
+    c.q = []; c.prev = null; c.delay = 0; c.ticks = 0; c.qsize = 0;
+    const setDelay = (v) => { if (v === c.delay) return; c.delay = v; c.ticks = Math.trunc(f32(v) / f32(STEP)); c.qsize = Math.max(c.ticks, 1) * 2; c.q = []; };
+    setDelay(parseF(c.p.Delay).v);
+    c.recv = (pin, s) => {
+      if (pin === 'signal_in') {
+        if (c.q.length >= c.qsize) return;
+        if (bool(c.p.ResetWhenSignalReceived)) { c.prev = null; c.q = []; }
+        if (bool(c.p.ResetWhenDifferentSignalReceived) && c.q.length && c.q[0].v !== s.v) { c.prev = null; c.q = []; }
+        const p = c.prev;
+        if (p && p.v === s.v && ((p.timer + p.dur === c.ticks) || (p.timer <= 0 && p.dur > 0))) { p.dur++; return; }
+        c.prev = { v: s.v, timer: c.ticks, dur: 1 }; c.q.push(c.prev);
+      } else if (pin === 'set_delay') {
+        const r = parseF(String(s.v).replace(/,/g, '')); if (!r.ok) return; const nd = clamp(r.v, 0, 60); // NumberStyles.Any
+        if (c.q.length && nd !== c.delay) { c.prev = null; c.q = []; }
+        setDelay(nd); c.p.Delay = fmtF(nd);
+      }
+    };
+    c.update = () => {
+      if (!c.q.length) return;
+      for (const e of c.q) e.timer--;
+      while (c.q.length && c.q[0].timer <= 0) {
+        const e = c.q[0]; e.dur--; c.send('signal_out', e.v);
+        if (e.dur <= 0) c.q.shift(); else break;
+      }
+    };
+  });
+
+  def('osc', 'oscillator', 'OscillatorComponent', { OutputType: 'Pulse', Frequency: '1' }, ['set_frequency', 'set_outputtype'], OUT, (c) => {
+    c.ph = 0; c.f = clamp(parseF(c.p.Frequency).v, 0, 240);
+    c.recv = (pin, s) => {
+      if (pin === 'set_frequency' || pin === 'frequency_in') { const r = parseF(s.v); if (r.ok) { c.f = clamp(r.v, 0, 240); c.p.Frequency = fmtF(c.f); } }
+      else if (pin === 'set_outputtype' || pin === 'set_wavetype') { if (/^(Pulse|Sawtooth|Sine|Square|Triangle|[0-4])$/.test(s.v)) c.p.OutputType = /^\d$/.test(s.v) ? ['Pulse', 'Sawtooth', 'Sine', 'Square', 'Triangle'][+s.v] : s.v; }
+    };
+    c.update = (dt) => {
+      const t = c.p.OutputType;
+      if (t === 'Pulse') { if (c.f <= 0) return; c.ph = f32(c.ph + dt); const iv = f32(1 / c.f); while (c.ph >= iv) { c.send('signal_out', '1'); c.ph = f32(c.ph - iv); } return; }
+      c.ph = f32((c.ph + f32(dt * c.f)) % 1);
+      if (t === 'Sawtooth') c.send('signal_out', fmtF(c.ph));
+      else if (t === 'Square') c.send('signal_out', c.ph < 0.5 ? '0' : '1');
+      else if (t === 'Sine') c.send('signal_out', fmtD(Math.sin(c.ph * f32(Math.PI * 2))));
+      else if (t === 'Triangle') { const pm = ((c.ph - 0.25) % 1 + 1) % 1; c.send('signal_out', fmtF(f32(4 * Math.abs(pm - 0.5) - 1))); }
+    };
+  });
+
+  def('relay', 'relaycomponent', 'RelayComponent', { IsOn: 'true' }, ['signal_in1', 'signal_in2', 'toggle', 'set_state'], ['signal_out1', 'signal_out2', 'state_out'], (c) => {
+    c.on = bool(c.p.IsOn);
+    c.recv = (pin, s) => {
+      const m = /^signal_in(\d?)$/.exec(pin);
+      if (m) { if (c.on) c.fwd(s, 'signal_out' + m[1], s.v); }
+      else if (pin === 'toggle') { if (s.v !== '0') c.on = !c.on; }
+      else if (pin === 'set_state') c.on = s.v !== '0';
+    };
+    c.update = () => c.send('state_out', c.on ? '1' : '0');
+  });
+
+  def('concat', 'concatcomponent', 'ConcatComponent', { Separator: '', TimeFrame: '0' }, IN12, OUT, (c) => {
+    const tf = () => Math.max(0, parseF(c.p.TimeFrame).v);
+    const init = Math.max(tf() * 2, 0.1); c.t = [init, init]; c.r = ['', ''];
+    c.recv = (pin, s) => { if (pin === 'signal_in1') { c.r[0] = s.v; c.t[0] = 0; } else if (pin === 'signal_in2') { c.r[1] = s.v; c.t[1] = 0; } };
+    c.update = (dt) => {
+      let early = false; const T = tf();
+      for (let i = 0; i < 2; i++) { if (c.t[i] > T) early = true; c.t[i] += dt; }
+      if (early) return;
+      const o = c.p.Separator ? c.r[0] + c.p.Separator + c.r[1] : c.r[0] + c.r[1];
+      c.send('signal_out', o.slice(0, 256));
+    };
+  });
+
+  def('color', 'colorcomponent', 'ColorComponent', { UseHSV: 'false' }, ['signal_r', 'signal_g', 'signal_b', 'signal_a'], OUT, (c) => {
+    c.r = [0, 0, 0, 0]; c.out = '0,0,0,0';
+    c.recv = (pin, s) => { const i = ['signal_r', 'signal_g', 'signal_b', 'signal_a'].indexOf(pin); if (i < 0) return; c.r[i] = parseF(s.v).v; c.out = c.r.map(fmtF).join(','); };
+    c.update = () => c.send('signal_out', c.out);
+  });
+
+  def('regex', 'regexcomponent', 'RegExFindComponent', { Output: '1', UseCaptureGroup: 'false', OutputEmptyCaptureGroup: 'false', FalseOutput: '0', ContinuousOutput: 'true', Expression: '' }, ['signal_in', 'set_output'], OUT, (c) => {
+    c.sent = true; c.prevIn = ''; c.res = false; c.groups = null; c.rx = null; c.rxSrc = null;
+    c.recv = (pin, s) => { if (pin === 'signal_in') { c.inp = s.v; c.sent = false; } else if (pin === 'set_output') c.p.Output = s.v; };
+    c.update = () => {
+      if (c.rxSrc !== c.p.Expression) { c.rxSrc = c.p.Expression; c.prevIn = ''; try { c.rx = new RegExp(c.p.Expression.replace(/\(\?<(\w+)>/g, '(?<$1>')); } catch (e) { c.rx = null; } }
+      if (!c.p.Expression || !c.p.Expression.trim() || !c.rx) return;
+      const cont = bool(c.p.ContinuousOutput);
+      if (!cont && c.sent) return;
+      if (c.inp !== c.prevIn && c.inp != null) { const m = c.rx.exec(c.inp); c.res = !!m; c.groups = bool(c.p.UseCaptureGroup) && m ? m : null; c.prevIn = c.inp; }
+      let out, allowEmpty = false;
+      if (c.res) {
+        if (bool(c.p.UseCaptureGroup)) { const g = c.groups && (c.groups.groups && c.groups.groups[c.p.Output] !== undefined ? c.groups.groups[c.p.Output] : c.groups[c.p.Output]); if (g !== undefined && g !== null) { out = g; allowEmpty = bool(c.p.OutputEmptyCaptureGroup); } else out = c.p.FalseOutput; }
+        else out = c.p.Output;
+      } else out = c.p.FalseOutput;
+      if ((out != null && out !== '') || (allowEmpty && out === '')) c.send('signal_out', out);
+      if (!cont) c.sent = true;
+    };
+  });
+
+  // Multiplexer / Demultiplexer (10 numbered pins: 0..9)
+  function makeSel(isMux) {
+    return (c) => {
+      const N = 10; const nameOf = i => (isMux ? 'signal_in' : 'signal_out') + i;
+      c.sel = Math.min(Math.max(0, parseI(c.p.SelectedConnection).v), N - 1);
+      const set = (v) => { c.sel = Math.min(Math.max(0, v), N - 1); c.p.SelectedConnection = String(c.sel); };
+      const move = (a) => { if (bool(c.p.WrapAround)) set(((c.sel + a) % N + N) % N); else set(c.sel + a); };
+      c.recv = (pin, s) => {
+        if (isMux && /^signal_in\d$/.test(pin)) { if (pin === nameOf(c.sel)) c.fwd(s, 'signal_out', s.v); return; }
+        if (!isMux && pin === 'signal_in') { c.fwd(s, nameOf(c.sel), s.v); return; }
+        if (pin === (isMux ? 'set_input' : 'set_output')) { const r = parseI(s.v); if (r.ok) set(r.v); }
+        else if (pin === (isMux ? 'move_input' : 'move_output')) {
+          const r = parseI(s.v); if (!r.ok) return;
+          if (bool(c.p.SkipEmptyConnections)) { for (let i = 0; i < N; i++) { move(r.v); if (c.isWired(nameOf(c.sel))) break; } }
+          else move(r.v);
+        }
+      };
+      c.update = () => { const o = isMux ? 'selected_input_out' : 'selected_output_out'; if (c.isWired(o)) c.send(o, String(c.sel)); };
+    };
+  }
+  const selDefs = { SelectedConnection: '0', WrapAround: 'true', SkipEmptyConnections: 'true' };
+  def('mux', 'multiplexercomponent', 'MultiplexerComponent', selDefs, ['signal_in0', 'signal_in1', 'signal_in2', 'signal_in3', 'signal_in4', 'signal_in5', 'signal_in6', 'signal_in7', 'signal_in8', 'signal_in9', 'set_input', 'move_input'], ['signal_out', 'selected_input_out'], makeSel(true));
+  def('demux', 'demultiplexercomponent', 'DemultiplexerComponent', selDefs, ['signal_in', 'set_output', 'move_output'], ['signal_out0', 'signal_out1', 'signal_out2', 'signal_out3', 'signal_out4', 'signal_out5', 'signal_out6', 'signal_out7', 'signal_out8', 'signal_out9', 'selected_output_out'], makeSel(false));
+
+  // Wifi: forwards signal_in instantly to every other wifi on the same channel whose signal_out is wired (stepsTaken+1).
+  def('wifi', 'wificomponent', 'WifiComponent', { Channel: '1' }, ['signal_in', 'set_channel'], OUT, (c) => {
+    c.recv = (pin, s) => {
+      if (pin === 'signal_in') c.wifiTx(s);
+      else if (pin === 'set_channel') { const r = parseI(s.v); if (r.ok) c.p.Channel = String(clamp(r.v, 0, 10000)); }
+    };
+  });
+
+  // ---- lookups ----
+  const byAliasMap = {}, byItemMap = {};
+  for (const d of CAT) { byAliasMap[d.alias] = d; byItemMap[d.item] = d; }
+  // extra aliases (item ids and class-ish names also work)
+  for (const d of CAT) { byAliasMap[d.item] = byAliasMap[d.item] || d; byAliasMap[d.item.replace(/component$/, '')] = byAliasMap[d.item.replace(/component$/, '')] || d; }
+  Object.assign(byAliasMap, { adder: byAliasMap.add, subtract: byAliasMap.sub, multiply: byAliasMap.mul, divide: byAliasMap.div, memory: byAliasMap.mem, oscillator: byAliasMap.osc, signalcheck: byAliasMap.check, modulo: byAliasMap.mod, exponent: byAliasMap.pow, exponentiation: byAliasMap.pow, exponentiationcomponent: byAliasMap.pow, multiplexer: byAliasMap.mux, demultiplexer: byAliasMap.demux, squareroot: byAliasMap.sqrt });
+  function byAlias(a) { return byAliasMap[String(a).toLowerCase()]; }
+  function byItem(i) { return byItemMap[i]; }
+  function aliases() { return CAT.map(d => d.alias); }
+  function propName(d, k) { const want = k.toLowerCase(); for (const p of Object.keys(d.defaults)) if (p.toLowerCase() === want) return p; return k; }
+  function pinAlias(item, p) { // short pin names accepted in .circ
+    const d = byItem(item); if (!d) return null;
+    const all = [...d.ins, ...d.outs];
+    if (all.includes(p)) return p;
+    const cand = all.filter(x => x === 'signal_' + p || x === 'set_' + p || x === 'signal_in_' + p || x.endsWith('_' + p));
+    return cand.length === 1 ? cand[0] : null;
+  }
+
+  return { CAT, byAlias, byItem, aliases, propName, pinAlias, parseF, parseI, fmtF, fmtD, roundEven, clamp, STEP };
+});
+
+;
+// Circuit file I/O.
+//  - Blueprints .txt (the in-game export format used by the "Blueprints" workshop mod)  <->  model
+//  - .circ compact DSL (token-cheap format for AIs)                                       <->  model
+// Model: { name, boxes:[Box], links:[{from:'reactor.out5', to:'battery.in1'}] }
+// Box:   { name, pins:{in1:'reactor.load_value_out',...}|null, components:[{id,item,props,pos}],
+//          wires:[{from:{c,pin},to:{c,pin},prefab}], labels:[{header,body,color,pos,size}],
+//          inLabels:{signal_in1:'..'}, outLabels:{..}, inPos, outPos }
+// wire endpoint: c===null -> box IO node (pin = signal_inN / signal_outN), else component id.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./components'));
+  else root.BaroFormat = factory(root.BaroComponents);
+})(typeof self !== 'undefined' ? self : this, function (C) {
+  'use strict';
+  const SS = '<<<STRINGSTART>>>', SE = '<<<STRINGEND>>>';
+
+  // ---------------- tiny XML reader (handles Blueprints string markers) ----------------
+  function decodeEnt(s) {
+    return s.replace(/&(#x[0-9a-fA-F]+|#\d+|quot|amp|lt|gt|apos);/g, (m, e) => {
+      if (e[0] === '#') return String.fromCharCode(e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
+      return { quot: '"', amp: '&', lt: '<', gt: '>', apos: "'" }[e];
+    });
+  }
+  function encEnt(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '&#xA;');
+  }
+  function parseXml(text) {
+    const raw = [];
+    // pull out marker strings first (they may contain quotes / angle brackets)
+    text = text.replace(/"?<<<STRINGSTART>>>([\s\S]*?)<<<STRINGEND>>>"?/g, (m, v) => { raw.push(v); return '"\u0001' + (raw.length - 1) + '\u0001"'; });
+    const rootN = { tag: '#root', attrs: {}, children: [] }, stack = [rootN];
+    const re = /<(\/?)([A-Za-z_][\w.:-]*)((?:\s+[^\s=\/>]+\s*=\s*"[^"]*")*)\s*(\/?)>|<!--[\s\S]*?-->|<\?[\s\S]*?\?>/g;
+    let m;
+    while ((m = re.exec(text))) {
+      if (!m[2]) continue;
+      if (m[1]) { stack.pop(); continue; }
+      const attrs = {};
+      m[3].replace(/([^\s=\/>]+)\s*=\s*"([^"]*)"/g, (q, k, v) => {
+        const mm = /^\u0001(\d+)\u0001$/.exec(v);
+        attrs[k] = mm ? raw[+mm[1]] : decodeEnt(v);
+      });
+      const n = { tag: m[2], attrs, children: [] };
+      stack[stack.length - 1].children.push(n);
+      if (!m[4]) stack.push(n);
+    }
+    return rootN;
+  }
+  const kids = (n, tag) => n.children.filter(c => c.tag === tag);
+  const find = (n, tag) => { if (n.tag === tag) return n; for (const c of n.children) { const r = find(c, tag); if (r) return r; } return null; };
+  const xy = s => (s || '0,0').split(',').map(Number);
+
+  // ---------------- Blueprints .txt -> box ----------------
+  function parseTxt(text, boxName) {
+    const doc = parseXml(text);
+    const cb = find(doc, 'CircuitBox');
+    if (!cb) throw new Error('No <CircuitBox> found');
+    const box = { name: boxName || 'reactor', pins: null, components: [], wires: [], labels: [], inLabels: {}, outLabels: {}, inPos: [-1200, 0], outPos: [1200, 0] };
+    const inN = kids(cb, 'InputNode')[0], outN = kids(cb, 'OutputNode')[0];
+    if (inN) { box.inPos = xy(inN.attrs.pos); for (const o of kids(inN, 'ConnectionLabelOverride')) box.inLabels[o.attrs.name] = o.attrs.value; }
+    if (outN) { box.outPos = xy(outN.attrs.pos); for (const o of kids(outN, 'ConnectionLabelOverride')) box.outLabels[o.attrs.name] = o.attrs.value; }
+    for (const c of kids(cb, 'Component')) {
+      const a = c.attrs, props = {};
+      for (const k in a) if (!['id', 'position', 'backingitemid', 'usedresource', 'Class', 'item'].includes(k)) props[k] = a[k];
+      box.components.push({ id: a.id, item: a.item, cls: a.Class, props, pos: xy(a.position) });
+    }
+    for (const w of kids(cb, 'Wire')) {
+      const f = kids(w, 'From')[0].attrs, t = kids(w, 'To')[0].attrs;
+      box.wires.push({ from: { c: f.target === '' ? null : f.target, pin: f.name }, to: { c: t.target === '' ? null : t.target, pin: t.name }, prefab: w.attrs.prefab || 'redwire' });
+    }
+    for (const l of kids(cb, 'Label')) box.labels.push({ header: l.attrs.header || '', body: l.attrs.body || '', color: l.attrs.color || '#7ED3E0', pos: xy(l.attrs.position), size: xy(l.attrs.size || '400,250') });
+    // harness from IO labels written as "device.pin" (this is how our exporter writes them)
+    const pins = {};
+    for (const [k, v] of Object.entries(box.inLabels)) if (/^\w+\.\w[\w%]*$/.test(v)) pins[shortPin(k)] = v;
+    for (const [k, v] of Object.entries(box.outLabels)) if (/^\w+\.\w[\w%]*$/.test(v)) pins[shortPin(k)] = v;
+    if (Object.keys(pins).length) box.pins = pins;
+    return box;
+  }
+
+  // ---------------- box -> Blueprints .txt ----------------
+  function autoLayout(box) {
+    // place components by signal depth so the in-game editor view is readable
+    const depth = {}; box.components.forEach(c => depth[c.id] = 0);
+    for (let it = 0; it < box.components.length + 1; it++)
+      for (const w of box.wires) if (w.from.c !== null && w.to.c !== null && w.from.c !== w.to.c && depth[w.to.c] < depth[w.from.c] + 1 && depth[w.from.c] < 40) depth[w.to.c] = depth[w.from.c] + 1;
+    const rows = {};
+    const maxD = Math.max(0, ...Object.values(depth));
+    for (const c of box.components) { const d = depth[c.id]; rows[d] = (rows[d] || 0) + 1; if (!c.pos) c.pos = [-900 + d * 400, 600 - (rows[d] - 1) * 260]; }
+    box.inPos = box.inPos || [-1400, 0]; box.outPos = box.outPos || [Math.max(1200, -900 + (maxD + 1) * 400 + 300), 0];
+  }
+  function toTxt(box, opts) {
+    opts = opts || {};
+    autoLayout(box);
+    const idMap = {}; box.components.forEach((c, i) => idMap[c.id] = String(i));
+    const baseId = opts.baseId || 1000;
+    const usedPins = new Set();
+    for (const w of box.wires) { if (w.from.c === null) usedPins.add(w.from.pin); if (w.to.c === null) usedPins.add(w.to.pin); }
+    const inLabels = Object.assign({}, box.inLabels), outLabels = Object.assign({}, box.outLabels);
+    for (const [k, v] of Object.entries(box.pins || {})) { const full = longPin(k, null); (full.startsWith('signal_in') ? inLabels : outLabels)[full] = v; }
+    const extra = [...usedPins, ...Object.keys(inLabels), ...Object.keys(outLabels)].filter(p => /signal_(in|out)[09]$/.test(p));
+    const compSlots = box.components.map((c, i) => baseId + i);
+    let wireN = 0; const wireBack = box.wires.map(w => (w.from.c === null || w.to.c === null) ? '' : '0,' + (wireN++));
+    const wireIds = []; for (let i = 0; i < wireN; i++) wireIds.push(baseId + 200 + i);
+    const slots = []; for (let i = 0; i < 64; i++) slots.push(compSlots[i] !== undefined ? compSlots[i] : '');
+    const wslots = [wireIds.join(';')]; for (let i = 1; i < 10; i++) wslots.push('');
+    const q = v => SS + v + SE;
+    const L = [];
+    L.push('<Root>');
+    L.push(`  <Item name="" identifier="circuitbox" ID="${baseId - 1}" markedfordeconstruction="false" flippedx="true" rect="208,-8,32,32" NonInteractable="False" NonPlayerTeamInteractable="False" AllowSwapping="True" Rotation="0" Scale="0.5" SpriteColor="255,255,255,255" InventoryIconColor="255,255,255,255" ContainerColor="255,255,255,255" InvulnerableToDamage="False" Tags="smallitem" DisplaySideBySideWhenLinked="False" DisallowedUpgrades="" SpriteDepth="0.8" HiddenInGame="False" conditionpercentage="100">`);
+    L.push('    <Holdable Attached="True" SpriteDepthWhenDropped="0.55" PickingTime="5" CanBePicked="True" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgDetachWrench">');
+    L.push('      <requireditem items="wrench" type="Equipped" characterinventoryslottype="None" optional="false" ignoreineditor="false" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" />');
+    L.push('    </Holdable>');
+    L.push('    <ConnectionPanel Locked="False" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgRewireScrewdriver">');
+    L.push('      <requireditem items="screwdriver" type="Equipped" characterinventoryslottype="None" optional="false" ignoreineditor="false" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" />');
+    for (let i = 1; i <= 8; i++) L.push(`      <input name="signal_in${i}" />`);
+    for (let i = 1; i <= 8; i++) L.push(`      <output name="signal_out${i}" />`);
+    for (const p of [...new Set(extra)].sort()) L.push(`      <${p.includes('_in') ? 'input' : 'output'} name="${p}" />`);
+    L.push('    </ConnectionPanel>');
+    L.push(`    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="${slots.join(',')}" ExtraStackSize="0" />`);
+    L.push(`    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="${wslots.join(',')}" ExtraStackSize="0" />`);
+    L.push('    <CircuitBox Locked="False" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgInteractSelect">');
+    L.push('      <requireditem items="idcard" type="Picked" characterinventoryslottype="None" optional="false" ignoreineditor="true" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" msg="UNAUTHORIZED ACCESS" />');
+    const node = (tag, pos, labels) => {
+      const ent = Object.entries(labels);
+      if (!ent.length) return L.push(`      <${tag} pos="${pos.join(',')}" />`);
+      L.push(`      <${tag} pos="${pos.join(',')}">`);
+      for (const [k, v] of ent) L.push(`        <ConnectionLabelOverride name="${k}" value="${q(v)}" />`);
+      L.push(`      </${tag}>`);
+    };
+    node('InputNode', box.inPos, inLabels);
+    node('OutputNode', box.outPos, outLabels);
+    box.components.forEach((c, i) => {
+      const def = C.byItem(c.item) || { cls: c.cls, defaults: {} };
+      const props = Object.assign({}, def.defaults, c.props);
+      let s = `      <Component id="${i}" position="${c.pos.map(Math.round).join(',')}" backingitemid="${i},0" usedresource="fpgacircuit" Class=${q(c.cls || def.cls)}`;
+      for (const [k, v] of Object.entries(props)) s += ` ${k}=${q(v)}`;
+      s += ` item=${q(c.item)} />`;
+      L.push(s);
+    });
+    box.wires.forEach((w, i) => {
+      L.push(`      <Wire id="${i}" backingitemid="${wireBack[i]}" prefab="${w.prefab || 'redwire'}">`);
+      L.push(`        <From name="${w.from.pin}" target="${w.from.c === null ? '' : idMap[w.from.c]}" />`);
+      L.push(`        <To name="${w.to.pin}" target="${w.to.c === null ? '' : idMap[w.to.c]}" />`);
+      L.push('      </Wire>');
+    });
+    box.labels.forEach((l, i) => L.push(`      <Label id="${i}" color="${l.color || '#7ED3E0'}" position="${(l.pos || [0, -900 - i * 300]).join(',')}" size="${(l.size || [500, 250]).join(',')}" header="${encEnt(l.header)}" body="${encEnt(l.body)}" />`));
+    L.push('    </CircuitBox>');
+    L.push('    <itemstats />');
+    L.push('  </Item>');
+    L.push('</Root>');
+    return L.join('\r\n');
+  }
+
+  // ---------------- pins ----------------
+  function shortPin(p) { const m = /^signal_(in|out)(\d)$/.exec(p); return m ? m[1] + m[2] : p; }
+  function longPin(p, compItem) {
+    if (compItem === null) { const m = /^(in|out)(\d)$/.exec(p); return m ? 'signal_' + m[1] + m[2] : p; }
+    if (/^\d+$/.test(p)) return 'signal_in' + p;
+    if (p === 'in') return 'signal_in';
+    if (p === 'out') return 'signal_out';
+    const al = C.pinAlias(compItem, p); return al || p;
+  }
+  function shortCompPin(p) {
+    let m = /^signal_in(\d+)$/.exec(p); if (m) return m[1];
+    if (p === 'signal_in') return 'in'; if (p === 'signal_out') return 'out';
+    return p;
+  }
+
+  // ---------------- .circ DSL ----------------
+  function tokenize(line) {
+    const out = []; const re = /(\w[\w%-]*)="((?:[^"\\]|\\.)*)"|"((?:[^"\\]|\\.)*)"|(\S+)/g; let m;
+    while ((m = re.exec(line))) {
+      if (m[1] !== undefined) out.push(m[1] + '=' + m[2].replace(/\\(.)/g, (a, b) => b === 'n' ? '\n' : b));
+      else if (m[3] !== undefined) out.push(m[3].replace(/\\(.)/g, (a, b) => b === 'n' ? '\n' : b));
+      else out.push(m[4]);
+    }
+    return out;
+  }
+  function parseCirc(text) {
+    const model = { name: 'circuit', boxes: [], links: [], meta: {} };
+    let box = null;
+    const getBox = () => { if (!box) { box = newBox('reactor'); model.boxes.push(box); } return box; };
+    const ep = (s, b, lineNo) => {
+      if (/^(in|out)\d$/.test(s)) return { c: null, pin: longPin(s, null) };
+      const i = s.lastIndexOf('.'); if (i < 0) throw new Error(`line ${lineNo}: bad pin "${s}" (use compId.pin or inN/outN)`);
+      const id = s.slice(0, i), pin = s.slice(i + 1), comp = b.components.find(c => c.id === id);
+      if (!comp) throw new Error(`line ${lineNo}: unknown component "${id}"`);
+      return { c: id, pin: longPin(pin, comp.item) };
+    };
+    text.split(/\r?\n/).forEach((rawLine, n) => {
+      const line = rawLine.replace(/(^|\s)#.*$/, '').trim(); if (!line) return;
+      const t = tokenize(line), k = t[0].toLowerCase(), ln = n + 1;
+      if (k === 'name') model.name = t.slice(1).join(' ');
+      else if (k === 'set') { for (const kv of t.slice(1)) { const [a, b] = kv.split('='); model.meta[a] = b; } }
+      else if (k === 'box') { box = model.boxes.find(b => b.name === t[1]) || newBox(t[1]); if (!model.boxes.includes(box)) model.boxes.push(box); }
+      else if (k === 'pin') { const b = getBox(); b.pins = b.pins || {}; b.pins[t[1]] = t[2]; }
+      else if (k === 'c') {
+        const b = getBox(); const def = C.byAlias(t[2]);
+        if (!def) throw new Error(`line ${ln}: unknown component type "${t[2]}". Types: ${C.aliases().join(' ')}`);
+        if (b.components.find(c => c.id === t[1])) throw new Error(`line ${ln}: duplicate id ${t[1]}`);
+        const props = {}; for (const kv of t.slice(3)) { const i = kv.indexOf('='); props[C.propName(def, kv.slice(0, i))] = kv.slice(i + 1); }
+        b.components.push({ id: t[1], item: def.item, cls: def.cls, props, pos: null });
+      }
+      else if (k === 'w') {
+        const b = getBox(); const from = ep(t[1], b, ln); let col = 'redwire';
+        for (const s of t.slice(2)) { if (s.startsWith('color=')) { col = s.slice(6); continue; } b.wires.push({ from, to: ep(s, b, ln), prefab: col }); }
+      }
+      else if (k === 'note') getBox().labels.push({ header: t[1] || '', body: t[2] || '', color: t[3] || '#7ED3E0' });
+      else if (k === 'label') { const b = getBox(); const p = longPin(t[1], null); (p.includes('_in') ? b.inLabels : b.outLabels)[p] = t.slice(2).join(' '); }
+      else if (k === 'link') model.links.push({ from: t[1], to: t[2] });
+      else throw new Error(`line ${ln}: unknown statement "${t[0]}"`);
+    });
+    return model;
+  }
+  function newBox(name) { return { name, pins: null, components: [], wires: [], labels: [], inLabels: {}, outLabels: {}, inPos: null, outPos: null }; }
+
+  function toCirc(model) {
+    const L = [`name ${model.name}`];
+    if (model.meta) { const m = Object.entries(model.meta); if (m.length) L.push('set ' + m.map(([a, b]) => `${a}=${b}`).join(' ')); }
+    const qv = v => /[\s"#]/.test(v) || v === '' ? '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n') + '"' : v;
+    for (const b of model.boxes) {
+      L.push(`box ${b.name}`);
+      for (const [k, v] of Object.entries(b.pins || {})) L.push(`pin ${k} ${v}`);
+      for (const [k, v] of Object.entries(b.inLabels)) if (!(b.pins && b.pins[shortPin(k)] === v)) L.push(`label ${shortPin(k)} ${v}`);
+      for (const [k, v] of Object.entries(b.outLabels)) if (!(b.pins && b.pins[shortPin(k)] === v)) L.push(`label ${shortPin(k)} ${v}`);
+      const ids = {}; b.components.forEach(c => { const def = C.byItem(c.item); ids[c.id] = /^\d+$/.test(c.id) ? (def ? def.alias : 'c') + c.id : c.id; });
+      for (const c of b.components) {
+        const def = C.byItem(c.item);
+        const props = Object.entries(c.props).filter(([k, v]) => !def || def.defaults[k] === undefined || String(def.defaults[k]) !== String(v));
+        L.push(`c ${ids[c.id]} ${def ? def.alias : c.item}` + props.map(([k, v]) => ` ${k}=${qv(v)}`).join(''));
+      }
+      const groups = new Map();
+      for (const w of b.wires) {
+        const f = w.from.c === null ? shortPin(w.from.pin) : ids[w.from.c] + '.' + shortCompPin(w.from.pin);
+        const to = w.to.c === null ? shortPin(w.to.pin) : ids[w.to.c] + '.' + shortCompPin(w.to.pin);
+        if (!groups.has(f)) groups.set(f, []); groups.get(f).push(to);
+      }
+      for (const [f, tos] of groups) L.push(`w ${f} ${tos.join(' ')}`);
+      for (const l of b.labels) L.push(`note ${qv(l.header)} ${qv(l.body)}`);
+    }
+    for (const l of model.links || []) L.push(`link ${l.from} ${l.to}`);
+    return L.join('\n') + '\n';
+  }
+
+  // Load anything: .circ text or one/two .txt texts. Returns model.
+  function load(text, boxName) {
+    if (/<CircuitBox/.test(text)) { const b = parseTxt(text, boxName); return { name: boxName || 'imported', boxes: [b], links: [], meta: {} }; }
+    return parseCirc(text);
+  }
+  return { parseTxt, toTxt, parseCirc, toCirc, load, shortPin, longPin };
+});
+
+;
+// Barotrauma reactor / power / circuit-box mock. Fixed 60 Hz step (Timing.Step), deterministic.
+// Frame order mirrors MapEntity.UpdateAll: Powered.UpdatePower() first, then every item's Update() in item-list order
+// (reactor -> fuel rods -> junction box -> batteries -> circuit boxes' components -> external wifi).
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./components'));
+  else root.BaroEngine = factory(root.BaroComponents);
+})(typeof self !== 'undefined' ? self : this, function (C) {
+  'use strict';
+  const STEP = 1 / 60;
+  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const sign = v => v > 0 ? 1 : v < 0 ? -1 : 0;
+  const trunc = v => (Number.isFinite(v) ? Math.trunc(v) : 0);
+  const adjustNoOvershoot = (cur, tgt, spd) => tgt < cur ? Math.max(tgt, cur - spd) : Math.min(tgt, cur + spd);
+  function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+  // vanilla item presets (reference/BAROTRAUMA_MECHANICS.md §7): fuel = AvailableFuel per rod (condition > 0), cond = max condition
+  const FUEL = { uranium: { fuel: 80, cond: 100 }, thorium: { fuel: 100, cond: 200 }, fulgurium: { fuel: 150, cond: 150 }, volatile: { fuel: 150, cond: 400 } };
+  const BATT = { battery: { capacity: 2000, maxRecharge: 500, maxOut: 1000 }, supercapacitor: { capacity: 20, maxRecharge: 1000, maxOut: 20000000, efficiency: 0.1, exponential: true } };
+
+  // Default wiring between box pins and devices (used when a box has no `pin` lines).
+  const DEFAULT_PINS = {
+    reactor: { in1: 'reactor.load_value_out', in2: 'reactor.power_value_out', in3: 'reactor.temperature_out', in4: 'reactor.fuel_out', in5: 'reactor.fuel_percentage_left', in6: 'junction.load_value_out', in7: 'junction.power_value_out', out1: 'reactor.set_fissionrate', out2: 'reactor.set_turbineoutput' },
+    battery: { in1: 'battery.charge_%', in2: 'battery.charge_rate', in3: 'junction.load_value_out', in4: 'junction.power_value_out', in5: 'reactor.load_value_out', in6: 'reactor.power_value_out', out1: 'battery.set_rate' },
+  };
+  const DEVICE_OUTS = {
+    reactor: ['temperature_out', 'power_value_out', 'load_value_out', 'fuel_out', 'fuel_percentage_left', 'meltdown_warning'],
+    junction: ['power_value_out', 'load_value_out'],
+    battery: ['power_value_out', 'load_value_out', 'charge', 'charge_%', 'charge_rate'],
+  };
+  const DEVICE_INS = { reactor: ['set_fissionrate', 'set_turbineoutput', 'shutdown'], battery: ['set_rate', 'disable_output'], junction: [] };
+
+  // Community circuits label their pins in their own words: map them to devices by keyword.
+  const GUESS = [
+    [/fuel.*(%|perc|left)|rod.*(%|cond)/i, 'reactor.fuel_percentage_left', 'in'], [/fuel/i, 'reactor.fuel_out', 'in'], [/temp/i, 'reactor.temperature_out', 'in'],
+    [/charge.*rate|rate/i, 'battery.charge_rate', 'in'], [/charge|batt/i, 'battery.charge_%', 'in'],
+    [/junction.*load|jb.*load/i, 'junction.load_value_out', 'in'], [/load/i, 'reactor.load_value_out', 'in'], [/power|output|out/i, 'reactor.power_value_out', 'in'],
+    [/fission/i, 'reactor.set_fissionrate', 'out'], [/turbine/i, 'reactor.set_turbineoutput', 'out'], [/shut|scram/i, 'reactor.shutdown', 'out'],
+    [/rate|charge|batt/i, 'battery.set_rate', 'out'], [/disable/i, 'battery.disable_output', 'out'],
+  ];
+  function guessPins(bm) {
+    const out = {};
+    for (const [labels, dir] of [[bm.inLabels || {}, 'in'], [bm.outLabels || {}, 'out']])
+      for (const [pin, label] of Object.entries(labels)) { const g = GUESS.find(([re, , d]) => d === dir && re.test(label)); if (g) out[pin.replace(/^signal_/, '')] = g[1]; }
+    return Object.keys(out).length ? out : null;
+  }
+
+  class Sim {
+    constructor(model, cfg) {
+      cfg = cfg || {};
+      this.cfg = cfg;
+      this.frame = 0; this.time = 0;
+      this.rand = rng(cfg.seed || 12345);
+      this.profile = cfg.profile || { points: [{ t: 0, demand: 2000 }], duration: 600 };
+      this.pIdx = 0;
+      this.items = []; this.pending = []; this.wifis = [];
+      this.warnings = [];
+      // ---- reactor ----
+      const rodType = FUEL[cfg.fuelType || 'uranium'] || FUEL.uranium;
+      const rodCount = cfg.rods == null ? (Number((this.profile.meta || {}).fuel_rods) || 1) : cfg.rods; // test file's rod count unless overridden
+      this.reactor = this.mkItem('reactor', {
+        maxPower: cfg.reactorMaxKW || this.profile.reactorMaxKW || 5000, fuelRate: cfg.fuelConsumptionRate || 0.2,
+        meltdownDelay: 120, fireDelay: 20, dos: clamp(cfg.skill || 0, 0, 1),
+        fission: 0, turbine: 0, temp: 0, tf: 0, tt: 0, autoTemp: false, powerOn: true, load: 0, cpc: 0, cto: 0,
+        availFuel: 0, prevAvailFuel: 0, sigF: null, sigT: null, lastF: -1e9, lastT: -1e9, melt: 0, fire: 0, boost: 0,
+        cond: 100, minOut: 0, maxOut: 0, optT: [0, 0], allT: [0, 0], optTemp: [40, 60], allTemp: [30, 70], optF: [0, 0], allF: [0, 0],
+        rods: Array.from({ length: rodCount }, () => ({ fuel: (cfg.rodFuel || rodType.fuel), cond: rodType.cond, max: rodType.cond })),
+      });
+      this.reactor.availFuel = this.rodFuel();
+      // ---- junction box ----
+      this.junction = this.mkItem('junction', { cond: 100, overloadV: 2, prevP: 0, pSig: null, prevL: 0, lSig: null, cooldown: 0, breaks: 0 });
+      // ---- batteries ----
+      this.batteries = [];
+      const bc = cfg.batteries || {};
+      if (bc.enabled) {
+        const bt = Object.assign({}, BATT[bc.type || 'battery'] || BATT.battery, bc.custom || {});
+        for (let i = 0; i < (bc.count || 1); i++) {
+          const b = this.mkItem('battery' + (i + 1), {
+            capacity: bt.capacity, maxRecharge: bt.maxRecharge, maxOut: bt.maxOut, eff: bt.efficiency == null ? 0.95 : bt.efficiency, exp: !!bt.exponential,
+            charge: bt.capacity * clamp(bc.startCharge == null ? 0.5 : bc.startCharge, 0, 1), prevCharge: 0, rate: 0, cpc: 0, out: 0, disabled: false,
+          });
+          b.prevCharge = b.charge; this.setRecharge(b, (bc.startRate == null ? 0 : bc.startRate) / 100 * b.maxRecharge);
+          this.batteries.push(b);
+        }
+      }
+      // ---- circuit boxes ----
+      this.boxes = [];
+      for (const bm of (model && model.boxes) || []) {
+        if (bm.name === 'battery' && !this.batteries.length) { this.warnings.push('battery box ignored: batteries are disabled'); continue; }
+        this.boxes.push(this.buildBox(bm));
+      }
+      this.wireHarness(model || { links: [] });
+      this.metrics = new Metrics(this);
+      if ((cfg.start || 'warm') === 'warm') this.warmStart();
+      if (cfg.vanilla) this.reactor.autoTemp = true; // baseline: the game's own automatic control, no circuit
+      this.metrics.reset();
+    }
+
+    // ---------- item / connection plumbing ----------
+    mkItem(name, props) { const it = Object.assign({ name, lsr: [], conns: {} }, props); this.items.push(it); return it; }
+    conn(item, pin) { return item.conns[pin] || (item.conns[pin] = { item, pin, wires: [], cb: [] }); }
+    wire(a, b) { a.wires.push(b); b.wires.push(a); }
+    // Item.SendSignal
+    itemSend(item, sig, conn) {
+      item.lsr.length = 0;
+      sig = { v: sig.v, steps: sig.steps + 1, src: sig.src };
+      if (sig.steps > 5 && sig.src) { let d = 0; for (const r of sig.src.lsr) if (r === conn && ++d > 2) return; }
+      if (sig.steps > 10) {
+        sig.steps = 0;
+        if (!this.pending.some(p => p.conn === conn && p.sig.src === sig.src && p.sig.v === sig.v)) this.pending.push({ sig, conn, frame: this.frame });
+        return;
+      }
+      if (!sig.src) sig.src = item;
+      this.connSend(conn, sig);
+    }
+    // Connection.SendSignal
+    connSend(conn, sig) {
+      for (const r of conn.wires) {
+        if (r.item === conn.item || (sig.src && sig.src.lsr[sig.src.lsr.length - 1] === r)) continue;
+        if (sig.src) sig.src.lsr.push(r);
+        this.deliver(r, sig);
+      }
+      for (const t of conn.cb) t(sig);
+    }
+    deliver(conn, sig) { const h = conn.item.recv; if (h) h(conn.pin, sig); }
+
+    // ---------- circuit box ----------
+    buildBox(bm) {
+      const box = this.mkItem('box:' + bm.name, { model: bm, comps: [], compById: {}, inputs: {}, outputs: {} });
+      const sim = this;
+      box.recv = (pin, sig) => { const t = box.inputs[pin]; if (t) for (const f of t) f(sig); };
+      for (const cm of bm.components) {
+        const d = C.byItem(cm.item);
+        if (!d) { this.warnings.push(`box ${bm.name}: unsupported component "${cm.item}" (ignored)`); continue; }
+        const ci = this.mkItem(`${bm.name}/${cm.id}`, { def: d, id: cm.id });
+        const comp = { p: Object.assign({}, d.defaults, cm.props), item: ci };
+        comp.send = (pin, v) => sim.itemSend(ci, { v: String(v), steps: 0, src: null }, sim.conn(ci, pin));
+        comp.fwd = (sig, pin, v) => sim.itemSend(ci, { v: String(v), steps: sig.steps, src: sig.src }, sim.conn(ci, pin));
+        comp.isWired = (pin) => { const c = ci.conns[pin]; return !!c && (c.wires.length > 0 || c.cb.length > 0); };
+        comp.wifiTx = (sig) => sim.wifiTx(ci, comp, sig);
+        d.make(comp);
+        ci.recv = (pin, sig) => comp.recv && comp.recv(pin, sig);
+        ci.comp = comp;
+        if (d.alias === 'wifi') this.wifis.push(comp);
+        box.comps.push(ci); box.compById[cm.id] = ci;
+      }
+      for (const w of bm.wires) {
+        const f = w.from, t = w.to;
+        if (f.c === null) { // input node -> component pin or output node
+          const target = t.c === null ? (sig => sim.itemSend(box, sig, sim.conn(box, t.pin))) : this.cbInto(box, t);
+          if (!target) continue;
+          (box.inputs[f.pin] = box.inputs[f.pin] || []).push(target);
+        } else {
+          const src = box.compById[f.c]; if (!src) continue;
+          const target = t.c === null ? (sig => sim.itemSend(box, sig, sim.conn(box, t.pin))) : this.cbInto(box, t);
+          if (target) this.conn(src, f.pin).cb.push(target);
+        }
+      }
+      return box;
+    }
+    cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; return sig => ci.recv(ep.pin, sig); }
+    wifiTx(srcItem, srcComp, sig) {
+      for (const w of this.wifis) {
+        if (w === srcComp || w.p.Channel !== srcComp.p.Channel || !w.isWired('signal_out')) continue;
+        const inConn = w.item.conns.signal_in;
+        if (sig.src && inConn) { if (sig.src.lsr.includes(inConn)) continue; sig.src.lsr.push(inConn); }
+        this.itemSend(w.item, { v: sig.v, steps: sig.steps + 1, src: sig.src }, this.conn(w.item, 'signal_out'));
+      }
+    }
+    devices(name) {
+      if (name === 'reactor') return [this.reactor];
+      if (name === 'junction') return [this.junction];
+      if (name === 'battery') return this.batteries;
+      const m = /^battery(\d+)$/.exec(name); if (m) return this.batteries[+m[1] - 1] ? [this.batteries[+m[1] - 1]] : [];
+      return null;
+    }
+    wireHarness(model) {
+      for (const box of this.boxes) {
+        let pins = box.model.pins;
+        if (!pins) { const g = guessPins(box.model); if (g) { pins = g; this.warnings.push(`${box.model.name} box: pin wiring guessed from labels: ${Object.entries(g).map(([k, v]) => k + '=' + v).join(' ')} (add 'pin' lines or a .pins file to fix)`); } }
+        pins = pins || DEFAULT_PINS[box.model.name] || {};
+        for (const [p, ep] of Object.entries(pins)) {
+          if (!ep || ep === 'none' || ep.startsWith('link.')) continue; // links are wired below
+          const [dev, dpin] = ep.split('.');
+          const ds = this.devices(dev);
+          if (!ds) { this.warnings.push(`unknown device "${dev}" in pin ${box.model.name}.${p}`); continue; }
+          const full = /^in\d$/.test(p) ? 'signal_' + p : /^out\d$/.test(p) ? 'signal_' + p : p;
+          for (const d of ds) this.wire(this.conn(box, full), this.conn(d, dpin));
+        }
+      }
+      let wifiCh = 9000;
+      for (const l of model.links || []) {
+        const [ab, ap] = l.from.split('.'), [bb, bp] = l.to.split('.');
+        const A = this.boxes.find(b => b.model.name === ab), B = this.boxes.find(b => b.model.name === bb);
+        if (!A || !B) { this.warnings.push(`link ${l.from} -> ${l.to}: box missing`); continue; }
+        const ca = this.conn(A, 'signal_' + ap), cb = this.conn(B, 'signal_' + bp);
+        if (l.wifi || this.cfg.linkMode === 'wifi') { // two external wifi components, one per box
+          const ch = String(l.wifi || wifiCh++);
+          const mk = (nm) => { const it = this.mkItem(nm, {}); const comp = { p: { Channel: ch }, item: it }; comp.isWired = pin => !!it.conns[pin] && it.conns[pin].wires.length > 0; comp.wifiTx = s => this.wifiTx(it, comp, s); C.byAlias('wifi').make(comp); it.recv = (pin, s) => comp.recv(pin, s); this.wifis.push(comp); return it; };
+          const wa = mk(`wifi:${l.from}`), wb = mk(`wifi:${l.to}`);
+          this.wire(ca, this.conn(wa, 'signal_in')); this.wire(this.conn(wb, 'signal_out'), cb);
+        } else this.wire(ca, cb);
+      }
+      // device signal inputs
+      const R = this.reactor, sim = this;
+      R.recv = (pin, sig) => {
+        if (pin === 'shutdown') { if (R.tf > 0 || R.tt > 0) { R.powerOn = false; R.autoTemp = false; R.tf = 0; R.tt = 0; sim.metrics.ev('reactor shutdown signal'); } }
+        else if (pin === 'set_fissionrate') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigF = clamp(r.v, 0, 100); R.lastF = sim.time; } }
+        else if (pin === 'set_turbineoutput') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigT = clamp(r.v, 0, 100); R.lastT = sim.time; } }
+      };
+      for (const b of this.batteries) b.recv = (pin, sig) => {
+        if (pin === 'disable_output') b.disabled = sig.v !== '0';
+        else if (pin === 'set_rate') { const r = C.parseF(String(sig.v).replace(/,/g, '')); /* NumberStyles.Any */ if (r.ok && Number.isFinite(r.v)) this.setRecharge(b, clamp(r.v / 100, 0, 1) * b.maxRecharge); }
+      };
+    }
+    setRecharge(b, v) { v = clamp(v, 0, b.maxRecharge); const div = Math.max(b.maxRecharge * 0.1, 1); b.rate = C.roundEven(v / div) * div; }
+    rodFuel() { let f = 0; for (const r of this.reactor.rods) if (r.cond > 0) f += r.fuel; return f; }
+
+    // ---------- demand profile ----------
+    demandAt(t) {
+      const pts = this.profile.points;
+      while (this.pIdx + 1 < pts.length && pts[this.pIdx + 1].t <= t) this.pIdx++;
+      return pts[this.pIdx].demand;
+    }
+
+    // ---------- power grid (Powered.UpdatePower) ----------
+    updatePower() {
+      const R = this.reactor, g = { power: 0, load: 0 };
+      const demand = this.demand = this.demandAt(this.time);
+      const reactorUp = R.cond > 0;
+      // loads
+      for (const b of this.batteries) {
+        b.cpc = this.batteryConsumption(b); g.load += b.cpc;
+        b.out = 0; b.isSrc = b.charge > 0;
+      }
+      g.load += demand;
+      // sources by priority: Reactor(1) then Battery(5)
+      if (reactorUp) {
+        const mm = this.reactorMinMax(g.load);
+        g.power += this.reactorPowerOut(g.power, mm, g.load);
+      } else { R.cpc = 0; }
+      const bs = this.batteries.filter(b => b.isSrc);
+      if (bs.length) {
+        let max = 0; for (const b of bs) max += this.battMinMax(b);
+        let added = 0;
+        for (const b of bs) { if (b.disabled || max <= 0) { b.out = 0; continue; } b.out = clamp((g.load - g.power) / max, 0, 1) * this.battMinMax(b); added += b.out; }
+        g.power += added;
+      }
+      g.voltage = Math.min(g.power / Math.max(g.load, 1e-10), 1000);
+      if (g.voltage < 0) g.voltage = 0;
+      // GridResolved
+      for (const b of this.batteries) {
+        b.charge = clamp(b.charge + (b.cpc * g.voltage) / 60 * STEP * b.eff, 0, b.capacity);
+        b.charge = clamp(b.charge - b.out / 60 * STEP, 0, b.capacity); b.prevCharge = b.charge;
+      }
+      this.grid = g;
+    }
+    batteryConsumption(b) {
+      if (b.charge >= b.capacity) { b.charge = b.capacity; return 0; }
+      const missing = b.capacity - b.charge;
+      let t = b.rate; if (b.exp) t = Math.pow(b.rate / b.maxRecharge, 2) * b.maxRecharge;
+      if (missing < 1) t *= missing;
+      return clamp(t, 0, b.maxRecharge);
+    }
+    battMinMax(b) {
+      if (b.disabled) return 0;
+      const ratio = b.prevCharge / b.capacity;
+      let m = ratio < 0.1 ? Math.max(ratio * 10, 0) * b.maxOut : b.maxOut;
+      return Math.min(m, b.prevCharge * 60 / STEP);
+    }
+    reactorMinMax() {
+      const R = this.reactor;
+      let tol = 1;
+      if (R.turbine > R.optT[0] && R.turbine < R.optT[1] && R.temp > R.optTemp[0] && R.temp < R.optTemp[1]) tol = 3;
+      const tf = Math.min(R.temp / 50, 1), mx = R.maxPower;
+      R.minOut = mx * clamp(Math.min((R.turbine - tol) / 100, tf), 0, 1);
+      R.maxOut = mx * Math.min((R.turbine + tol) / 100, tf);
+      if (R.maxOut < R.minOut) R.maxOut = R.minOut;
+      return { min: R.minOut, max: R.maxOut, rmax: R.powerOn ? mx : R.maxOut };
+    }
+    reactorPowerOut(power, mm, load) {
+      const R = this.reactor;
+      const loadLeft = Math.max(load - power, 0);
+      const expected = clamp(loadLeft, mm.min, mm.max);
+      let ratio = Math.max((loadLeft - mm.min) / (mm.max - mm.min), 0);
+      if (!Number.isFinite(ratio)) ratio = 0;
+      const out = clamp(ratio * (R.maxOut - R.minOut) + R.minOut, R.minOut, R.maxOut);
+      let newLoad = loadLeft; const mx = R.maxPower;
+      if (mx !== mm.rmax && mm.rmax > 0) {
+        const ideal = mx / mm.rmax * loadLeft;
+        const adj = clamp((ratio - 0.5) * 25 + ideal - (R.turbine / 100 * mx), -mx / 100, mx / 100);
+        newLoad = clamp(loadLeft - (expected - out) + adj, 0, loadLeft);
+      }
+      R.load = Math.max(newLoad, 0);
+      R.cpc = -out;
+      return out;
+    }
+
+    // ---------- reactor (Reactor.Update) ----------
+    updateReactor(dt) {
+      const R = this.reactor, T = this.time;
+      if (R.cond <= 0) { // UpdateBroken
+        this.send(R, 'temperature_out', String(trunc(R.temp * 100)));
+        R.cpc = 0; R.temp = clamp(R.temp - dt * 1000, 0, 100);
+        R.tf = Math.max(R.tf - dt * 10, 0); R.tt = Math.max(R.tt - dt * 10, 0);
+        return;
+      }
+      const fCtl = R.sigF !== null && R.lastF > T - 1, tCtl = R.sigT !== null && R.lastT > T - 1;
+      this.metrics.ctl(fCtl, tCtl);
+      const mx = R.maxPower;
+      if (fCtl) R.tf = adjustNoOvershoot(R.tf, R.sigF, dt * 5); else R.sigF = null;
+      if (tCtl) R.tt = adjustNoOvershoot(R.tt, R.sigT, dt * 5); else R.sigT = null;
+      R.prevAvailFuel = R.availFuel;
+      if (mx !== 0) R.cto += clamp((R.load / mx * 100) - R.cto, -20, 20) * dt;
+      const d = R.dos;
+      let tol = lerp(2.5, 10, d); R.optT = [R.cto - tol, R.cto + tol];
+      tol = lerp(5, 20, d); R.allT = [R.cto - tol, R.cto + tol];
+      R.optTemp = [lerp(40, 30, d), lerp(60, 70, d)]; R.allTemp = [lerp(30, 10, d), lerp(70, 90, d)];
+      R.optF = [lerp(30, 20, d), lerp(R.availFuel - 20, R.availFuel - 10, d)]; R.optF[0] = Math.min(R.optF[0], R.optF[1] - 10);
+      R.allF = [lerp(20, 10, d), R.availFuel]; R.allF[0] = Math.min(R.allF[0], R.allF[1] - 10);
+      const heat = R.fission * (R.prevAvailFuel / 100) * 2 + R.boost;
+      const td = (heat - R.turbine) - R.temp;
+      R.temp = clamp(R.temp + clamp(sign(td) * 10 * dt, -Math.abs(td), Math.abs(td)), 0, 100);
+      R.boost = adjustNoOvershoot(R.boost, 0, dt);
+      R.fission = clamp(lerp(R.fission, Math.min(R.tf, R.availFuel), dt), 0, 100);
+      R.turbine = clamp(lerp(R.turbine, R.tt, dt), 0, 100);
+      if (!R.powerOn) { R.tf = 0; R.tt = 0; }
+      else if (R.autoTemp) this.autoTemp(2, dt);
+      let fuelLeft = 0;
+      for (const rod of R.rods) {
+        if (R.fission > 0 && rod.cond > 0) { const used = Math.min(rod.cond, R.fission / 100 * R.fuelRate * dt); rod.cond -= used; this.metrics.fuel += used; }
+        fuelLeft += rod.cond / rod.max * 100;
+      }
+      this.send(R, 'temperature_out', String(trunc(R.temp * 100)));
+      this.send(R, 'power_value_out', String(trunc(-R.cpc)));
+      this.send(R, 'load_value_out', String(trunc(R.load)));
+      this.send(R, 'fuel_out', String(trunc(R.availFuel)));
+      this.send(R, 'fuel_percentage_left', String(trunc(fuelLeft)));
+      // UpdateFailures
+      if (R.temp > R.allTemp[1]) {
+        this.send(R, 'meltdown_warning', '1');
+        R.melt += lerp(dt * 2, dt, R.cond / 100);
+        if (R.melt > R.meltdownDelay) { this.meltdown(); return; }
+      } else { this.send(R, 'meltdown_warning', '0'); R.melt = Math.max(0, R.melt - dt); }
+      if (R.temp > R.optTemp[1]) {
+        R.fire += lerp(dt * 2, dt, R.cond / 100);
+        if (R.fire >= R.fireDelay) { this.metrics.fires++; this.metrics.ev('FIRE started at reactor (temp > ' + R.optTemp[1].toFixed(0) + ' for ' + R.fireDelay + 's)'); R.fire = 0; }
+      } else R.fire = Math.max(0, R.fire - dt);
+      // fuel rods update after the reactor: OnContained adds their fuel to AvailableFuel for next frame
+      R.availFuel = this.rodFuel();
+    }
+    autoTemp(speed, dt) {
+      const R = this.reactor;
+      const dT = (R.optT[0] + R.optT[1]) / 2;
+      R.tt = clamp(R.tt + clamp(dT - R.tt, -speed, speed) * dt, 0, 100);
+      const dF = (R.optF[0] + R.optF[1]) / 2;
+      R.tf += clamp(dF - R.tf, -speed, speed) * dt;
+      if (R.temp > (R.optTemp[0] + R.optTemp[1]) / 2) R.tf = Math.min(R.tf - speed * 2 * dt, R.allF[1]);
+      else if (-R.cpc < R.load) R.tf = Math.min(R.tf + speed * 2 * dt, 100);
+      R.tf = clamp(R.tf, 0, 100);
+      R.tf = clamp(R.tf, R.fission - 5, R.fission + 5);
+    }
+    meltdown() {
+      const R = this.reactor;
+      R.cond = 0; R.fire = 0; R.melt = 0; for (const r of R.rods) r.cond = 0;
+      this.metrics.meltdownAt = this.time; this.metrics.ev('MELTDOWN (temperature above ' + R.allTemp[1].toFixed(0) + ' for too long)');
+    }
+    // Game start state: like Reactor.PowerUpImmediately() (vanilla autotemp pre-heats), then automatic control is switched OFF.
+    warmStart() {
+      const R = this.reactor, saved = R.rods.map(r => r.cond);
+      R.powerOn = true; R.autoTemp = true; R.load = this.demandAt(0); R.cto = R.load / R.maxPower * 100; R.prevAvailFuel = R.availFuel;
+      const dt = STEP * 10; const mute = this.send; this.send = () => { };
+      for (let i = 0; i < 100; i++) { this.updateReactor(dt); this.autoTemp(100, dt); R.load = this.demandAt(0); }
+      // settle with the real grid for 30 s so output matches the starting load
+      for (let i = 0; i < 1800; i++) { this.updatePower(); this.updateReactor(STEP); this.autoTemp(2, STEP); }
+      this.send = mute;
+      R.autoTemp = false; R.sigF = R.sigT = null; R.melt = 0; R.fire = 0;
+      R.rods.forEach((r, i) => r.cond = saved[i]); R.availFuel = this.rodFuel();
+      for (const b of this.batteries) b.charge = b.prevCharge = b.capacity * clamp((this.cfg.batteries || {}).startCharge == null ? 0.5 : this.cfg.batteries.startCharge, 0, 1);
+    }
+    send(item, pin, v) { const c = item.conns[pin]; if (c) this.itemSend(item, { v, steps: 0, src: null }, c); }
+
+    // ---------- junction box / batteries (Update) ----------
+    updateJunction(dt) {
+      const J = this.junction, g = this.grid;
+      const p = g.power, l = g.load;
+      if (J.prevP !== trunc(p) || J.pSig === null) { J.prevP = trunc(C.roundEven(p)); J.pSig = String(J.prevP); }
+      if (J.prevL !== trunc(l) || J.lSig === null) { J.prevL = trunc(C.roundEven(l)); J.lSig = String(J.prevL); }
+      this.send(J, 'power_value_out', J.pSig); this.send(J, 'load_value_out', J.lSig);
+      // UpdateOvervoltage (OverloadVoltage 2.0): 1%/frame chance of random damage while overloaded
+      if (g.voltage > Math.max(J.overloadV, 1) && this.time >= 5) {
+        this.metrics.overloadT += dt;
+        if (J.cooldown > 0) { J.cooldown -= dt; return; }
+        if (this.rand() < 0.01) { J.cond -= dt * (10 + this.rand() * 490) * lerp(5, 1, J.cond / 100); }
+        if (J.cond <= 0) { J.breaks++; this.metrics.junctionBreaks++; this.metrics.ev('JUNCTION BOX BROKE from overvoltage (auto-repaired to continue test)'); J.cond = 100; J.cooldown = 5; }
+      }
+    }
+    updateBattery(b) {
+      const r = C.roundEven;
+      this.send(b, 'power_value_out', String(r(b.out)));
+      this.send(b, 'load_value_out', String(r(this.grid.load)));
+      this.send(b, 'charge', String(r(b.charge)));
+      this.send(b, 'charge_%', String(r(b.charge / b.capacity * 100)));
+      this.send(b, 'charge_rate', String(r(b.rate / b.maxRecharge * 100)));
+    }
+
+    // ---------- one frame ----------
+    step() {
+      const dt = STEP;
+      this.updatePower();
+      // delayed (stepsTaken > 10) signals from the previous frame
+      if (this.pending.length) { const p = this.pending; this.pending = []; for (const e of p) this.connSend(e.conn, e.sig); }
+      this.updateReactor(dt);
+      this.updateJunction(dt);
+      for (const b of this.batteries) this.updateBattery(b);
+      for (const box of this.boxes) for (const ci of box.comps) if (ci.comp.update) ci.comp.update(dt);
+      this.metrics.sample(dt);
+      this.frame++; this.time = this.frame * STEP;
+    }
+    get done() { return this.time >= this.profile.duration; }
+    runToEnd(onProgress) { while (!this.done) { this.step(); if (onProgress && this.frame % 3600 === 0) onProgress(this); } return this.metrics.report(); }
+    snapshot() {
+      const R = this.reactor, g = this.grid || { power: 0, load: 0, voltage: 0 };
+      return { t: this.time, demand: this.demand || 0, power: g.power, load: g.load, voltage: g.voltage, temp: R.temp, fission: R.fission, turbine: R.turbine, tf: R.tf, tt: R.tt, out: -R.cpc, cto: R.cto,
+        fuel: R.rods.reduce((a, r) => a + r.cond / r.max * 100, 0), batt: this.batteries.length ? this.batteries.reduce((a, b) => a + b.charge / b.capacity, 0) / this.batteries.length * 100 : null,
+        battOut: this.batteries.reduce((a, b) => a + b.out, 0), battIn: this.batteries.reduce((a, b) => a + b.cpc, 0), fCtl: R.sigF !== null, tCtl: R.sigT !== null };
+    }
+  }
+
+  // ---------- metrics / log ----------
+  class Metrics {
+    constructor(sim) { this.sim = sim; this.reset(); }
+    reset() {
+      Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
+        overloadT: 0, junctionBreaks: 0, fires: 0, meltdownAt: null, tempMax: 0, tAboveOpt: 0, tCritical: 0, noCtlF: 0, noCtlT: 0, events: [], timeline: [], nextTl: 0, outAbs: 0, battMin: Infinity, battMax: -Infinity, lowRun: 0, worstLow: 0 });
+      if (this.sim.reactor) this.fuelStart = this.sim.reactor.rods.reduce((a, r) => a + r.cond, 0);
+    }
+    ev(msg) { if (this.events.length < 60) this.events.push(fmtT(this.sim.time) + ' ' + msg); }
+    ctl(f, t) { if (this.sim.reactor.powerOn && this.sim.time > 1) { if (!f) this.noCtlF += 1 / 60; if (!t) this.noCtlT += 1 / 60; } }
+    sample(dt) {
+      const s = this.sim, g = s.grid, R = s.reactor, v = g.voltage, dem = s.demand;
+      this.t += dt;
+      this.eDemand += dem * dt; this.eReactor += -R.cpc * dt;
+      const sh = Math.max(0, g.load - g.power), su = Math.max(0, g.power - g.load);
+      this.eUnmet += Math.min(sh, dem) * dt; this.eSurplus += su * dt;
+      for (const b of s.batteries) { this.eBattOut += b.out * dt; this.eBattIn += b.cpc * dt; const pc = b.charge / b.capacity * 100; this.battMin = Math.min(this.battMin, pc); this.battMax = Math.max(this.battMax, pc); }
+      const vv = g.load > 0 ? v : 1;
+      this.vAbsDev += Math.abs(vv - 1) * dt; this.vSq += (vv - 1) * (vv - 1) * dt; this.vMin = Math.min(this.vMin, vv); this.vMax = Math.max(this.vMax, vv);
+      if (vv < 0.9) this.tLow90 += dt; if (vv < 0.5) this.tLow50 += dt; if (vv > 1.1) this.tHigh110 += dt;
+      const inB = vv >= 0.95 && vv <= 1.05; if (inB) this.tBand += dt;
+      if (this.inBand && !inB && s.time > 0) this.fluct++;
+      this.inBand = inB;
+      if (vv < 0.9) { this.lowRun += dt; } else { if (this.lowRun > 1) this.ev(`brownout ${this.lowRun.toFixed(1)}s (voltage < 0.9)`); this.worstLow = Math.max(this.worstLow, this.lowRun); this.lowRun = 0; }
+      this.tempMax = Math.max(this.tempMax, R.temp);
+      if (R.temp > R.optTemp[1]) this.tAboveOpt += dt;
+      if (R.temp > R.allTemp[1]) this.tCritical += dt;
+      if (s.time >= this.nextTl) { this.nextTl += 1; const n = s.snapshot(); this.timeline.push(n); }
+    }
+    report() {
+      const s = this.sim, T = Math.max(this.t, 1e-9), kwh = x => x / 3600;
+      const fuelUsed = this.fuel, delivered = kwh(this.eDemand - this.eUnmet);
+      const r = {
+        circuit: s.cfg.circuitName || '', profile: s.profile.name || '', duration_s: +T.toFixed(1), reactor_max_kw: s.reactor.maxPower,
+        rods: `${s.reactor.rods.length}x ${(s.cfg.fuelType || 'uranium')}`, batteries: s.batteries.length ? `${s.batteries.length}x ${(s.cfg.batteries || {}).type || 'battery'}` : 'off',
+        demand_kwh: +kwh(this.eDemand).toFixed(1), unmet_kwh: +kwh(this.eUnmet).toFixed(2), unmet_pct: +(this.eUnmet / Math.max(this.eDemand, 1e-9) * 100).toFixed(2),
+        surplus_kwh: +kwh(this.eSurplus).toFixed(2), reactor_kwh: +kwh(this.eReactor).toFixed(1),
+        fuel_condition_used: +fuelUsed.toFixed(2), fuel_rods_used: +(fuelUsed / (s.reactor.rods[0] ? s.reactor.rods[0].max : 100)).toFixed(3),
+        fuel_per_mwh: delivered > 0 ? +(fuelUsed / (delivered / 1000)).toFixed(2) : null,
+        voltage_mean_abs_dev: +(this.vAbsDev / T).toFixed(4), voltage_rms_dev: +Math.sqrt(this.vSq / T).toFixed(4), voltage_min: +this.vMin.toFixed(3), voltage_max: +this.vMax.toFixed(3),
+        pct_time_in_band_0_95_1_05: +(this.tBand / T * 100).toFixed(2), fluctuation_events: this.fluct,
+        brownout_s_v_lt_0_9: +this.tLow90.toFixed(1), blackout_s_v_lt_0_5: +this.tLow50.toFixed(1), worst_brownout_s: +Math.max(this.worstLow, this.lowRun).toFixed(1), overvolt_s_v_gt_1_1: +this.tHigh110.toFixed(1),
+        junction_overload_s_v_gt_2: +this.overloadT.toFixed(1), junction_breaks: this.junctionBreaks,
+        temp_max: +this.tempMax.toFixed(1), temp_above_optimal_s: +this.tAboveOpt.toFixed(1), temp_critical_s: +this.tCritical.toFixed(1), fires: this.fires, meltdown_at_s: this.meltdownAt === null ? null : +this.meltdownAt.toFixed(1),
+        no_fission_signal_s: +this.noCtlF.toFixed(1), no_turbine_signal_s: +this.noCtlT.toFixed(1),
+        battery_charge_min_pct: s.batteries.length ? +this.battMin.toFixed(1) : null, battery_charge_max_pct: s.batteries.length ? +this.battMax.toFixed(1) : null,
+        battery_out_kwh: +kwh(this.eBattOut).toFixed(2), battery_in_kwh: +kwh(this.eBattIn).toFixed(2),
+      };
+      // scores 0-100 (higher is better)
+      r.score_reliability = +Math.max(0, 100 - r.unmet_pct * 10 - r.voltage_mean_abs_dev * 200 - r.fluctuation_events / (T / 60) * 2 - (r.meltdown_at_s !== null ? 100 : 0) - r.fires * 10 - r.junction_breaks * 10).toFixed(1);
+      r.kwh_per_rod = r.fuel_rods_used > 0 ? +(delivered / r.fuel_rods_used).toFixed(0) : null; // fuel efficiency: higher is better
+      r.events = this.events; r.warnings = s.warnings;
+      return r;
+    }
+  }
+  function fmtT(t) { const m = Math.floor(t / 60), s = t - m * 60; return `[${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}]`; }
+
+  // ---------- load profiles (CSV written by the PowerLogger mod) ----------
+  function parseProfile(text, name) {
+    const prof = { name: name || 'profile', points: [], meta: {} };
+    let cols = null;
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim(); if (!line) continue;
+      if (line.startsWith('#')) { const m = /^#\s*([\w.]+)\s*[=:]\s*(.*)$/.exec(line); if (m) prof.meta[m[1]] = m[2].trim(); continue; }
+      const parts = line.split(',');
+      if (!cols) { if (/[a-z]/i.test(parts[0])) { cols = parts.map(s => s.trim().toLowerCase()); continue; } cols = ['t', 'demand']; }
+      const row = {}; cols.forEach((c, i) => row[c] = Number(parts[i]));
+      const demand = Number.isFinite(row.demand) ? row.demand : row.load;
+      if (Number.isFinite(row.t) && Number.isFinite(demand)) prof.points.push({ t: row.t, demand: Math.max(0, demand), turbine: row.turbine, out: row.reactor_out });
+    }
+    if (!prof.points.length) prof.points.push({ t: 0, demand: 0 });
+    const t0 = prof.points[0].t; for (const p of prof.points) p.t -= t0;
+    prof.duration = Number(prof.meta.duration) || (prof.points[prof.points.length - 1].t + 1);
+    // reactor max output: saved directly, else auto-calculated from Output(kW) = (Turbine/100) * MaxOutput
+    let mx = Number(prof.meta.reactor_max_kw);
+    if (!(mx > 0)) { const est = prof.points.filter(p => p.turbine > 5 && p.out > 0).map(p => p.out / (p.turbine / 100)); if (est.length) { est.sort((a, b) => a - b); mx = est[est.length >> 1]; } }
+    if (mx > 0) prof.reactorMaxKW = Math.round(mx);
+    return prof;
+  }
+
+  return { Sim, parseProfile, DEFAULT_PINS, DEVICE_OUTS, DEVICE_INS, FUEL, BATT, STEP };
+});
+
+;
+// Shared helpers used by the CLI (sim/cli.js) and the web bench (web/): load circuits, export, format logs.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./format'), require('./engine'));
+  else root.BaroProject = factory(root.BaroFormat, root.BaroEngine);
+})(typeof self !== 'undefined' ? self : this, function (F, E) {
+  'use strict';
+  // texts: {main: text, mainName, battery?: text}. main may be .circ or Blueprints .txt.
+  // pinsText: optional sidecar "<box> <pin> <device.pin>" lines, e.g. "reactor in1 reactor.load_value_out"
+  function applyPins(model, pinsText) {
+    for (const raw of String(pinsText || '').split(/\r?\n/)) {
+      const t = raw.replace(/#.*/, '').trim().split(/\s+/); if (t.length < 3) continue;
+      const b = model.boxes.find(x => x.name === t[0]); if (!b) continue;
+      b.pins = b.pins || {}; b.pins[t[1]] = t[2];
+    }
+    return model;
+  }
+  function loadModel(main, mainName, batteryText, pinsText) {
+    let model;
+    if (!/<CircuitBox/.test(main)) model = F.parseCirc(main);
+    else {
+      model = F.load(main, 'reactor'); model.name = (mainName || 'imported').replace(/(_reactor)?\.txt$/i, '');
+      if (batteryText) model.boxes.push(F.parseTxt(batteryText, 'battery'));
+      // rebuild box-to-box links from "link.<box>_<pin>" labels written by exportBoxes
+      for (const b of model.boxes) for (const [p, v] of Object.entries(b.pins || {})) {
+        const m = /^link\.(\w+?)_((?:in|out)\d)$/.exec(v);
+        if (m && p.startsWith('out')) model.links.push({ from: `${b.name}.${p}`, to: `${m[1]}.${m[2]}` });
+      }
+    }
+    if (pinsText) applyPins(model, pinsText);
+    return model;
+  }
+  // "$MAX" in any component property = reactor max output (kW) of the test.
+  function substitute(model, maxKW) {
+    const m = JSON.parse(JSON.stringify(model));
+    for (const b of m.boxes) for (const c of b.components) for (const k in c.props) if (typeof c.props[k] === 'string' && c.props[k].includes('$MAX')) c.props[k] = c.props[k].replace(/\$MAX/g, String(maxKW));
+    return m;
+  }
+  // -> [{filename, text}]  one box: <name>.txt ; two boxes: <name>_reactor.txt + <name>_battery.txt
+  function exportBoxes(model, maxKW) {
+    const m = substitute(model, maxKW), out = [];
+    m.boxes.forEach((b, bi) => { // in-game note for every value that came from $MAX
+      const ids = model.boxes[bi].components.filter(c => Object.values(c.props).some(v => String(v).includes('$MAX'))).map(c => c.id);
+      if (ids.length) b.labels.push({ header: 'REACTOR MAX OUTPUT', body: `Exported for a ${maxKW} kW reactor. If your reactor's max output differs, edit: ${ids.join(', ')}`, color: '#FFB000' });
+    });
+    for (const b of m.boxes) if (!b.pins) { // label used pins with the default harness so the in-game wiring is obvious
+      const used = new Set(); for (const w of b.wires) { if (w.from.c === null) used.add(F.shortPin(w.from.pin)); if (w.to.c === null) used.add(F.shortPin(w.to.pin)); }
+      const d = E.DEFAULT_PINS[b.name] || {}; b.pins = {}; for (const p of used) if (d[p]) b.pins[p] = d[p];
+    }
+    for (const b of m.boxes) for (const l of m.links || []) { const [fb, fp] = l.from.split('.'), [tb, tp] = l.to.split('.'); if (fb === b.name) b.pins[fp] = `link.${tb}_${tp}`; if (tb === b.name) b.pins[tp] = `link.${fb}_${fp}`; }
+    if (m.boxes.length === 1) out.push({ filename: m.name + '.txt', text: F.toTxt(m.boxes[0]) });
+    else for (const b of m.boxes) out.push({ filename: `${m.name}_${b.name}.txt`, text: F.toTxt(b, { baseId: b.name === 'battery' ? 3000 : 1000 }) });
+    return out;
+  }
+  function fmtReport(r) {
+    const L = [];
+    for (const [k, v] of Object.entries(r)) if (k !== 'events' && k !== 'warnings' && v !== null && v !== '') L.push(`${k}=${v}`);
+    let s = L.join('\n');
+    if (r.warnings && r.warnings.length) s += '\nWARNINGS:\n' + r.warnings.map(w => '  ' + w).join('\n');
+    s += '\nEVENTS' + (r.events && r.events.length ? ':\n' + r.events.map(e => '  ' + e).join('\n') : ': none');
+    return s + '\n';
+  }
+  function timelineCsv(tl) {
+    const cols = ['t', 'demand', 'power', 'voltage', 'temp', 'fission', 'turbine', 'tf', 'tt', 'cto', 'fuel', 'batt', 'battOut', 'battIn'];
+    return cols.join(',') + '\n' + tl.map(p => cols.map(c => p[c] == null ? '' : (Math.round(p[c] * 100) / 100)).join(',')).join('\n') + '\n';
+  }
+  return { loadModel, applyPins, substitute, exportBoxes, fmtReport, timelineCsv };
+});
+</script>
+<script type="application/json" id="lib">{"circuits":{"example_battery":{"circ":"# Example with batteries: reactor box = feed-forward, battery box charges when below 80%.\nname example_battery\nbox reactor\nc tdiv div\nc tmax mem Value=$MAX\nc tpct mul\nc k100 mem Value=100\nc fadd add\nc k50 mem Value=50\nc fmul mul\nc fdiv div ClampMin=0 ClampMax=100\nw in1 tdiv.1\nw tmax.out tdiv.2\nw tdiv.out tpct.1\nw k100.out tpct.2\nw tpct.out out2 fadd.1\nw k50.out fadd.2 fmul.2\nw fadd.out fmul.1\nw fmul.out fdiv.1\nw in4 fdiv.2\nw fdiv.out out1\nbox battery\nc low greater Output=40 FalseOutput=0   # 80 > charge% -> charge at 40%\nc k80 mem Value=80\nw k80.out low.1\nw in1 low.2\nw low.out out1\n","group":"AI"},"example_feedforward":{"circ":"# Example: simple feed-forward auto reactor (starting point, not tuned).\n# turbine% = load / maxKW * 100 ;  fission% = (50 + turbine) * 50 / fuel  (aims for temperature 50)\nname example_feedforward\nbox reactor\nc tdiv div                    # load / max\nc tmax mem Value=$MAX         # $MAX = reactor max output kW (filled in automatically)\nc tpct mul                    # * 100\nc k100 mem Value=100\nc fadd add                    # turbine + 50\nc k50 mem Value=50\nc fmul mul                    # * 50\nc fdiv div ClampMin=0 ClampMax=100   # / fuel\nw in1 tdiv.1\nw tmax.out tdiv.2\nw tdiv.out tpct.1\nw k100.out tpct.2\nw tpct.out out2 fadd.1\nw k50.out fadd.2 fmul.2\nw fadd.out fmul.1\nw fmul.out fdiv.1\nw in4 fdiv.2\nw fdiv.out out1\n","group":"AI"}},"profiles":{"synthetic_combat":"# BaroPowerLog v1 (synthetic)\n# sub=synthetic\n# reactor_max_kw=5200\n# duration=900\n# fuel_rods=2\nt,demand\n0,1500\n6.5,2400\n10,1500\n25,2400\n28,4000\n29.5,3100\n39.5,4000\n45.5,3100\n73.5,4000\n81,3100\n85.5,1500\n88.5,2400\n91,1500\n118.5,2400\n131,4600\n139.5,3700\n154,3100\n160.5,1500\n165,2400\n172.5,1500\n176,2100\n179.5,3000\n186.5,2100\n190.5,3100\n208,1500\n210,2400\n216.5,1500\n228.5,3100\n242.5,3700\n247,4600\n254,3000\n258.5,2100\n284.5,3000\n287.5,2100\n296,3100\n319.5,3700\n323.5,4600\n325.5,2400\n330.5,1500\n345,2100\n364,1500\n382.5,2100\n384.5,3000\n387.5,2100\n396,3100\n417.5,4000\n419,3000\n424,2100\n433.5,3100\n440.5,1500\n448.5,2400\n455,1500\n461,2100\n474.5,3000\n481,2100\n499.5,3000\n513.5,2100\n517,1500\n519,2400\n523.5,1500\n530,2400\n536,4000\n537,3100\n545.5,4000\n551.5,3100\n552.5,1500\n563.5,2400\n570.5,1500\n587,3100\n602.5,4000\n610.5,3100\n622.5,4000\n627,3100\n635,4000\n641,3000\n641.5,2100\n665.5,3100\n677,3700\n695,4600\n699,4000\n702.5,3100\n717.5,2100\n724.5,3000\n737,2400\n746,4000\n747.5,3100\n754.5,4000\n758,3100\n775,3700\n781,3100\n784,4000\n788,3100\n796.5,1500\n813,3700\n831,2100\n847,1500\n864,3100\n876.5,2100\n891,3000\n897.5,2400\n","synthetic_cruise":"# BaroPowerLog v1 (synthetic)\n# sub=synthetic\n# reactor_max_kw=3000\n# duration=900\n# fuel_rods=2\nt,demand\n0,1500\n52.5,1900\n125,1100\n177.5,2300\n241,1100\n309.5,1500\n365,1900\n445.5,1500\n534.5,1700\n584.5,2300\n646.5,1500\n683,1100\n805,1900\n858,1500\n","synthetic_ramps":"# BaroPowerLog v1 (synthetic)\n# sub=synthetic\n# reactor_max_kw=4000\n# duration=900\n# fuel_rods=2\nt,demand\n0,1200\n1,1200.1\n1.5,1200.2\n2,1200.3\n2.5,1200.4\n3,1200.6\n3.5,1200.8\n4,1201.1\n4.5,1201.4\n5,1201.7\n5.5,1202.1\n6,1202.5\n6.5,1202.9\n7,1203.3\n7.5,1203.8\n8,1204.4\n8.5,1204.9\n9,1205.5\n9.5,1206.1\n10,1206.8\n10.5,1207.5\n11,1208.2\n11.5,1209\n12,1209.8\n12.5,1210.6\n13,1211.5\n13.5,1212.4\n14,1213.3\n14.5,1214.3\n15,1215.3\n15.5,1216.3\n16,1217.4\n16.5,1218.5\n17,1219.6\n17.5,1220.8\n18,1222\n18.5,1223.2\n19,1224.5\n19.5,1225.8\n20,1227.1\n20.5,1228.5\n21,1229.9\n21.5,1231.3\n22,1232.8\n22.5,1234.3\n23,1235.8\n23.5,1237.3\n24,1238.9\n24.5,1240.6\n25,1242.2\n25.5,1243.9\n26,1245.6\n26.5,1247.4\n27,1249.2\n27.5,1251\n28,1252.8\n28.5,1254.7\n29,1256.6\n29.5,1258.5\n30,1260.5\n30.5,1262.5\n31,1264.6\n31.5,1266.6\n32,1268.7\n32.5,1270.8\n33,1273\n33.5,1275.2\n34,1277.4\n34.5,1279.7\n35,1281.9\n35.5,1284.2\n36,1286.6\n36.5,1289\n37,1291.4\n37.5,1293.8\n38,1296.2\n38.5,1298.7\n39,1301.2\n39.5,1303.8\n40,1306.4\n40.5,1309\n41,1311.6\n41.5,1314.3\n42,1317\n42.5,1319.7\n43,1322.4\n43.5,1325.2\n44,1328\n44.5,1330.8\n45,1333.7\n45.5,1336.6\n46,1339.5\n46.5,1342.4\n47,1345.4\n47.5,1348.4\n48,1351.4\n48.5,1354.5\n49,1357.5\n49.5,1360.6\n50,1363.8\n50.5,1366.9\n51,1370.1\n51.5,1373.3\n52,1376.5\n52.5,1379.8\n53,1383.1\n53.5,1386.4\n54,1389.7\n54.5,1393.1\n55,1396.5\n55.5,1399.9\n56,1403.3\n56.5,1406.8\n57,1410.2\n57.5,1413.7\n58,1417.3\n58.5,1420.8\n59,1424.4\n59.5,1428\n60,1431.6\n60.5,1435.3\n61,1438.9\n61.5,1442.6\n62,1446.3\n62.5,1450\n63,1453.8\n63.5,1457.6\n64,1461.4\n64.5,1465.2\n65,1469\n65.5,1472.9\n66,1476.8\n66.5,1480.7\n67,1484.6\n67.5,1488.6\n68,1492.5\n68.5,1496.5\n69,1500.5\n69.5,1504.5\n70,1508.6\n70.5,1512.6\n71,1516.7\n71.5,1520.8\n72,1524.9\n72.5,1529.1\n73,1533.2\n73.5,1537.4\n74,1541.6\n74.5,1545.8\n75,1550\n75.5,1554.2\n76,1558.5\n76.5,1562.8\n77,1567.1\n77.5,1571.4\n78,1575.7\n78.5,1580\n79,1584.4\n79.5,1588.8\n80,1593.1\n80.5,1597.5\n81,1602\n81.5,1606.4\n82,1610.8\n82.5,1615.3\n83,1619.8\n83.5,1624.2\n84,1628.7\n84.5,1633.3\n85,1637.8\n85.5,1642.3\n86,1646.9\n86.5,1651.4\n87,1656\n87.5,1660.6\n88,1665.2\n88.5,1669.8\n89,1674.4\n89.5,1679\n90,1683.7\n90.5,1688.3\n91,1693\n91.5,1697.7\n92,1702.4\n92.5,1707.1\n93,1711.8\n93.5,1716.5\n94,1721.2\n94.5,1725.9\n95,1730.7\n95.5,1735.4\n96,1740.2\n96.5,1744.9\n97,1749.7\n97.5,1754.5\n98,1759.2\n98.5,1764\n99,1768.8\n99.5,1773.6\n100,1778.4\n100.5,2983.3\n101,2988.1\n101.5,2992.9\n102,2997.7\n102.5,3002.6\n103,3007.4\n103.5,3012.3\n104,3017.1\n104.5,3022\n105,3026.8\n105.5,3031.7\n106,3036.6\n106.5,3041.4\n107,3046.3\n107.5,3051.2\n108,3056\n108.5,3060.9\n109,3065.8\n109.5,3070.7\n110,3075.6\n110.5,3080.5\n111,3085.3\n111.5,3090.2\n112,3095.1\n112.5,3100\n113,3104.9\n113.5,3109.8\n114,3114.7\n114.5,3119.5\n115,3124.4\n115.5,3129.3\n116,3134.2\n116.5,3139.1\n117,3144\n117.5,3148.8\n118,3153.7\n118.5,3158.6\n119,3163.4\n119.5,3168.3\n120,1973.2\n120.5,1978\n121,1982.9\n121.5,1987.7\n122,1992.6\n122.5,1997.4\n123,2002.3\n123.5,2007.1\n124,2011.9\n124.5,2016.7\n125,2021.6\n125.5,2026.4\n126,2031.2\n126.5,2036\n127,2040.8\n127.5,2045.5\n128,2050.3\n128.5,2055.1\n129,2059.8\n129.5,2064.6\n130,2069.3\n130.5,2074.1\n131,2078.8\n131.5,2083.5\n132,2088.2\n132.5,2092.9\n133,2097.6\n133.5,2102.3\n134,2107\n134.5,2111.7\n135,2116.3\n135.5,2121\n136,2125.6\n136.5,2130.2\n137,2134.8\n137.5,2139.4\n138,2144\n138.5,2148.6\n139,2153.1\n139.5,2157.7\n140,2162.2\n140.5,2166.7\n141,2171.3\n141.5,2175.8\n142,2180.2\n142.5,2184.7\n143,2189.2\n143.5,2193.6\n144,2198\n144.5,2202.5\n145,2206.9\n145.5,2211.2\n146,2215.6\n146.5,2220\n147,2224.3\n147.5,2228.6\n148,2232.9\n148.5,2237.2\n149,2241.5\n149.5,2245.8\n150,2250\n150.5,2254.2\n151,2258.4\n151.5,2262.6\n152,2266.8\n152.5,2270.9\n153,2275.1\n153.5,2279.2\n154,2283.3\n154.5,2287.4\n155,2291.4\n155.5,2295.5\n156,2299.5\n156.5,2303.5\n157,2307.5\n157.5,2311.4\n158,2315.4\n158.5,2319.3\n159,2323.2\n159.5,2327.1\n160,2331\n160.5,2334.8\n161,2338.6\n161.5,2342.4\n162,2346.2\n162.5,2350\n163,2353.7\n163.5,2357.4\n164,2361.1\n164.5,2364.7\n165,2368.4\n165.5,2372\n166,2375.6\n166.5,2379.2\n167,2382.7\n167.5,2386.3\n168,2389.8\n168.5,2393.2\n169,2396.7\n169.5,2400.1\n170,2403.5\n170.5,2406.9\n171,2410.3\n171.5,2413.6\n172,2416.9\n172.5,2420.2\n173,2423.5\n173.5,2426.7\n174,2429.9\n174.5,2433.1\n175,2436.2\n175.5,2439.4\n176,2442.5\n176.5,2445.5\n177,2448.6\n177.5,2451.6\n178,2454.6\n178.5,2457.6\n179,2460.5\n179.5,2463.4\n180,2466.3\n180.5,2469.2\n181,2472\n181.5,2474.8\n182,2477.6\n182.5,2480.3\n183,2483\n183.5,2485.7\n184,2488.4\n184.5,2491\n185,2493.6\n185.5,2496.2\n186,2498.8\n186.5,2501.3\n187,2503.8\n187.5,2506.2\n188,2508.6\n188.5,2511\n189,2513.4\n189.5,2515.8\n190,2518.1\n190.5,2520.3\n191,2522.6\n191.5,2524.8\n192,2527\n192.5,2529.2\n193,2531.3\n193.5,2533.4\n194,2535.4\n194.5,2537.5\n195,2539.5\n195.5,2541.5\n196,2543.4\n196.5,2545.3\n197,2547.2\n197.5,2549\n198,2550.8\n198.5,2552.6\n199,2554.4\n199.5,2556.1\n200,2557.8\n200.5,2559.4\n201,2561.1\n201.5,2562.7\n202,2564.2\n202.5,2565.7\n203,2567.2\n203.5,2568.7\n204,2570.1\n204.5,2571.5\n205,2572.9\n205.5,2574.2\n206,2575.5\n206.5,2576.8\n207,2578\n207.5,2579.2\n208,2580.4\n208.5,2581.5\n209,2582.6\n209.5,2583.7\n210,2584.7\n210.5,2585.7\n211,2586.7\n211.5,2587.6\n212,2588.5\n212.5,2589.4\n213,2590.2\n213.5,2591\n214,2591.8\n214.5,2592.5\n215,2593.2\n215.5,2593.9\n216,2594.5\n216.5,2595.1\n217,2595.6\n217.5,2596.2\n218,2596.7\n218.5,2597.1\n219,2597.5\n219.5,2597.9\n220,2598.3\n220.5,3798.6\n221,3798.9\n221.5,3799.2\n222,3799.4\n222.5,3799.6\n223,3799.7\n223.5,3799.8\n224,3799.9\n224.5,3800\n226,3799.9\n226.5,3799.8\n227,3799.7\n227.5,3799.6\n228,3799.4\n228.5,3799.2\n229,3798.9\n229.5,3798.6\n230,3798.3\n230.5,3797.9\n231,3797.5\n231.5,3797.1\n232,3796.7\n232.5,3796.2\n233,3795.6\n233.5,3795.1\n234,3794.5\n234.5,3793.9\n235,3793.2\n235.5,3792.5\n236,3791.8\n236.5,3791\n237,3790.2\n237.5,3789.4\n238,3788.5\n238.5,3787.6\n239,3786.7\n239.5,3785.7\n240,2584.7\n240.5,2583.7\n241,2582.6\n241.5,2581.5\n242,2580.4\n242.5,2579.2\n243,2578\n243.5,2576.8\n244,2575.5\n244.5,2574.2\n245,2572.9\n245.5,2571.5\n246,2570.1\n246.5,2568.7\n247,2567.2\n247.5,2565.7\n248,2564.2\n248.5,2562.7\n249,2561.1\n249.5,2559.4\n250,2557.8\n250.5,2556.1\n251,2554.4\n251.5,2552.6\n252,2550.8\n252.5,2549\n253,2547.2\n253.5,2545.3\n254,2543.4\n254.5,2541.5\n255,2539.5\n255.5,2537.5\n256,2535.4\n256.5,2533.4\n257,2531.3\n257.5,2529.2\n258,2527\n258.5,2524.8\n259,2522.6\n259.5,2520.3\n260,2518.1\n260.5,2515.8\n261,2513.4\n261.5,2511\n262,2508.6\n262.5,2506.2\n263,2503.8\n263.5,2501.3\n264,2498.8\n264.5,2496.2\n265,2493.6\n265.5,2491\n266,2488.4\n266.5,2485.7\n267,2483\n267.5,2480.3\n268,2477.6\n268.5,2474.8\n269,2472\n269.5,2469.2\n270,2466.3\n270.5,2463.4\n271,2460.5\n271.5,2457.6\n272,2454.6\n272.5,2451.6\n273,2448.6\n273.5,2445.5\n274,2442.5\n274.5,2439.4\n275,2436.2\n275.5,2433.1\n276,2429.9\n276.5,2426.7\n277,2423.5\n277.5,2420.2\n278,2416.9\n278.5,2413.6\n279,2410.3\n279.5,2406.9\n280,2403.5\n280.5,2400.1\n281,2396.7\n281.5,2393.2\n282,2389.8\n282.5,2386.3\n283,2382.7\n283.5,2379.2\n284,2375.6\n284.5,2372\n285,2368.4\n285.5,2364.7\n286,2361.1\n286.5,2357.4\n287,2353.7\n287.5,2350\n288,2346.2\n288.5,2342.4\n289,2338.6\n289.5,2334.8\n290,2331\n290.5,2327.1\n291,2323.2\n291.5,2319.3\n292,2315.4\n292.5,2311.4\n293,2307.5\n293.5,2303.5\n294,2299.5\n294.5,2295.5\n295,2291.4\n295.5,2287.4\n296,2283.3\n296.5,2279.2\n297,2275.1\n297.5,2270.9\n298,2266.8\n298.5,2262.6\n299,2258.4\n299.5,2254.2\n300,2250\n300.5,2245.8\n301,2241.5\n301.5,2237.2\n302,2232.9\n302.5,2228.6\n303,2224.3\n303.5,2220\n304,2215.6\n304.5,2211.2\n305,2206.9\n305.5,2202.5\n306,2198\n306.5,2193.6\n307,2189.2\n307.5,2184.7\n308,2180.2\n308.5,2175.8\n309,2171.3\n309.5,2166.7\n310,2162.2\n310.5,2157.7\n311,2153.1\n311.5,2148.6\n312,2144\n312.5,2139.4\n313,2134.8\n313.5,2130.2\n314,2125.6\n314.5,2121\n315,2116.3\n315.5,2111.7\n316,2107\n316.5,2102.3\n317,2097.6\n317.5,2092.9\n318,2088.2\n318.5,2083.5\n319,2078.8\n319.5,2074.1\n320,2069.3\n320.5,2064.6\n321,2059.8\n321.5,2055.1\n322,2050.3\n322.5,2045.5\n323,2040.8\n323.5,2036\n324,2031.2\n324.5,2026.4\n325,2021.6\n325.5,2016.7\n326,2011.9\n326.5,2007.1\n327,2002.3\n327.5,1997.4\n328,1992.6\n328.5,1987.7\n329,1982.9\n329.5,1978\n330,1973.2\n330.5,1968.3\n331,1963.4\n331.5,1958.6\n332,1953.7\n332.5,1948.8\n333,1944\n333.5,1939.1\n334,1934.2\n334.5,1929.3\n335,1924.4\n335.5,1919.5\n336,1914.7\n336.5,1909.8\n337,1904.9\n337.5,1900\n338,1895.1\n338.5,1890.2\n339,1885.3\n339.5,1880.5\n340,1875.6\n340.5,3070.7\n341,3065.8\n341.5,3060.9\n342,3056\n342.5,3051.2\n343,3046.3\n343.5,3041.4\n344,3036.6\n344.5,3031.7\n345,3026.8\n345.5,3022\n346,3017.1\n346.5,3012.3\n347,3007.4\n347.5,3002.6\n348,2997.7\n348.5,2992.9\n349,2988.1\n349.5,2983.3\n350,2978.4\n350.5,2973.6\n351,2968.8\n351.5,2964\n352,2959.2\n352.5,2954.5\n353,2949.7\n353.5,2944.9\n354,2940.2\n354.5,2935.4\n355,2930.7\n355.5,2925.9\n356,2921.2\n356.5,2916.5\n357,2911.8\n357.5,2907.1\n358,2902.4\n358.5,2897.7\n359,2893\n359.5,2888.3\n360,1683.7\n360.5,1679\n361,1674.4\n361.5,1669.8\n362,1665.2\n362.5,1660.6\n363,1656\n363.5,1651.4\n364,1646.9\n364.5,1642.3\n365,1637.8\n365.5,1633.3\n366,1628.7\n366.5,1624.2\n367,1619.8\n367.5,1615.3\n368,1610.8\n368.5,1606.4\n369,1602\n369.5,1597.5\n370,1593.1\n370.5,1588.8\n371,1584.4\n371.5,1580\n372,1575.7\n372.5,1571.4\n373,1567.1\n373.5,1562.8\n374,1558.5\n374.5,1554.2\n375,1550\n375.5,1545.8\n376,1541.6\n376.5,1537.4\n377,1533.2\n377.5,1529.1\n378,1524.9\n378.5,1520.8\n379,1516.7\n379.5,1512.6\n380,1508.6\n380.5,1504.5\n381,1500.5\n381.5,1496.5\n382,1492.5\n382.5,1488.6\n383,1484.6\n383.5,1480.7\n384,1476.8\n384.5,1472.9\n385,1469\n385.5,1465.2\n386,1461.4\n386.5,1457.6\n387,1453.8\n387.5,1450\n388,1446.3\n388.5,1442.6\n389,1438.9\n389.5,1435.3\n390,1431.6\n390.5,1428\n391,1424.4\n391.5,1420.8\n392,1417.3\n392.5,1413.7\n393,1410.2\n393.5,1406.8\n394,1403.3\n394.5,1399.9\n395,1396.5\n395.5,1393.1\n396,1389.7\n396.5,1386.4\n397,1383.1\n397.5,1379.8\n398,1376.5\n398.5,1373.3\n399,1370.1\n399.5,1366.9\n400,1363.8\n400.5,1360.6\n401,1357.5\n401.5,1354.5\n402,1351.4\n402.5,1348.4\n403,1345.4\n403.5,1342.4\n404,1339.5\n404.5,1336.6\n405,1333.7\n405.5,1330.8\n406,1328\n406.5,1325.2\n407,1322.4\n407.5,1319.7\n408,1317\n408.5,1314.3\n409,1311.6\n409.5,1309\n410,1306.4\n410.5,1303.8\n411,1301.2\n411.5,1298.7\n412,1296.2\n412.5,1293.8\n413,1291.4\n413.5,1289\n414,1286.6\n414.5,1284.2\n415,1281.9\n415.5,1279.7\n416,1277.4\n416.5,1275.2\n417,1273\n417.5,1270.8\n418,1268.7\n418.5,1266.6\n419,1264.6\n419.5,1262.5\n420,1260.5\n420.5,1258.5\n421,1256.6\n421.5,1254.7\n422,1252.8\n422.5,1251\n423,1249.2\n423.5,1247.4\n424,1245.6\n424.5,1243.9\n425,1242.2\n425.5,1240.6\n426,1238.9\n426.5,1237.3\n427,1235.8\n427.5,1234.3\n428,1232.8\n428.5,1231.3\n429,1229.9\n429.5,1228.5\n430,1227.1\n430.5,1225.8\n431,1224.5\n431.5,1223.2\n432,1222\n432.5,1220.8\n433,1219.6\n433.5,1218.5\n434,1217.4\n434.5,1216.3\n435,1215.3\n435.5,1214.3\n436,1213.3\n436.5,1212.4\n437,1211.5\n437.5,1210.6\n438,1209.8\n438.5,1209\n439,1208.2\n439.5,1207.5\n440,1206.8\n440.5,1206.1\n441,1205.5\n441.5,1204.9\n442,1204.4\n442.5,1203.8\n443,1203.3\n443.5,1202.9\n444,1202.5\n444.5,1202.1\n445,1201.7\n445.5,1201.4\n446,1201.1\n446.5,1200.8\n447,1200.6\n447.5,1200.4\n448,1200.3\n448.5,1200.2\n449,1200.1\n449.5,1200\n451,1200.1\n451.5,1200.2\n452,1200.3\n452.5,1200.4\n453,1200.6\n453.5,1200.8\n454,1201.1\n454.5,1201.4\n455,1201.7\n455.5,1202.1\n456,1202.5\n456.5,1202.9\n457,1203.3\n457.5,1203.8\n458,1204.4\n458.5,1204.9\n459,1205.5\n459.5,1206.1\n460,1206.8\n460.5,2407.5\n461,2408.2\n461.5,2409\n462,2409.8\n462.5,2410.6\n463,2411.5\n463.5,2412.4\n464,2413.3\n464.5,2414.3\n465,2415.3\n465.5,2416.3\n466,2417.4\n466.5,2418.5\n467,2419.6\n467.5,2420.8\n468,2422\n468.5,2423.2\n469,2424.5\n469.5,2425.8\n470,2427.1\n470.5,2428.5\n471,2429.9\n471.5,2431.3\n472,2432.8\n472.5,2434.3\n473,2435.8\n473.5,2437.3\n474,2438.9\n474.5,2440.6\n475,2442.2\n475.5,2443.9\n476,2445.6\n476.5,2447.4\n477,2449.2\n477.5,2451\n478,2452.8\n478.5,2454.7\n479,2456.6\n479.5,2458.5\n480,1260.5\n480.5,1262.5\n481,1264.6\n481.5,1266.6\n482,1268.7\n482.5,1270.8\n483,1273\n483.5,1275.2\n484,1277.4\n484.5,1279.7\n485,1281.9\n485.5,1284.2\n486,1286.6\n486.5,1289\n487,1291.4\n487.5,1293.8\n488,1296.2\n488.5,1298.7\n489,1301.2\n489.5,1303.8\n490,1306.4\n490.5,1309\n491,1311.6\n491.5,1314.3\n492,1317\n492.5,1319.7\n493,1322.4\n493.5,1325.2\n494,1328\n494.5,1330.8\n495,1333.7\n495.5,1336.6\n496,1339.5\n496.5,1342.4\n497,1345.4\n497.5,1348.4\n498,1351.4\n498.5,1354.5\n499,1357.5\n499.5,1360.6\n500,1363.8\n500.5,1366.9\n501,1370.1\n501.5,1373.3\n502,1376.5\n502.5,1379.8\n503,1383.1\n503.5,1386.4\n504,1389.7\n504.5,1393.1\n505,1396.5\n505.5,1399.9\n506,1403.3\n506.5,1406.8\n507,1410.2\n507.5,1413.7\n508,1417.3\n508.5,1420.8\n509,1424.4\n509.5,1428\n510,1431.6\n510.5,1435.3\n511,1438.9\n511.5,1442.6\n512,1446.3\n512.5,1450\n513,1453.8\n513.5,1457.6\n514,1461.4\n514.5,1465.2\n515,1469\n515.5,1472.9\n516,1476.8\n516.5,1480.7\n517,1484.6\n517.5,1488.6\n518,1492.5\n518.5,1496.5\n519,1500.5\n519.5,1504.5\n520,1508.6\n520.5,1512.6\n521,1516.7\n521.5,1520.8\n522,1524.9\n522.5,1529.1\n523,1533.2\n523.5,1537.4\n524,1541.6\n524.5,1545.8\n525,1550\n525.5,1554.2\n526,1558.5\n526.5,1562.8\n527,1567.1\n527.5,1571.4\n528,1575.7\n528.5,1580\n529,1584.4\n529.5,1588.8\n530,1593.1\n530.5,1597.5\n531,1602\n531.5,1606.4\n532,1610.8\n532.5,1615.3\n533,1619.8\n533.5,1624.2\n534,1628.7\n534.5,1633.3\n535,1637.8\n535.5,1642.3\n536,1646.9\n536.5,1651.4\n537,1656\n537.5,1660.6\n538,1665.2\n538.5,1669.8\n539,1674.4\n539.5,1679\n540,1683.7\n540.5,1688.3\n541,1693\n541.5,1697.7\n542,1702.4\n542.5,1707.1\n543,1711.8\n543.5,1716.5\n544,1721.2\n544.5,1725.9\n545,1730.7\n545.5,1735.4\n546,1740.2\n546.5,1744.9\n547,1749.7\n547.5,1754.5\n548,1759.2\n548.5,1764\n549,1768.8\n549.5,1773.6\n550,1778.4\n550.5,1783.3\n551,1788.1\n551.5,1792.9\n552,1797.7\n552.5,1802.6\n553,1807.4\n553.5,1812.3\n554,1817.1\n554.5,1822\n555,1826.8\n555.5,1831.7\n556,1836.6\n556.5,1841.4\n557,1846.3\n557.5,1851.2\n558,1856\n558.5,1860.9\n559,1865.8\n559.5,1870.7\n560,1875.6\n560.5,1880.5\n561,1885.3\n561.5,1890.2\n562,1895.1\n562.5,1900\n563,1904.9\n563.5,1909.8\n564,1914.7\n564.5,1919.5\n565,1924.4\n565.5,1929.3\n566,1934.2\n566.5,1939.1\n567,1944\n567.5,1948.8\n568,1953.7\n568.5,1958.6\n569,1963.4\n569.5,1968.3\n570,1973.2\n570.5,1978\n571,1982.9\n571.5,1987.7\n572,1992.6\n572.5,1997.4\n573,2002.3\n573.5,2007.1\n574,2011.9\n574.5,2016.7\n575,2021.6\n575.5,2026.4\n576,2031.2\n576.5,2036\n577,2040.8\n577.5,2045.5\n578,2050.3\n578.5,2055.1\n579,2059.8\n579.5,2064.6\n580,2069.3\n580.5,3274.1\n581,3278.8\n581.5,3283.5\n582,3288.2\n582.5,3292.9\n583,3297.6\n583.5,3302.3\n584,3307\n584.5,3311.7\n585,3316.3\n585.5,3321\n586,3325.6\n586.5,3330.2\n587,3334.8\n587.5,3339.4\n588,3344\n588.5,3348.6\n589,3353.1\n589.5,3357.7\n590,3362.2\n590.5,3366.7\n591,3371.3\n591.5,3375.8\n592,3380.2\n592.5,3384.7\n593,3389.2\n593.5,3393.6\n594,3398\n594.5,3402.5\n595,3406.9\n595.5,3411.2\n596,3415.6\n596.5,3420\n597,3424.3\n597.5,3428.6\n598,3432.9\n598.5,3437.2\n599,3441.5\n599.5,3445.8\n600,2250\n600.5,2254.2\n601,2258.4\n601.5,2262.6\n602,2266.8\n602.5,2270.9\n603,2275.1\n603.5,2279.2\n604,2283.3\n604.5,2287.4\n605,2291.4\n605.5,2295.5\n606,2299.5\n606.5,2303.5\n607,2307.5\n607.5,2311.4\n608,2315.4\n608.5,2319.3\n609,2323.2\n609.5,2327.1\n610,2331\n610.5,2334.8\n611,2338.6\n611.5,2342.4\n612,2346.2\n612.5,2350\n613,2353.7\n613.5,2357.4\n614,2361.1\n614.5,2364.7\n615,2368.4\n615.5,2372\n616,2375.6\n616.5,2379.2\n617,2382.7\n617.5,2386.3\n618,2389.8\n618.5,2393.2\n619,2396.7\n619.5,2400.1\n620,2403.5\n620.5,2406.9\n621,2410.3\n621.5,2413.6\n622,2416.9\n622.5,2420.2\n623,2423.5\n623.5,2426.7\n624,2429.9\n624.5,2433.1\n625,2436.2\n625.5,2439.4\n626,2442.5\n626.5,2445.5\n627,2448.6\n627.5,2451.6\n628,2454.6\n628.5,2457.6\n629,2460.5\n629.5,2463.4\n630,2466.3\n630.5,2469.2\n631,2472\n631.5,2474.8\n632,2477.6\n632.5,2480.3\n633,2483\n633.5,2485.7\n634,2488.4\n634.5,2491\n635,2493.6\n635.5,2496.2\n636,2498.8\n636.5,2501.3\n637,2503.8\n637.5,2506.2\n638,2508.6\n638.5,2511\n639,2513.4\n639.5,2515.8\n640,2518.1\n640.5,2520.3\n641,2522.6\n641.5,2524.8\n642,2527\n642.5,2529.2\n643,2531.3\n643.5,2533.4\n644,2535.4\n644.5,2537.5\n645,2539.5\n645.5,2541.5\n646,2543.4\n646.5,2545.3\n647,2547.2\n647.5,2549\n648,2550.8\n648.5,2552.6\n649,2554.4\n649.5,2556.1\n650,2557.8\n650.5,2559.4\n651,2561.1\n651.5,2562.7\n652,2564.2\n652.5,2565.7\n653,2567.2\n653.5,2568.7\n654,2570.1\n654.5,2571.5\n655,2572.9\n655.5,2574.2\n656,2575.5\n656.5,2576.8\n657,2578\n657.5,2579.2\n658,2580.4\n658.5,2581.5\n659,2582.6\n659.5,2583.7\n660,2584.7\n660.5,2585.7\n661,2586.7\n661.5,2587.6\n662,2588.5\n662.5,2589.4\n663,2590.2\n663.5,2591\n664,2591.8\n664.5,2592.5\n665,2593.2\n665.5,2593.9\n666,2594.5\n666.5,2595.1\n667,2595.6\n667.5,2596.2\n668,2596.7\n668.5,2597.1\n669,2597.5\n669.5,2597.9\n670,2598.3\n670.5,2598.6\n671,2598.9\n671.5,2599.2\n672,2599.4\n672.5,2599.6\n673,2599.7\n673.5,2599.8\n674,2599.9\n674.5,2600\n676,2599.9\n676.5,2599.8\n677,2599.7\n677.5,2599.6\n678,2599.4\n678.5,2599.2\n679,2598.9\n679.5,2598.6\n680,2598.3\n680.5,2597.9\n681,2597.5\n681.5,2597.1\n682,2596.7\n682.5,2596.2\n683,2595.6\n683.5,2595.1\n684,2594.5\n684.5,2593.9\n685,2593.2\n685.5,2592.5\n686,2591.8\n686.5,2591\n687,2590.2\n687.5,2589.4\n688,2588.5\n688.5,2587.6\n689,2586.7\n689.5,2585.7\n690,2584.7\n690.5,2583.7\n691,2582.6\n691.5,2581.5\n692,2580.4\n692.5,2579.2\n693,2578\n693.5,2576.8\n694,2575.5\n694.5,2574.2\n695,2572.9\n695.5,2571.5\n696,2570.1\n696.5,2568.7\n697,2567.2\n697.5,2565.7\n698,2564.2\n698.5,2562.7\n699,2561.1\n699.5,2559.4\n700,2557.8\n700.5,3756.1\n701,3754.4\n701.5,3752.6\n702,3750.8\n702.5,3749\n703,3747.2\n703.5,3745.3\n704,3743.4\n704.5,3741.5\n705,3739.5\n705.5,3737.5\n706,3735.4\n706.5,3733.4\n707,3731.3\n707.5,3729.2\n708,3727\n708.5,3724.8\n709,3722.6\n709.5,3720.3\n710,3718.1\n710.5,3715.8\n711,3713.4\n711.5,3711\n712,3708.6\n712.5,3706.2\n713,3703.8\n713.5,3701.3\n714,3698.8\n714.5,3696.2\n715,3693.6\n715.5,3691\n716,3688.4\n716.5,3685.7\n717,3683\n717.5,3680.3\n718,3677.6\n718.5,3674.8\n719,3672\n719.5,3669.2\n720,2466.3\n720.5,2463.4\n721,2460.5\n721.5,2457.6\n722,2454.6\n722.5,2451.6\n723,2448.6\n723.5,2445.5\n724,2442.5\n724.5,2439.4\n725,2436.2\n725.5,2433.1\n726,2429.9\n726.5,2426.7\n727,2423.5\n727.5,2420.2\n728,2416.9\n728.5,2413.6\n729,2410.3\n729.5,2406.9\n730,2403.5\n730.5,2400.1\n731,2396.7\n731.5,2393.2\n732,2389.8\n732.5,2386.3\n733,2382.7\n733.5,2379.2\n734,2375.6\n734.5,2372\n735,2368.4\n735.5,2364.7\n736,2361.1\n736.5,2357.4\n737,2353.7\n737.5,2350\n738,2346.2\n738.5,2342.4\n739,2338.6\n739.5,2334.8\n740,2331\n740.5,2327.1\n741,2323.2\n741.5,2319.3\n742,2315.4\n742.5,2311.4\n743,2307.5\n743.5,2303.5\n744,2299.5\n744.5,2295.5\n745,2291.4\n745.5,2287.4\n746,2283.3\n746.5,2279.2\n747,2275.1\n747.5,2270.9\n748,2266.8\n748.5,2262.6\n749,2258.4\n749.5,2254.2\n750,2250\n750.5,2245.8\n751,2241.5\n751.5,2237.2\n752,2232.9\n752.5,2228.6\n753,2224.3\n753.5,2220\n754,2215.6\n754.5,2211.2\n755,2206.9\n755.5,2202.5\n756,2198\n756.5,2193.6\n757,2189.2\n757.5,2184.7\n758,2180.2\n758.5,2175.8\n759,2171.3\n759.5,2166.7\n760,2162.2\n760.5,2157.7\n761,2153.1\n761.5,2148.6\n762,2144\n762.5,2139.4\n763,2134.8\n763.5,2130.2\n764,2125.6\n764.5,2121\n765,2116.3\n765.5,2111.7\n766,2107\n766.5,2102.3\n767,2097.6\n767.5,2092.9\n768,2088.2\n768.5,2083.5\n769,2078.8\n769.5,2074.1\n770,2069.3\n770.5,2064.6\n771,2059.8\n771.5,2055.1\n772,2050.3\n772.5,2045.5\n773,2040.8\n773.5,2036\n774,2031.2\n774.5,2026.4\n775,2021.6\n775.5,2016.7\n776,2011.9\n776.5,2007.1\n777,2002.3\n777.5,1997.4\n778,1992.6\n778.5,1987.7\n779,1982.9\n779.5,1978\n780,1973.2\n780.5,1968.3\n781,1963.4\n781.5,1958.6\n782,1953.7\n782.5,1948.8\n783,1944\n783.5,1939.1\n784,1934.2\n784.5,1929.3\n785,1924.4\n785.5,1919.5\n786,1914.7\n786.5,1909.8\n787,1904.9\n787.5,1900\n788,1895.1\n788.5,1890.2\n789,1885.3\n789.5,1880.5\n790,1875.6\n790.5,1870.7\n791,1865.8\n791.5,1860.9\n792,1856\n792.5,1851.2\n793,1846.3\n793.5,1841.4\n794,1836.6\n794.5,1831.7\n795,1826.8\n795.5,1822\n796,1817.1\n796.5,1812.3\n797,1807.4\n797.5,1802.6\n798,1797.7\n798.5,1792.9\n799,1788.1\n799.5,1783.3\n800,1778.4\n800.5,1773.6\n801,1768.8\n801.5,1764\n802,1759.2\n802.5,1754.5\n803,1749.7\n803.5,1744.9\n804,1740.2\n804.5,1735.4\n805,1730.7\n805.5,1725.9\n806,1721.2\n806.5,1716.5\n807,1711.8\n807.5,1707.1\n808,1702.4\n808.5,1697.7\n809,1693\n809.5,1688.3\n810,1683.7\n810.5,1679\n811,1674.4\n811.5,1669.8\n812,1665.2\n812.5,1660.6\n813,1656\n813.5,1651.4\n814,1646.9\n814.5,1642.3\n815,1637.8\n815.5,1633.3\n816,1628.7\n816.5,1624.2\n817,1619.8\n817.5,1615.3\n818,1610.8\n818.5,1606.4\n819,1602\n819.5,1597.5\n820,1593.1\n820.5,2788.8\n821,2784.4\n821.5,2780\n822,2775.7\n822.5,2771.4\n823,2767.1\n823.5,2762.8\n824,2758.5\n824.5,2754.2\n825,2750\n825.5,2745.8\n826,2741.6\n826.5,2737.4\n827,2733.2\n827.5,2729.1\n828,2724.9\n828.5,2720.8\n829,2716.7\n829.5,2712.6\n830,2708.6\n830.5,2704.5\n831,2700.5\n831.5,2696.5\n832,2692.5\n832.5,2688.6\n833,2684.6\n833.5,2680.7\n834,2676.8\n834.5,2672.9\n835,2669\n835.5,2665.2\n836,2661.4\n836.5,2657.6\n837,2653.8\n837.5,2650\n838,2646.3\n838.5,2642.6\n839,2638.9\n839.5,2635.3\n840,1431.6\n840.5,1428\n841,1424.4\n841.5,1420.8\n842,1417.3\n842.5,1413.7\n843,1410.2\n843.5,1406.8\n844,1403.3\n844.5,1399.9\n845,1396.5\n845.5,1393.1\n846,1389.7\n846.5,1386.4\n847,1383.1\n847.5,1379.8\n848,1376.5\n848.5,1373.3\n849,1370.1\n849.5,1366.9\n850,1363.8\n850.5,1360.6\n851,1357.5\n851.5,1354.5\n852,1351.4\n852.5,1348.4\n853,1345.4\n853.5,1342.4\n854,1339.5\n854.5,1336.6\n855,1333.7\n855.5,1330.8\n856,1328\n856.5,1325.2\n857,1322.4\n857.5,1319.7\n858,1317\n858.5,1314.3\n859,1311.6\n859.5,1309\n860,1306.4\n860.5,1303.8\n861,1301.2\n861.5,1298.7\n862,1296.2\n862.5,1293.8\n863,1291.4\n863.5,1289\n864,1286.6\n864.5,1284.2\n865,1281.9\n865.5,1279.7\n866,1277.4\n866.5,1275.2\n867,1273\n867.5,1270.8\n868,1268.7\n868.5,1266.6\n869,1264.6\n869.5,1262.5\n870,1260.5\n870.5,1258.5\n871,1256.6\n871.5,1254.7\n872,1252.8\n872.5,1251\n873,1249.2\n873.5,1247.4\n874,1245.6\n874.5,1243.9\n875,1242.2\n875.5,1240.6\n876,1238.9\n876.5,1237.3\n877,1235.8\n877.5,1234.3\n878,1232.8\n878.5,1231.3\n879,1229.9\n879.5,1228.5\n880,1227.1\n880.5,1225.8\n881,1224.5\n881.5,1223.2\n882,1222\n882.5,1220.8\n883,1219.6\n883.5,1218.5\n884,1217.4\n884.5,1216.3\n885,1215.3\n885.5,1214.3\n886,1213.3\n886.5,1212.4\n887,1211.5\n887.5,1210.6\n888,1209.8\n888.5,1209\n889,1208.2\n889.5,1207.5\n890,1206.8\n890.5,1206.1\n891,1205.5\n891.5,1204.9\n892,1204.4\n892.5,1203.8\n893,1203.3\n893.5,1202.9\n894,1202.5\n894.5,1202.1\n895,1201.7\n895.5,1201.4\n896,1201.1\n896.5,1200.8\n897,1200.6\n897.5,1200.4\n898,1200.3\n898.5,1200.2\n899,1200.1\n899.5,1200\n"}}</script>
+<script>
+(() => {
+'use strict';
+const E = self.BaroEngine, F = self.BaroFormat, P = self.BaroProject;
+const LIB = JSON.parse(document.getElementById('lib').textContent);
+const $ = id => document.getElementById(id);
+const store = { get(k, d) { try { const v = localStorage.getItem('rcb.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('rcb.' + k, JSON.stringify(v)); } catch (e) { } } };
+let downloads = null;
+let profiles = Object.assign({}, LIB.profiles), circuits = Object.assign({}, LIB.circuits);
+let sim = null, model = null, running = false, speed = '1', carry = 0, lastTs = 0, finished = false, report = null, lagging = false, profile = null;
+
+// ---------- settings ----------
+function fillSelect(sel, entries, value) { sel.innerHTML = ''; for (const [v, label] of entries) { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); } if (value && entries.some(e => e[0] === value)) sel.value = value; }
+function refreshLists() {
+  fillSelect($('profileSel'), Object.keys(profiles).sort().map(k => [k, k]), store.get('profile', null) || $('profileSel').value);
+  const groups = [['vanilla', 'Vanilla automatic control (baseline)']];
+  for (const k of Object.keys(circuits).sort()) groups.push([k, (circuits[k].group ? circuits[k].group + ': ' : '') + k]);
+  fillSelect($('circSel'), groups, store.get('circuit', null) || 'example_feedforward');
+}
+function config() {
+  return {
+    reactorMaxKW: Number($('maxKW').value) || 5000, rods: Number($('rods').value), fuelType: $('fuelType').value, start: $('start').value,
+    linkMode: $('linkMode').value, seed: 12345,
+    batteries: { enabled: $('battOn').checked, count: Math.max(1, Number($('battN').value) || 1), type: $('battType').value, startCharge: (Number($('battStart').value) || 0) / 100 },
+  };
+}
+function saveSettings() { const c = config(); store.set('settings', { ...c, maxAuto: $('maxAuto').checked }); store.set('profile', $('profileSel').value); store.set('circuit', $('circSel').value); }
+function loadSettings() {
+  const s = store.get('settings', null); if (!s) return;
+  $('maxKW').value = s.reactorMaxKW; $('maxAuto').checked = s.maxAuto !== false; $('rods').value = s.rods; $('fuelType').value = s.fuelType; $('start').value = s.start; $('linkMode').value = s.linkMode;
+  $('battOn').checked = !!s.batteries.enabled; $('battN').value = s.batteries.count; $('battType').value = s.batteries.type; $('battStart').value = Math.round(s.batteries.startCharge * 100);
+}
+function selectProfile() {
+  const key = $('profileSel').value; if (!key) return;
+  profile = E.parseProfile(profiles[key], key);
+  const d = profile.points.map(p => p.demand);
+  $('profileInfo').textContent = `${profile.meta.sub || 'unknown sub'} · ${fmtClock(profile.duration)} · demand ${Math.round(Math.min(...d))}–${Math.round(Math.max(...d))} kW · max output ${profile.reactorMaxKW ? profile.reactorMaxKW + ' kW' : 'not saved'}`;
+  if ($('maxAuto').checked && profile.reactorMaxKW) $('maxKW').value = profile.reactorMaxKW;
+  if (!$('maxKW').value) $('maxKW').value = 5000;
+  if (profile.meta.fuel_rods && Number(profile.meta.fuel_rods) >= 1 && Number(profile.meta.fuel_rods) <= 4) $('rods').value = profile.meta.fuel_rods;
+}
+function selectCircuit() {
+  const key = $('circSel').value;
+  if (key === 'vanilla') { $('circText').value = '# Vanilla automatic control: no circuit box, the reactor\'s own AutoTemp runs it.\n'; return; }
+  const c = circuits[key];
+  try { $('circText').value = c.circ != null ? c.circ : F.toCirc(P.loadModel(c.main, c.mainName, c.battery, c.pins)); }
+  catch (e) { $('circText').value = ''; status('Could not read circuit: ' + e.message, true); }
+}
+
+// ---------- sim lifecycle ----------
+function build() {
+  running = false; finished = false; report = null; carry = 0; setRunLabel();
+  saveSettings();
+  const cfg = config(); const key = $('circSel').value;
+  cfg.profile = profile; cfg.vanilla = key === 'vanilla';
+  try {
+    model = cfg.vanilla ? { name: 'vanilla_autotemp', boxes: [], links: [] } : F.parseCirc($('circText').value);
+    if (!cfg.vanilla && !model.boxes.length) throw new Error('the circuit has no components');
+    cfg.circuitName = model.name;
+    sim = new E.Sim(P.substitute(model, cfg.reactorMaxKW), cfg);
+    $('circMsg').textContent = model.boxes.length ? `${model.boxes.map(b => `${b.name}: ${b.components.length} components, ${b.wires.length} wires`).join(' · ')}` : '';
+    const w = sim.warnings.length ? ' Warnings: ' + sim.warnings.join('; ') : '';
+    status(`Ready: ${model.name} on ${profile.name} with a ${cfg.reactorMaxKW} kW reactor.${w}`, !!w);
+    $('log').textContent = 'Running produces the log here.';
+  } catch (e) { sim = null; status('Circuit error: ' + e.message, true); }
+  renderFiles(); render(); draw();
+}
+function status(t, err) { const s = $('status'); s.textContent = t; s.className = 'msg' + (err ? ' err' : ''); }
+function setRunLabel() { $('btnRun').textContent = running ? 'Pause' : (sim && sim.time > 0 && !finished ? 'Resume' : 'Start'); }
+function loop(ts) {
+  if (!running || !sim) return;
+  const dt = Math.min((ts - lastTs) / 1000, 0.25); lastTs = ts;
+  const t0 = performance.now(); let n = 0;
+  if (speed === 'max') { while (!sim.done && performance.now() - t0 < 14) { for (let i = 0; i < 200 && !sim.done; i++) { sim.step(); n++; } } lagging = false; }
+  else {
+    carry += Number(speed) * dt * 60;
+    while (carry >= 1 && !sim.done) { sim.step(); carry--; n++; if ((n & 63) === 0 && performance.now() - t0 > 14) break; }
+    lagging = carry > Number(speed) * 6; if (lagging) carry = 0;
+  }
+  if (sim.done) finish();
+  render(); draw();
+  if (running) requestAnimationFrame(loop);
+}
+function finish() {
+  running = false; finished = true; setRunLabel();
+  report = sim.metrics.report();
+  $('log').textContent = P.fmtReport(report);
+  status(`Finished: reliability ${report.score_reliability}/100, ${report.kwh_per_rod ?? '–'} kWh per fuel rod, ${report.unmet_pct}% demand unmet.`);
+  showTab('log');
+}
+
+// ---------- readouts ----------
+const fmtClock = t => { t = Math.max(0, t); const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; };
+function setTile(id, v, sid, s, cls) { const el = $(id); el.textContent = v; el.className = 'v ' + (cls || ''); if (sid) $(sid).innerHTML = s; }
+function render() {
+  if (!sim) return;
+  const n = sim.snapshot(), R = sim.reactor;
+  $('clock').textContent = `${fmtClock(n.t)} / ${fmtClock(sim.profile.duration)}` + (lagging ? ' · behind' : '');
+  $('prog').style.width = Math.min(100, n.t / sim.profile.duration * 100) + '%';
+  const v = n.voltage, vc = v < 0.5 ? 'bad' : v < 0.9 || v > 1.5 ? 'warn' : v > 1.1 ? 'warn' : 'ok';
+  setTile('tV', v.toFixed(2), 'sV', `<span class="pill ${vc}">${v < 0.5 ? 'BLACKOUT' : v < 0.9 ? 'BROWNOUT' : v > 2 ? 'OVERLOAD' : v > 1.1 ? 'OVERVOLT' : 'STABLE'}</span>`, vc);
+  setTile('tP', `${Math.round(n.power)}`, 'sP', `of ${Math.round(n.load)} kW load · demand ${Math.round(n.demand)}`);
+  const tc = n.temp > R.allTemp[1] ? 'bad' : n.temp > R.optTemp[1] || n.temp < R.optTemp[0] ? 'warn' : 'ok';
+  setTile('tT', n.temp.toFixed(1), 'sT', R.cond <= 0 ? '<span class="pill bad">MELTDOWN</span>' : `optimal ${R.optTemp[0]}–${R.optTemp[1]} · meltdown timer ${R.melt.toFixed(0)}s`, tc);
+  setTile('tF', `${n.fission.toFixed(1)}%`, 'sF', `→ ${n.tf.toFixed(1)}% ${n.fCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
+  setTile('tU', `${n.turbine.toFixed(1)}%`, 'sU', `→ ${n.tt.toFixed(1)}% · ideal ${n.cto.toFixed(1)}% ${n.tCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
+  setTile('tFu', `${n.fuel.toFixed(1)}%`, 'sFu', `${R.rods.length} rod${R.rods.length > 1 ? 's' : ''} · used ${sim.metrics.fuel.toFixed(1)}`);
+  if (sim.batteries.length) setTile('tB', `${n.batt.toFixed(1)}%`, 'sB', `in ${Math.round(n.battIn)} · out ${Math.round(n.battOut)} kW`);
+  else setTile('tB', 'off', 'sB', 'enable in settings');
+}
+
+// ---------- chart ----------
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function draw() {
+  const cv = $('chart'), ctx = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight; if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const tl = sim ? sim.metrics.timeline : [], dur = sim ? sim.profile.duration : 600;
+  const L = 52, Rr = 12, gap = 16, top = 6, bottom = 22, ph = (H - top - bottom - gap * 2) / 3;
+  const ink = css('--muted'), line = css('--line'), font = '11px ' + css('--f-mono');
+  const x = t => L + (W - L - Rr) * t / dur;
+  const maxKW = sim ? Math.max(sim.reactor.maxPower, ...tl.map(p => Math.max(p.demand, p.power))) : 5000;
+  const panels = [
+    { y0: top, name: 'kW', min: 0, max: Math.ceil(maxKW / 1000) * 1000, ticks: 4, series: [['demand', '--c-demand'], ['power', '--c-supply'], ['battOut', '--c-batt']] },
+    { y0: top + ph + gap, name: 'V', min: 0, max: 2, ticks: 4, band: [0.9, 1.1], series: [['voltage', '--c-volt']] },
+    { y0: top + 2 * (ph + gap), name: '%', min: 0, max: 100, ticks: 4, band: sim ? [sim.reactor.optTemp[0], sim.reactor.optTemp[1]] : [40, 60], series: [['temp', '--c-temp'], ['fission', '--c-fission'], ['turbine', '--c-turbine']] },
+  ];
+  ctx.font = font; ctx.textBaseline = 'middle';
+  for (const p of panels) {
+    const y = v => p.y0 + ph - (Math.min(Math.max(v, p.min), p.max) - p.min) / (p.max - p.min) * ph;
+    if (p.band) { ctx.fillStyle = line; ctx.globalAlpha = .35; ctx.fillRect(L, y(p.band[1]), W - L - Rr, y(p.band[0]) - y(p.band[1])); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.fillStyle = ink; ctx.textAlign = 'right';
+    for (let i = 0; i <= p.ticks; i++) { const v = p.min + (p.max - p.min) * i / p.ticks, yy = Math.round(y(v)) + .5; ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(W - Rr, yy); ctx.stroke(); ctx.fillText(p.name === 'kW' ? (v >= 1000 ? (v / 1000) + 'k' : v) : (p.name === 'V' ? v.toFixed(1) : v), L - 6, yy); }
+    ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
+    for (const [key, col] of p.series) {
+      if (!tl.length || tl[0][key] == null) continue;
+      ctx.strokeStyle = css(col); ctx.beginPath();
+      tl.forEach((pt, i) => { const xx = x(pt.t), yy = y(pt[key]); if (i) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); });
+      ctx.stroke();
+    }
+  }
+  ctx.fillStyle = ink; ctx.textAlign = 'center';
+  const step = dur > 1800 ? 300 : dur > 600 ? 120 : 60;
+  for (let t = 0; t <= dur; t += step) ctx.fillText(fmtClock(t), x(t), H - 9);
+  if (sim && sim.time > 0) { ctx.strokeStyle = css('--accent'); ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x(sim.time) + .5, top); ctx.lineTo(x(sim.time) + .5, H - bottom); ctx.stroke(); ctx.setLineDash([]); }
+}
+
+// ---------- files / downloads ----------
+async function save(filename, data) {
+  if (!downloads) { status('Saving files is not available in this view. Use Copy instead.', true); return; }
+  try { await downloads.save({ filename, data }); } catch (e) { if (e && e.code !== 'declined') status('Could not save ' + filename + ': ' + (e.message || e.code), true); }
+}
+async function copy(text, what) { try { await navigator.clipboard.writeText(text); status(`Copied ${what}.`); } catch (e) { status('Copy was blocked here. Select the text and copy it manually.', true); } }
+function renderFiles() {
+  const box = $('fileCards'); box.innerHTML = '';
+  if (!model || !model.boxes.length) { box.innerHTML = '<p class="hint">The vanilla baseline has no circuit files.</p>'; return; }
+  let files; try { files = P.exportBoxes(model, config().reactorMaxKW); } catch (e) { box.textContent = e.message; return; }
+  for (const f of files) {
+    const card = document.createElement('div'); card.className = 'filecard';
+    const h = document.createElement('h3'); h.textContent = f.filename;
+    const pre = document.createElement('pre'); pre.textContent = f.text.split('\n').filter(l => /<Component|<ConnectionLabelOverride/.test(l)).map(l => l.trim().replace(/"?<<<STRING(START|END)>>>"?/g, '"')).join('\n');
+    const bar = document.createElement('div'); bar.className = 'bar';
+    const b1 = document.createElement('button'); b1.textContent = 'Save'; b1.dataset.dl = ''; b1.onclick = () => save(f.filename, f.text);
+    const b2 = document.createElement('button'); b2.textContent = 'Copy'; b2.onclick = () => copy(f.text, f.filename);
+    bar.append(b1, b2); card.append(h, pre, bar); box.appendChild(card);
+  }
+  syncDl();
+}
+function syncDl() { document.querySelectorAll('[data-dl]').forEach(b => b.hidden = !downloads); }
+function showTab(name) { document.querySelectorAll('[role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name)); document.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== name); }
+
+// ---------- events ----------
+$('btnRun').onclick = () => { if (!sim) build(); if (!sim) return; if (finished) build(); running = !running; setRunLabel(); if (running) { lastTs = performance.now(); requestAnimationFrame(loop); } };
+$('btnReset').onclick = build;
+$('btnApply').onclick = build;
+$('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return; speed = b.dataset.s; carry = 0; document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x === b)); store.set('speed', speed); };
+document.querySelector('.tabs').onclick = e => { const b = e.target.closest('[role=tab]'); if (b) showTab(b.dataset.tab); };
+$('profileSel').onchange = () => { selectProfile(); build(); };
+$('circSel').onchange = () => { selectCircuit(); build(); };
+for (const id of ['maxKW', 'rods', 'fuelType', 'start', 'battOn', 'battN', 'battType', 'battStart', 'linkMode']) $(id).onchange = () => { if (id === 'maxKW') $('maxAuto').checked = false; build(); };
+$('maxAuto').onchange = () => { selectProfile(); build(); };
+$('profileFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const key = f.name.replace(/\.(csv|txt)$/i, ''); profiles[key] = await f.text(); refreshLists(); $('profileSel').value = key; selectProfile(); build(); e.target.value = '';
+};
+$('circFile').onchange = async e => {
+  const fs = [...e.target.files]; if (!fs.length) return;
+  const texts = await Promise.all(fs.map(f => f.text()));
+  const circ = fs.findIndex(f => /\.circ$/i.test(f.name));
+  let key, entry;
+  if (circ >= 0) { key = fs[circ].name.replace(/\.circ$/i, ''); entry = { circ: texts[circ], group: 'Loaded' }; }
+  else {
+    const bi = fs.findIndex(f => /_battery\.txt$/i.test(f.name)), ri = fs.findIndex((f, i) => i !== bi);
+    key = fs[ri].name.replace(/(_reactor)?\.txt$/i, ''); entry = { main: texts[ri], mainName: fs[ri].name, battery: bi >= 0 ? texts[bi] : null, group: 'Loaded' };
+    if (bi >= 0) $('battOn').checked = true;
+  }
+  circuits[key] = entry; refreshLists(); $('circSel').value = key; selectCircuit(); build(); e.target.value = '';
+};
+$('btnSaveLog').onclick = () => report && save(`${report.circuit}__${report.profile}.log.txt`, P.fmtReport(report));
+$('btnSaveTl').onclick = () => sim && save(`${sim.cfg.circuitName}__${sim.profile.name}.timeline.csv`, P.timelineCsv(sim.metrics.timeline));
+$('btnCopyLog').onclick = () => copy($('log').textContent, 'the log');
+$('btnSaveCirc').onclick = () => save(`${(model && model.name) || 'circuit'}.circ.txt`, $('circText').value);
+$('btnCfg').onclick = () => { const c = config(); save('sim.config.json', JSON.stringify(c, null, 2)); };
+window.addEventListener('resize', draw);
+if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+
+// ---------- boot ----------
+loadSettings(); refreshLists(); selectProfile(); selectCircuit();
+const sp = store.get('speed', '1'); document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x.dataset.s === sp)); speed = sp;
+build();
+syncDl();
+Promise.resolve(window.claude && window.claude.use ? window.claude.use('downloads') : null).then(d => { downloads = d; syncDl(); }).catch(() => { });
+})();
+</script>

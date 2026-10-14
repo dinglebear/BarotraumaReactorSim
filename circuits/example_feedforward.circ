@@ -1,0 +1,22 @@
+# Example: simple feed-forward auto reactor (starting point, not tuned).
+# turbine% = load / maxKW * 100 ;  fission% = (50 + turbine) * 50 / fuel  (aims for temperature 50)
+name example_feedforward
+box reactor
+c tdiv div                    # load / max
+c tmax mem Value=$MAX         # $MAX = reactor max output kW (filled in automatically)
+c tpct mul                    # * 100
+c k100 mem Value=100
+c fadd add                    # turbine + 50
+c k50 mem Value=50
+c fmul mul                    # * 50
+c fdiv div ClampMin=0 ClampMax=100   # / fuel
+w in1 tdiv.1
+w tmax.out tdiv.2
+w tdiv.out tpct.1
+w k100.out tpct.2
+w tpct.out out2 fadd.1
+w k50.out fadd.2 fmul.2
+w fadd.out fmul.1
+w fmul.out fdiv.1
+w in4 fdiv.2
+w fdiv.out out1

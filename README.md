@@ -3,7 +3,7 @@
 A playground for testing Barotrauma auto-reactor circuits outside the game. It simulates the reactor, the power grid, batteries, junction boxes and circuit boxes at the game's 60 ticks/s. The math is taken from the game source, including every limit the game puts on signal-controlled reactors. The reactor's automatic control is off, so the circuit box runs it.
 
 - **AIs:** read [`AIHowTo.md`](AIHowTo.md). It covers how to write, run and read the logs for circuits.
-- **Master page:** `web/index.html` (open in a browser, or use the published artifact).
+- **Master page:** `web/index.html` (open in a browser), published at https://claude.ai/artifact/H7Y1hxZhsLgqyyr8Gjuyw5.
   - Settings: batteries on/off, reactor max output, test file and circuit.
   - Live charts at x1/x5/x10/x25/Max speed.
   - Save the in-game `.txt` files and the logs.

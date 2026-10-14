@@ -2465,15 +2465,15 @@ const clone = o => JSON.parse(JSON.stringify(o));
 const edBox = () => ED.model && ED.model.boxes.find(b => b.name === ED.box);
 const defOf = c => C.byItem(c.item);
 const pinShort = p => p.replace(/^signal_/, '');
-function edOpenModel(m, readonly) { // show any model, e.g. a circuit box from the sub (read only)
-  ED.model = clone(m); for (const b of ED.model.boxes) F.autoLayout(b);
+function edOpenModel(m, readonly, pinText) { // show any model, e.g. a circuit box from the sub (read only)
+  ED.model = clone(m); ED.pinText = pinText || null; for (const b of ED.model.boxes) F.autoLayout(b);
   ED.box = ED.model.boxes[0] ? ED.model.boxes[0].name : 'reactor'; ED.readonly = !!readonly; ED.dirty = false; ED.sel = ED.pend = null; ED.view = null;
   if (readonly) $('edEdit').checked = false;
   edSetBoxButtons(); edRender(); edMsg(readonly ? 'Viewing a circuit box from the sub (read only). Live values show while the round runs.' : '');
 }
 function edSync(force) { // take the circuit under test into the editor unless the user has unsaved edits
   if (ED.readonly && !force && mode === 'sub') { edRender(); return; }
-  ED.readonly = false;
+  ED.readonly = false; ED.pinText = null;
   if (ED.dirty && !force) { edRender(); return; }
   ED.model = clone(model && model.boxes.length ? model : { name: 'my_circuit', boxes: [], links: [], meta: {} });
   for (const b of ED.model.boxes) F.autoLayout(b);
@@ -2482,7 +2482,7 @@ function edSync(force) { // take the circuit under test into the editor unless t
   edSetBoxButtons(); ED.view = null; edRender();
 }
 function edSetBoxButtons() { document.querySelectorAll('#edBox button').forEach(x => x.setAttribute('aria-pressed', x.dataset.b === ED.box)); }
-function edMsg(t) { $('edMsg').textContent = t || (ED.dirty ? 'Unsaved changes: press Apply & test.' : ''); }
+function edMsg(t) { $('edMsg').textContent = t || (ED.readonly ? 'Viewing a circuit box from the sub (read only). Live values show while the round runs.' : ED.dirty ? 'Unsaved changes: press Apply & test.' : ''); }
 // geometry, as in the game's circuit box (CircuitBoxNode/CircuitBoxSizes): a saved position is the node's CENTRE, y points up,
 // body = 64 padding + 32 per pin row, a 48-high header sits on top, pins are 32 apart around the centre
 function compSize(c) { const d = defOf(c); const n = Math.max(d ? d.ins.length : 1, d ? d.outs.length : 1); return [CW, 64 + n * ROW]; }
@@ -2507,7 +2507,9 @@ function liveConn(b, end) {
   return cn ? cn.last : undefined;
 }
 function boxPinLabel(b, pin) { // what a box pin is wired to
-  const sp = F.shortPin(pin), pins = b.pins || E.DEFAULT_PINS[b.name] || {};
+  const sp = F.shortPin(pin), lab0 = (pin.includes('_in') ? b.inLabels : b.outLabels)[pin];
+  if (ED.pinText) return [lab0, ED.pinText[sp]].filter(Boolean).join(' → ') || ''; // a sub's own box: its label and what it is wired to
+  const pins = b.pins || E.DEFAULT_PINS[b.name] || {};
   const link = (ED.model.links || []).find(l => l.from === b.name + '.' + sp || l.to === b.name + '.' + sp);
   if (link) return 'link ' + (link.from === b.name + '.' + sp ? '→ ' + link.to : '← ' + link.from);
   return pins[sp] && pins[sp] !== 'none' ? pins[sp] : ((pin.includes('_in') ? b.inLabels : b.outLabels)[pin] || '');
@@ -2576,7 +2578,7 @@ const editing = () => $('edEdit').checked && !ED.readonly;
 function edInspector() {
   const el = $('edInsp'), b = edBox(), s = ED.sel, ro = !editing();
   if (!b || !s) {
-    el.innerHTML = `<h3>${ED.box === 'battery' ? 'Battery box' : 'Reactor box'}</h3><p class="hint">Click a component, wire or pin to see it. Numbers in green are the live signals while the test runs.</p>`
+    el.innerHTML = `<h3>${ED.readonly ? 'Circuit box from the sub' : ED.box === 'battery' ? 'Battery box' : 'Reactor box'}</h3><p class="hint">Click a component, wire or pin to see it. Numbers in green are the live signals while the test runs.</p>`
       + `<p class="hint"><b>To build:</b> tick <b>Edit</b>. Add components from the list, drag them by the title bar, then click an output pin (right side) and an input pin (left side) to wire them. Click a box pin on the INPUTS / OUTPUTS panels to choose what it connects to. Delete removes the selection. <b>Apply &amp; test</b> runs it.</p>`
       + `<p class="hint">Wire to <code>nav.velocity_x_out</code> (nav terminal / sonar monitor) to predict engine spikes. A full battery can't absorb anything: keep it near 80 %.</p>`;
     return;
@@ -2739,7 +2741,7 @@ function buildShip(cfg) {
   return s;
 }
 // geometry: world (x right, y up) -> screen (y down)
-const svRect = r => ({ x: r[0], y: -r[1], w: Math.max(r[2], 18), h: Math.max(r[3], 18) });
+const svRect = r => ({ x: r[0], y: -r[1], w: r[2], h: r[3] });
 function svDev(id) { return sim && sim.byId ? sim.byId.get(id) : null; }
 function svGridOf(itemId, conn) { return sim && sim.connGrid ? sim.connGrid.get(itemId + '|' + conn) : null; }
 function svGridCol(g) { if (!g || !sim.grids) return '#888'; const i = sim.grids.indexOf(g); return GRID_COL[(i < 0 ? 0 : i) % GRID_COL.length]; }
@@ -2768,7 +2770,7 @@ function svRender() {
   // devices
   const showL = $('svLabels').checked;
   for (const d of [...sim.byId.values()]) {
-    const it = d.it, r = svRect(it.rect), kind = d.kind || 'reactor', col = KIND_COL[kind] || KIND_COL.other, sel = SV.sel && SV.sel.id === it.id;
+    const it = d.it, r0 = svRect(it.rect), mn = 12 * k, r = { x: r0.x + r0.w / 2 - Math.max(r0.w, mn) / 2, y: r0.y + r0.h / 2 - Math.max(r0.h, mn) / 2, w: Math.max(r0.w, mn), h: Math.max(r0.h, mn) }, kind = d.kind || 'reactor', col = KIND_COL[kind] || KIND_COL.other, sel = SV.sel && SV.sel.id === it.id;
     const kw = d.batt ? d.batt.cpc : d.cpc || 0, off = d.voltage !== undefined && d.voltage < 0.5 && kind !== 'logic' && kind !== 'circuitbox' && kind !== 'reactor' && kind !== 'battery' && kind !== 'supercap';
     const over = d.overloaded;
     o.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${3 * k}" fill="${col}" fill-opacity="${off ? .25 : .8}" stroke="${over ? '#ff2a1a' : sel ? 'var(--ink)' : 'none'}" stroke-width="${(over ? 4 : 3) * k}" data-k="dev" data-id="${it.id}"/>`);
@@ -2815,7 +2817,7 @@ function svInspector() {
     return `${esc(me.conn)} ↔ ${esc(od ? od.identifier : '?')}#${other.item}.${esc(other.conn)}${cn && cn.last !== undefined ? ` <b>${esc(String(cn.last).slice(0, 14))}</b>` : ''}`;
   });
   let h = `<h3>${esc(it.identifier)} #${it.id}</h3><p class="hint">${esc(d.kind || 'reactor')}${d.grid ? ` · on a grid at ${d.grid.voltage.toFixed(2)} V` : ''}</p>`;
-  h += `<label>Power<div class="val">${d.kind === 'reactor' ? 'gives ' + Math.round(-R.cpc) : Math.round(kw)} kW${d.voltage !== undefined && d.kind !== 'reactor' ? ' · ' + d.voltage.toFixed(2) + ' V' : ''}</div></label>`;
+  if (d.kind !== 'circuitbox' && d.kind !== 'logic') h += `<label>Power<div class="val">${d.kind === 'reactor' ? 'gives ' + Math.round(-R.cpc) : Math.round(kw)} kW${d.voltage !== undefined && d.kind !== 'reactor' ? ' · ' + d.voltage.toFixed(2) + ' V' : ''}</div></label>`;
   const facts = [];
   if (d.batt) facts.push(`charge ${Math.round(d.batt.charge / d.batt.capacity * 100)} % of ${d.batt.capacity} kW·min · recharge ${Math.round(d.batt.rate)} of ${d.batt.maxRecharge} kW · giving ${Math.round(d.batt.out)} kW${d.batt.disabled ? ' · output disabled' : ''}`);
   if (d.kind === 'relay') facts.push(st.on ? 'closed (passes power)' : 'open');
@@ -2830,7 +2832,10 @@ function svInspector() {
   if (d.kind === 'relay') acts.push(['Toggle relay', () => { st.on = !st.on; }]);
   if (d.kind === 'pump') acts.push([st.active ? 'Turn pump off' : 'Turn pump on', () => { st.active = !st.active; }]);
   if (d.press) acts.push(['Press', () => d.press()]);
-  if (d.kind === 'circuitbox') acts.push(['Open in the Circuit box tab', () => { edOpenModel({ name: it.identifier + '_' + it.id, boxes: [Object.assign({}, d.box, { name: 'reactor' })], links: [], meta: {} }, true); showTab('box'); }]);
+  if (d.kind === 'circuitbox') acts.push(['Open in the Circuit box tab', () => {
+    const pinText = {}; // what each box pin is wired to on the sub
+    for (const w of sim.ship.wires) { const me = w.from.item === it.id ? w.from : w.to.item === it.id ? w.to : null; if (!me) continue; const o = me === w.from ? w.to : w.from, od = sim.ship.items.find(i => i.id === o.item); const sp = F.shortPin(me.conn); pinText[sp] = (pinText[sp] ? pinText[sp] + ', ' : '') + `${od ? od.identifier : '?'}#${o.item}.${o.conn}`; }
+    edOpenModel({ name: it.identifier + '_' + it.id, boxes: [d.box], links: [], meta: {} }, true, pinText); showTab('box'); }]);
   if (it.comps && it.comps.LightComponent && d.kind !== 'reactor') acts.push(['Toggle light', () => d.sim.recv('toggle', { v: '1', steps: 0, src: null })]);
   h += acts.map((a, i) => `<button data-act="${i}">${esc(a[0])}</button>`).join(' ');
   if (conns.length) h += `<label>Wires<div class="val">${conns.join('<br>')}</div></label>`;

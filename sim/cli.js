@@ -2,7 +2,7 @@
 // Usage: see AIHowTo.md.  node sim/cli.js <command> [args]
 'use strict';
 const fs = require('fs'), path = require('path');
-const F = require('./format'), E = require('./engine'), P = require('./project');
+const F = require('./format'), E = require('./engine'), P = require('./project'), A = require('./autopins');
 const ROOT = path.resolve(__dirname, '..');
 const rel = p => path.relative(ROOT, p) || '.';
 const read = p => fs.readFileSync(p, 'utf8');
@@ -35,6 +35,26 @@ function loadModel(file, batteryFile) {
   const pinsFile = [file.replace(/\.(txt|circ)$/, '.pins'), file.replace(/(_reactor)?\.(txt|circ)$/, '.pins')].find(p => fs.existsSync(p)) || '';
   return P.loadModel(read(file), path.basename(file), batteryFile ? read(batteryFile) : null, fs.existsSync(pinsFile) ? read(pinsFile) : null);
 }
+// In-game circuits (.txt) often don't say which pin goes where. Check the pins (.pins file, labels or default harness) on a
+// short load-step test; if the reactor doesn't run well, move pins around by trial and error and save what works to <name>.pins.
+const pinMemo = {};
+function autoPins(model, file, cfg, a) {
+  if (!file || !file.endsWith('.txt') || a['no-autopins']) return null;
+  const key = file + '|' + cfg.reactorMaxKW + '|' + !!a.force;
+  let res = pinMemo[key];
+  if (!res) {
+    res = pinMemo[key] = A.solve(model, cfg, { guess: E.guessPins, force: !!a.force });
+    if ((res.initialWorks && !a.force) || res.cost >= res.initialCost - 0.01) return res.saved = null, null;
+    const pf = file.replace(/\.txt$/, '.pins'), old = fs.existsSync(pf) ? read(pf) : '';
+    if (old) fs.writeFileSync(pf + '.bak', old);
+    const keep = old.split(/\r?\n/).filter(l => /^\s*prop\s/.test(l)).join('\n');
+    fs.writeFileSync(pf, A.pinsText(res, old ? `(old file: ${path.basename(pf)}.bak)` : '') + (keep ? keep + '\n' : ''));
+    res.saved = rel(pf);
+  }
+  if (!res.saved) return null;
+  for (const b of model.boxes) if (res.pins[b.name]) b.pins = res.pins[b.name];
+  return `pins found by trial and error (${res.log[res.log.length - 1]}): ${res.changed.join(', ') || 'no change'}; saved to ${res.saved}`;
+}
 function exportTxt(model, file, vals) {
   if (!file.endsWith('.circ')) return [];
   return P.exportBoxes(model, vals).map(o => { const p = path.join(path.dirname(file), o.filename); fs.writeFileSync(p, o.text); return rel(p); });
@@ -48,9 +68,12 @@ function runOne(circuitFile, profileFile, a, quiet) {
   const maxKW = cfg.reactorMaxKW || prof.reactorMaxKW || 5000;
   Object.assign(cfg, { reactorMaxKW: maxKW, profile: prof, circuitName: model.name });
   if (!circuitFile) cfg.vanilla = true;
+  const pinNote = autoPins(model, circuitFile, cfg, a);
+  if (pinNote && !quiet) console.log(pinNote);
   const vals = P.placeholders(cfg);
   const sim = new E.Sim(P.substitute(model, vals), cfg);
   const r = sim.runToEnd();
+  if (pinNote) r.warnings = [pinNote, ...(r.warnings || [])];
   if (circuitFile && !quiet) r.exported = exportTxt(model, circuitFile, vals).join(',');
   const name = `${model.name}__${prof.name}`;
   fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
@@ -90,6 +113,15 @@ const COMMANDS = {
     const f = resolve(a._[0], CIRC_DIRS), m = loadModel(f), cfg = loadConfig(a); cfg.start = 'cold';
     const s = new E.Sim(P.substitute(m, P.placeholders(cfg)), cfg);
     console.log(`ok: ${m.boxes.map(b => `${b.name}(${b.components.length} comps, ${b.wires.length} wires)`).join(' ')}` + (s.warnings.length ? '\n' + s.warnings.join('\n') : ''));
+  },
+  // autopins <circuit.txt> [--force]: find which pin goes where by trial and error, write <name>.pins
+  autopins(a) {
+    const f = resolve(a._[0], CIRC_DIRS), m = loadModel(f), cfg = loadConfig(a);
+    cfg.reactorMaxKW = cfg.reactorMaxKW || 5000;
+    const res = A.solve(m, cfg, { guess: E.guessPins, force: !!a.force });
+    console.log(res.log.join('\n') + (res.changed.length ? '\nchanges: ' + res.changed.join(', ') : ''));
+    process.stdout.write(A.pinsText(res));
+    if (a.write || !fs.existsSync(f.replace(/\.txt$/, '.pins'))) { const pf = f.replace(/\.(txt|circ)$/, '.pins'); if (fs.existsSync(pf)) fs.writeFileSync(pf + '.bak', read(pf)); fs.writeFileSync(pf, A.pinsText(res)); console.log('saved ' + rel(pf)); }
   },
   // verify <trace.csv>: replay a ReactorTrace recorded in game and show where the simulator differs
   verify(a) { const f = resolve(a._[0], ['traces', 'load_profiles']); process.stdout.write(require('./verify').verify(read(f), { from: a.from != null ? Number(a.from) : null, mode: a.physics ? 'physics' : a.autotemp ? 'autotemp' : null, debug: a.debug ? String(a.debug).split('-').map(Number) : null })); },

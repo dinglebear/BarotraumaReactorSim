@@ -60,3 +60,12 @@ for (const [name, maxRms] of [['Dugong_round001', 0.5], ['Humpback_round001', 1.
   assert(rms < maxRms, `${name}: temperature drifted from the game (rms ${rms}):\n` + out);
 }
 console.log('real-game checks passed');
+// pin finder: strip Rimuru's harness (its lever pin has no label) and it must find a working one by trial and error
+{
+  const A = require('./autopins'), P = require('./project'), E = require('./engine'), f = path.join(ROOT, 'context/reactor_circuits/rimuru_autoreactor.txt');
+  const m = P.loadModel(fs.readFileSync(f, 'utf8'), 'rimuru_autoreactor.txt'); for (const b of m.boxes) b.pins = null;
+  const res = A.solve(m, { reactorMaxKW: 3000 }, { guess: E.guessPins });
+  assert(!res.initialWorks && res.works, 'autopins did not repair Rimuru:\n' + res.log.join('\n'));
+  assert(/^const\./.test(res.pins.reactor.in9) && res.pins.reactor.out0 === 'reactor.set_turbineoutput' && res.pins.reactor.out1 === 'reactor.set_fissionrate', 'autopins found odd pins: ' + JSON.stringify(res.pins));
+  console.log('autopins check passed');
+}

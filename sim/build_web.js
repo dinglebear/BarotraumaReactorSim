@@ -4,7 +4,7 @@
 const fs = require('fs'), path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
-const sim = ['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/project.js'].map(read).join('\n;\n');
+const sim = ['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/project.js', 'sim/autopins.js'].map(read).join('\n;\n');
 const lib = { circuits: {}, profiles: {} };
 const list = d => fs.existsSync(path.join(ROOT, d)) ? fs.readdirSync(path.join(ROOT, d)).sort() : [];
 for (const f of list('circuits')) {

@@ -10,8 +10,15 @@
   const f32 = Math.fround;
 
   // ---- C# number parsing / formatting (InvariantCulture) ----
+  // signals repeat a lot (steady state), so parsing/formatting is cached; results are frozen and shared
+  const parseCache = new Map(), fmtCache = [new Map(), new Map()];
+  const remember = (m, k, v) => { if (m.size > 20000) m.clear(); m.set(k, v); return v; };
   function parseF(s) { // float.TryParse(NumberStyles.Float) -> {ok, v}
     if (s == null) return { ok: false, v: 0 };
+    const hit = parseCache.get(s); if (hit) return hit;
+    return remember(parseCache, s, Object.freeze(parseF0(s)));
+  }
+  function parseF0(s) {
     const t = String(s).trim();
     if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return { ok: true, v: f32(Number(t)) };
     const m = /^([+-]?)(Infinity|∞)$/i.exec(t); if (m) return { ok: true, v: m[1] === '-' ? -Infinity : Infinity };
@@ -22,6 +29,11 @@
   function shortest(x, maxP, round) { for (let p = 1; p <= maxP; p++) { const s = x.toPrecision(p); if (round(Number(s)) === x) return s; } return x.toPrecision(maxP); }
   // .NET Core "G" (shortest round-trip). sciAbove: 9 for float, 15 for double.
   function fmtG(x, isFloat) {
+    if (Number.isInteger(x) && Math.abs(x) < 1e7 && !Object.is(x, -0)) return String(x); // fewer than 9 digits: plain
+    const m = fmtCache[isFloat ? 1 : 0], hit = m.get(x); if (hit !== undefined) return hit;
+    return remember(m, x, fmtG0(x, isFloat));
+  }
+  function fmtG0(x, isFloat) {
     if (Number.isNaN(x)) return 'NaN';
     if (x === Infinity) return 'Infinity'; if (x === -Infinity) return '-Infinity';
     if (x === 0) return Object.is(x, -0) ? '-0' : '0';

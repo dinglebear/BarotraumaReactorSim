@@ -43,3 +43,20 @@ Patches (`circuits/rimuru_fixedmax.circ`, `circuits/rimuru_fixed.circ`):
 - Removing the calibration loop (max from `$MAX`) takes Dugong from 21.8 to 35.4 and synthetic_combat avoidable unmet from 21.7 % to 14.2 %.
 - Also moving the protection to 60 gives 37.6, level with the best community controllers.
 - Remaining weakness, shared with basic_reactor: it still follows the load with a 5 %/s turbine, so fast load swings still brown out. Battery buffering, or predicting with the nav terminal, is where the remaining gains are.
+
+## Rimuru in a real round (`load_profiles/Dugong_round002_rimuru.csv`, Dugong 3000 kW)
+Closed loop: the simulator runs its copy of Rimuru against the round's load, rods and lever. The log is v2, so it has no target columns, and the lever times below are inferred from the data. Nothing crashed: the log ends because the game was closed.
+
+| time | what happened | game | simulator |
+|---|---|---|---|
+| 0–240 s | lever 1 (efficiency), 1 rod | turbine 46.1, temp 25.8, fission 45.0 | 47.2 / 23.6 / 44.2 |
+| ~240 s | quick mode (lever 0): turbine target 100 | temp fell to 0 and output to 0 for ~10 s (252–262 s), fission frozen at 56.5 | stays ~23 °C (not reproduced) |
+| 262 s | rods 1 → 4 while in quick mode | 90 °C, voltage 2.14 for ~10 s | 95–100 °C, voltage 2.14 |
+| ~298 s | back to lever 1 | turbine 72.3 / fission 20.0 held frozen until ~345 s | settles at once |
+| 370–500 s | lever 1, 4 rods | turbine 46.5, fission 10.9, temp 23.2 | identical |
+| ~501 s → end | quick mode for the rest of the round | — | temp RMS 3.3, fission RMS 1.5 (520–1410 s) |
+
+Takeaways:
+- Quick mode with a single rod can't hold temperature: turbine 100 cools the reactor faster than one rod heats it.
+- Adding rods while in quick mode overshoots, because fission can only fall 5 %/s.
+- The two frozen stretches (fission 56.5 at 0 °C; turbine 72.3 / fission 20) look like periods where the circuit sent no signal. Record with the current logger (it writes `target_fission`, `target_turbine`, `autotemp`) to confirm.

@@ -37,7 +37,7 @@
   const GUESS = [
     [/fuel.*(%|perc|left)|rod.*(%|cond)/i, 'reactor.fuel_percentage_left', 'in'], [/fuel/i, 'reactor.fuel_out', 'in'], [/temp/i, 'reactor.temperature_out', 'in'],
     [/charge.*rate|rate/i, 'battery.charge_rate', 'in'], [/charge|batt/i, 'battery.charge_%', 'in'],
-    [/junction.*load|jb.*load/i, 'junction.load_value_out', 'in'], [/load/i, 'reactor.load_value_out', 'in'], [/power|output|out/i, 'reactor.power_value_out', 'in'],
+    [/velocity|speed|nav/i, 'nav.velocity_x_out', 'in'], [/junction.*load|jb.*load/i, 'junction.load_value_out', 'in'], [/load/i, 'reactor.load_value_out', 'in'], [/power|output|out/i, 'reactor.power_value_out', 'in'],
     [/fission/i, 'reactor.set_fissionrate', 'out'], [/turbine/i, 'reactor.set_turbineoutput', 'out'], [/shut|scram/i, 'reactor.shutdown', 'out'],
     [/rate|charge|batt/i, 'battery.set_rate', 'out'], [/disable/i, 'battery.disable_output', 'out'],
   ];
@@ -655,5 +655,5 @@
     return prof;
   }
 
-  return { Sim, parseProfile, FUEL_IDS, DEFAULT_PINS, DEVICE_OUTS, DEVICE_INS, FUEL, BATT, STEP };
+  return { Sim, parseProfile, guessPins, FUEL_IDS, DEFAULT_PINS, DEVICE_OUTS, DEVICE_INS, FUEL, BATT, STEP };
 });

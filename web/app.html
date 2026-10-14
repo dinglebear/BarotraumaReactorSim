@@ -171,7 +171,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
         <div class="tabpane" data-pane="circ" hidden>
           <p class="hint">Edit the compact circuit text and press Apply. <code>$MAX</code> (reactor kW) and <code>$BATT_KW</code> / <code>$BATT_OUT</code> / <code>$BATT_N</code> (battery totals) are filled in from the settings. Syntax is in AIHowTo.md.</p>
           <textarea id="circText" spellcheck="false" aria-label="Circuit source"></textarea>
-          <div class="bar"><button id="btnApply" class="primary">Apply &amp; reset</button><button id="btnSaveCirc" data-dl>Save .circ</button><span id="circMsg" class="hint"></span></div>
+          <div class="bar"><button id="btnApply" class="primary">Apply &amp; reset</button><button id="btnPins" title="Move the box pins around by trial and error until the reactor runs well">Find pins</button><button id="btnSaveCirc" data-dl>Save .circ</button><span id="circMsg" class="hint"></span></div>
         </div>
         <div class="tabpane" data-pane="files" hidden>
           <p class="hint">Blueprints-format files: load them in game with the Blueprints mod. Box pins are labelled with what to wire them to.</p>
@@ -187,7 +187,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
 <script>
 (() => {
 'use strict';
-const E = self.BaroEngine, F = self.BaroFormat, P = self.BaroProject;
+const E = self.BaroEngine, F = self.BaroFormat, P = self.BaroProject, A = self.BaroAutoPins;
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const $ = id => document.getElementById(id);
 const store = { get(k, d) { try { const v = localStorage.getItem('rcb.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('rcb.' + k, JSON.stringify(v)); } catch (e) { } } };
@@ -232,6 +232,34 @@ function selectCircuit() {
   const c = circuits[key];
   try { $('circText').value = c.circ != null ? c.circ : F.toCirc(P.loadModel(c.main, c.mainName, c.battery, c.pins)); }
   catch (e) { $('circText').value = ''; status('Could not read circuit: ' + e.message, true); }
+}
+
+// ---------- pin finder ----------
+// In-game circuits (.txt) often don't say which pin goes where: test the pins on a short load-step run and, if the
+// reactor doesn't run well, move them around by trial and error. Runs in slices so the page stays responsive.
+let pinJob = 0;
+async function findPins(force) {
+  const key = $('circSel').value, c = circuits[key], job = ++pinJob;
+  if (key === 'vanilla' || !profile) return;
+  let m; try { m = F.parseCirc($('circText').value); } catch (e) { return; }
+  if (!m.boxes.length) return;
+  const cfg = config(); cfg.profile = profile;
+  const g = A.search(m, cfg, { guess: E.guessPins, force });
+  let s, t = performance.now();
+  $('btnPins').disabled = true;
+  try {
+    while (!(s = g.next()).done) {
+      if (performance.now() - t > 30) { status(`Finding pins by trial and error… ${s.value.tried} test runs, best cost ${s.value.best.res.cost.toFixed(1)}`); await new Promise(r => setTimeout(r)); t = performance.now(); if (job !== pinJob) return; }
+    }
+  } finally { if (job === pinJob) $('btnPins').disabled = false; }
+  const res = s.value;
+  if (c) c.pinsChecked = true;
+  if ((res.initialWorks && !force) || res.cost >= res.initialCost - 0.01) { if (force) status(`Pins checked: ${res.log[res.log.length - 1]}. Nothing better found.`); return; }
+  for (const b of m.boxes) if (res.pins[b.name]) b.pins = res.pins[b.name];
+  const text = res.log.map(l => '# autopins: ' + l).join('\n') + (res.changed.length ? '\n# autopins changed: ' + res.changed.join(', ') : '') + '\n' + F.toCirc(m);
+  $('circText').value = text; if (c) { c.circ = text; }
+  build();
+  status(`Pins found by trial and error (${res.changed.length} moved, ${res.tried} test runs): ${res.changed.join(', ')}. See the Circuit tab.`);
 }
 
 // ---------- sim lifecycle ----------
@@ -363,7 +391,9 @@ $('btnApply').onclick = build;
 $('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return; speed = b.dataset.s; carry = 0; document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x === b)); store.set('speed', speed); };
 document.querySelector('.tabs').onclick = e => { const b = e.target.closest('[role=tab]'); if (b) showTab(b.dataset.tab); };
 $('profileSel').onchange = () => { selectProfile(); build(); };
-$('circSel').onchange = () => { selectCircuit(); build(); };
+$('circSel').onchange = () => { selectCircuit(); build(); autoCheckPins(); };
+$('btnPins').onclick = () => findPins(true);
+function autoCheckPins() { const c = circuits[$('circSel').value]; if (c && c.main != null && !c.pinsChecked) findPins(false); }
 for (const id of ['maxKW', 'rods', 'fuelType', 'start', 'battOn', 'battN', 'battType', 'battStart', 'battRate', 'linkMode']) $(id).onchange = () => { if (id === 'maxKW') $('maxAuto').checked = false; build(); };
 $('maxAuto').onchange = () => { selectProfile(); build(); };
 $('profileFile').onchange = async e => {
@@ -381,7 +411,7 @@ $('circFile').onchange = async e => {
     key = fs[ri].name.replace(/(_reactor)?\.txt$/i, ''); entry = { main: texts[ri], mainName: fs[ri].name, battery: bi >= 0 ? texts[bi] : null, group: 'Loaded' };
     if (bi >= 0) $('battOn').checked = true;
   }
-  circuits[key] = entry; refreshLists(); $('circSel').value = key; selectCircuit(); build(); e.target.value = '';
+  circuits[key] = entry; refreshLists(); $('circSel').value = key; selectCircuit(); build(); autoCheckPins(); e.target.value = '';
 };
 $('btnSaveLog').onclick = () => report && save(`${report.circuit}__${report.profile}.log.txt`, P.fmtReport(report));
 $('btnSaveTl').onclick = () => sim && save(`${sim.cfg.circuitName}__${sim.profile.name}.timeline.csv`, P.timelineCsv(sim.metrics.timeline));
@@ -394,7 +424,7 @@ if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEven
 // ---------- boot ----------
 loadSettings(); refreshLists(); selectProfile(); selectCircuit();
 const sp = store.get('speed', '1'); document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x.dataset.s === sp)); speed = sp;
-build();
+build(); autoCheckPins();
 syncDl();
 Promise.resolve(window.claude && window.claude.use ? window.claude.use('downloads') : null).then(d => { downloads = d; syncDl(); }).catch(() => { });
 })();

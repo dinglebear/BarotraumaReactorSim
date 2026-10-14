@@ -9,7 +9,7 @@ node sim/cli.js run <circuit> --profile <name>      # one test, prints the full 
 node sim/cli.js compare a,b,vanilla --profile all   # side-by-side table (vanilla = game's own auto control)
 node sim/cli.js check <circuit>                     # fast syntax/wiring check, no run
 ```
-Other: `decompile <file.txt>` (in-game file -> .circ text), `build <circuit>` (export only), `profiles` (list test files), `verify <trace.csv>` (replay a reactor trace recorded in game and show where the simulator differs; traces go in `traces/`).
+Other: `autopins <file.txt>` (find which pin goes where by trial and error, writes `.pins`), `decompile <file.txt>` (in-game file -> .circ text), `build <circuit>` (export only), `profiles` (list test files), `verify <trace.csv>` (replay a reactor trace recorded in game and show where the simulator differs; traces go in `traces/`).
 Flags: `--batteries N` (0 = off), `--btype battery|supercapacitor`, `--max KW`, `--rods N`, `--fuel uranium|thorium|fulgurium|volatile`, `--link wire|wifi`, `--start warm|cold`, `--duration S`, `--timeline` (also write a 1 Hz CSV), `--battery file.txt`.
 Defaults come from `sim.config.json` (the web page's "Save settings" writes this file). The test file supplies the reactor max output and the rod count unless overridden.
 
@@ -198,6 +198,17 @@ Put the in-game `.txt` (or a `_reactor.txt` + `_battery.txt` pair) in `context/r
 1. labels written as `reactor.load_value_out`;
 2. a `name.pins` file with lines like `reactor in1 reactor.load_value_out`;
 3. a guess from the circuit's own labels, reported in WARNINGS (check it).
+
+**Auto pins.** Before running a `.txt`, the CLI tests its pins on a 170 s load-step test (about 0.2 s). If the reactor doesn't follow the load clearly better than vanilla AutoTemp, the CLI moves the pins around by trial and error:
+- every source on every input (temp, power, load, fuel, fuel %, `const.1`/`const.0` for levers, none);
+- swapped pairs;
+- every fission/turbine layout on the outputs.
+
+It keeps the best result and writes it to `name.pins`, backing up any old file as `.pins.bak` and keeping its `prop` lines. This takes 5–60 s once; later runs reuse the file. Pins labelled in the circuit only move for a clear gain. Box links and recorded devices (nav terminal etc.) never move.
+- `node sim/cli.js autopins <name> [--force] [--write]`: run the search on its own; `--force` searches even when the pins work.
+- `--no-autopins` on `run` or `compare` turns the search off.
+
+`.circ` files are never changed: their pins are yours.
 
 A `.pins` file can also retune a circuit per ship: `prop reactor <componentId> <Property> <value>`. The value may use `$MAX`, e.g. `prop reactor 3 Value $MAX/100`.
 

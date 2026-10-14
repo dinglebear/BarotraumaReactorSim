@@ -1,0 +1,22 @@
+# Toolkit test on the Dugong: every edit kind once. Not a design, just proof it works.
+subname Dugong Toolkit Test
+# 1. a panic button on the bridge flips a relay; the relay sounds its own new alarm and stops the command room door auto-closing.
+#    (27.set_state is driven every tick by OR #29, so feed the OR instead. Vanilla door OR: Output "" FalseOutput 0 TimeFrame 4 = auto-close after 4 s without motion; a 1 on its free input keeps the door as it is)
+add @panic button at -760,40
+add @latch relaycomponent at -730,40 RelayComponent.IsOn=false
+add @siren alarmbuzzer at -625,100
+wire @panic.signal_out @latch.toggle
+wire @latch.state_out @siren.set_state
+wire @latch.state_out 29.signal_in2
+# 2. a whole reactor circuit box built into the sub, wired to the reactor with real wires
+box @brain at -700,-150 from example_feedforward
+wire 267.load_value_out @brain.signal_in1
+wire 267.power_value_out @brain.signal_in2
+wire 267.temperature_out @brain.signal_in3
+wire 267.fuel_out @brain.signal_in4
+wire @brain.signal_out1 267.set_fissionrate
+wire @brain.signal_out2 267.set_turbineoutput
+# 3. remove the discharge coil's wall button and give the coil a new one next to the nav terminal
+remove 393
+add @coil button at -820,40
+wire @coil.signal_out 9.trigger_in

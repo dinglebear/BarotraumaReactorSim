@@ -100,3 +100,19 @@ console.log('real-game checks passed');
   }
   console.log(`blueprints compatibility passed (${files.length} files)`);
 }
+
+// sub editor: an unedited .sub serializes back unchanged; a patch adds/wires/removes items and passes the loader checks
+{
+  const zlib = require('zlib'), X = require('./subxml'), SE = require('./subedit'), SF = require('./subfile');
+  const readSub = f => { const b = fs.readFileSync(path.join(ROOT, 'ships/vanilla', f + '.sub')); return (b[0] === 0x1f ? zlib.gunzipSync(b) : b).toString('utf8'); };
+  const dug = readSub('Dugong'), norm = s => s.replace(/\r/g, '').trim();
+  assert(norm(X.serialize(X.parse(dug))) === norm(dug), 'subxml round trip changed the Dugong');
+  const doc = new SE.SubDoc(dug, [new SE.SubDoc(readSub('Humpback'))]);
+  doc.apply('subname Test\nadd @b button at -760,40\nadd @r relaycomponent at -730,40 RelayComponent.IsOn=false\nwire @b.signal_out @r.toggle\nremove 393\n', {});
+  assert(doc.check().length === 0, 'sub patch loader checks: ' + doc.check().join('; '));
+  const sh = SF.parseSub(doc.text());
+  assert(!sh.items.some(i => i.id === 393), 'removed item still there');
+  const b = sh.items.find(i => i.identifier === 'button' && sh.wires.some(w => (w.from.item === i.id && w.from.conn === 'signal_out') || (w.to.item === i.id && w.to.conn === 'signal_out')));
+  assert(b, 'new button is not wired');
+  console.log('sub editor passed');
+}

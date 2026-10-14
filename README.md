@@ -48,7 +48,7 @@ node sim/cli.js check <circuit>                      # syntax/wiring check
 node sim/test.js                                     # simulator + Blueprints-format tests
 node sim/build_web.js                                # rebuild the bench after adding circuits or test files
 ```
-Circuits written as `.circ` export to Blueprints `.txt` on a single-profile `run`. [`context/reactor_circuits/STUDY.md`](context/reactor_circuits/STUDY.md) benchmarks the community circuits to beat.
+Circuits written as `.circ` export to Blueprints `.txt` on a single-profile `run`. To rewire a whole sub (doors, lights, relays, embedded circuit boxes), see [`SUBEDIT.md`](SUBEDIT.md): `node sim/cli.js sub list|patch|check`. [`context/reactor_circuits/STUDY.md`](context/reactor_circuits/STUDY.md) benchmarks the community circuits to beat.
 
 ## Folders
 | Folder | Contents |
@@ -57,6 +57,7 @@ Circuits written as `.circ` export to Blueprints `.txt` on a single-profile `run
 | `context/reactor_circuits/` | community reactor circuits (Blueprints `.txt`, optional `.pins`) and their study |
 | `context/blueprints_mod/`, `context/community_circuits/` | Blueprints mod scripts and example circuits (format reference) |
 | `load_profiles/` | test files: recorded rounds (`*_roundNNN*.csv`) and synthetic ones (`synthetic_*`, from `sim/make_profiles.js`) |
+| `ships/` | vanilla subs used by the mock (`vanilla/`), sub patches (`patches/`) and patched subs (`custom/`) |
 | `mod/ReactorPowerLogger/` | the client-side logging mod |
 | `reference/BAROTRAUMA_MECHANICS.md` | game mechanics, from the game source |
 | `sim/` | simulator: engine, components, formats, CLI, pin finder, web build |

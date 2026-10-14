@@ -253,3 +253,6 @@ How the round plays:
 - `$MAX`/`$BATT_*` are filled from the sub. The log has the same metrics as a test-file run.
 
 Each sub sets its own reactor fire/meltdown delays, junction-box overload voltage (1.7) and battery sizes. Test-file headers carry them too (`reactor_fire_delay`, `junction_overload_voltage`, `ship_batteries`).
+
+## 12. Editing a sub's wiring
+[`SUBEDIT.md`](SUBEDIT.md) covers rewiring a real `.sub` (doors, lights, relays, whole circuit boxes). Write a `.subpatch` script, apply it with `node sim/cli.js sub patch <in.sub> <patch>`, check it with `node sim/cli.js sub check`, then run it in the mock with `ship`.

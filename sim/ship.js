@@ -32,6 +32,7 @@
       if (ri) this.byId.set(ri.id, { it: ri, sim: this.reactor, kind: 'reactor', cpc: 0 });
       for (const it of ship.items) if (it !== ri) this.addDevice(it);
       for (const w of ship.wires) this.addWire(w);
+      for (const d of this.relays) if (ship.wires.some(w => (w.from.item === d.it.id && /^power/.test(w.from.conn)) || (w.to.item === d.it.id && /^power/.test(w.to.conn)))) d.state.on = true; // relays carrying power start ON (closed)
       for (const w of ship.wires) for (const [a, b] of [[w.from, w.to], [w.to, w.from]]) { // turrets/coils: batteries wired straight to their power_in
         const t = this.byId.get(a.item), src = this.byId.get(b.item);
         if (t && src && src.batt && a.conn === 'power_in' && b.conn === 'power_out' && (t.kind === 'turret' || t.kind === 'discharger')) (t.feeds = t.feeds || []).push(src.batt);
@@ -76,7 +77,7 @@
       if (k.PowerTransfer) { const p = first(it, 'PowerTransfer'); Object.assign(d.sim, { cond: 100, overloadV: n(p.OverloadVoltage, 1.7), prevP: 0, pSig: null, prevL: 0, lSig: null }); d.kind = 'junction'; this.jbs.push(d); return; }
       if (k.RelayComponent) {
         const p = first(it, 'RelayComponent'); d.kind = 'relay'; d.maxPower = n(p.MaxPower, 1000); this.relays.push(d);
-        d.state.on = true; d.state.savedOn = bool(p.IsOn, true); // relays start ON (closed); toggle/set_state signals or the viewer can switch them
+        d.state.savedOn = bool(p.IsOn, true); d.state.on = d.state.savedOn; // power relays are switched on after wiring (below); signal-only relays keep their saved state
         d.sim.recv = (pin, sig) => {
           const s = d.state;
           if (pin === 'toggle') { if (sig.v !== '0') s.on = !s.on; }

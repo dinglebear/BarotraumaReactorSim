@@ -1,0 +1,316 @@
+// Ship mock: a light electrical model of a whole submarine, built from a .sub file (sim/subfile.js).
+// Everything that matters electrically is there with the sub's own settings and real wiring: reactor, batteries and
+// supercapacitors, junction boxes, relays, engines, pumps, lights, oxygen generator, sonar/nav terminal, turrets and
+// discharge coils, doors, detectors, buttons, standalone logic components and circuit boxes. No water, crew or physics:
+// a scenario plays the practice round (pilot input, fights, a hull breach) and each device draws power by its rules
+// (reference/DEVICES.md). Reactor, batteries, signals and circuit boxes reuse the bench simulator (sim/engine.js).
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine'), require('./components'));
+  else root.BaroShip = factory(root.BaroEngine, root.BaroComponents);
+})(typeof self !== 'undefined' ? self : this, function (E, C) {
+  'use strict';
+  const f = Math.fround, cl = (v, a, b) => Math.min(Math.max(v, a), b), STEP = E.STEP;
+  const n = (v, d) => { const x = Number(v); return v !== undefined && v !== '' && Number.isFinite(x) ? x : d; };
+  const bool = (v, d) => v === undefined ? d : String(v).toLowerCase() === 'true';
+  const POWER = new Set(['power', 'power_in', 'power_out']);
+  const first = (it, k) => (it.comps[k] || [])[0];
+  const parse = v => { const r = C.parseF(v); return r.ok ? r.v : NaN; };
+  const center = it => [it.rect[0] + it.rect[2] / 2, it.rect[1] - it.rect[3] / 2];
+
+  class ShipSim extends E.Sim {
+    // ship: from subfile.parseSub; cfg: { duration, scenario, rods, fuelType, start, seed, breach }
+    constructor(ship, cfg) {
+      cfg = Object.assign({ duration: 600 }, cfg || {});
+      const ri = ship.items.find(i => i.comps.Reactor), R0 = ri ? first(ri, 'Reactor') : {};
+      const profile = { name: ship.name + ' practice round', points: [{ t: 0, demand: 0, ch: {} }], duration: cfg.duration, channels: [], meta: {} };
+      super({ name: ship.name, boxes: [], links: [] }, Object.assign({}, cfg, {
+        profile, reactorMaxKW: n(R0.MaxPowerOutput, 5000), batteries: { enabled: false }, start: 'cold',
+        meltdownDelay: n(R0.MeltdownDelay, 120), fireDelay: n(R0.FireDelay, 20), fuelConsumptionRate: n(R0.FuelConsumptionRate, 0.2),
+      }));
+      this.ship = ship; this.devs = []; this.byId = new Map(); this.caps = []; this.jbs = []; this.relays = []; this.hullWater = {};
+      this.scenario = new Scenario(this, cfg.scenario || {});
+      if (ri) this.byId.set(ri.id, { it: ri, sim: this.reactor, kind: 'reactor', cpc: 0 });
+      for (const it of ship.items) if (it !== ri) this.addDevice(it);
+      for (const w of ship.wires) this.addWire(w);
+      this.grids = []; this.gridsKey = '';
+      // who runs the reactor: a circuit wired to its set_fissionrate/set_turbineoutput, else the crew's automatic control
+      const ctl = ship.wires.some(w => ri && ((w.from.item === ri.id && /^set_(fissionrate|turbineoutput)$/.test(w.from.conn)) || (w.to.item === ri.id && /^set_(fissionrate|turbineoutput)$/.test(w.to.conn))));
+      this.reactor.autoTemp = cfg.reactorControl ? cfg.reactorControl === 'auto' : !ctl;
+      // start mid-round: devices on, reactor steady at the current load (like the bench's warm start)
+      for (const d of this.devs) if (d.update) d.update(0);
+      this.updatePower(); this.shipLoad = this.grid ? this.grid.load : 0;
+      if ((cfg.start || 'warm') === 'warm') this.warmStart();
+      this.metrics.reset();
+    }
+    demandAt() { return this.shipLoad || 0; }
+
+    // ---------- build ----------
+    addDevice(it) {
+      const d = { it, kind: 'other', cpc: 0, voltage: 0, sim: this.mkItem('dev:' + it.id, { id: it.id }), state: {} };
+      d.sim.dev = d; this.byId.set(it.id, d); this.devs.push(d);
+      const k = it.comps;
+      if (it.box) { // circuit box: the bench's box model, wired by the sub's real wires
+        const bm = Object.assign({}, it.box, { name: 'box' + it.id }); const box = this.buildBox(bm); this.boxes.push(box); d.kind = 'circuitbox'; d.sim = box; box.dev = d; d.box = bm; return;
+      }
+      if (it.logic) { // a logic component placed in the sub (outside a circuit box)
+        const def = C.byItem(it.identifier), props = {}; const attrs = first(it, def.cls) || {};
+        for (const key of Object.keys(def.defaults)) if (attrs[key] !== undefined) props[key] = attrs[key];
+        const box = this.buildBox({ name: 'logic' + it.id, components: [{ id: '0', item: def.item, props }], wires: [], pins: {} });
+        this.boxes.push(box); d.kind = 'logic'; d.sim = box.compById['0']; d.sim.dev = d; return;
+      }
+      if (k.PowerContainer) {
+        const p = first(it, 'PowerContainer'), sc = /supercapacitor/.test(it.identifier);
+        const b = Object.assign(d.sim, { capacity: n(p.Capacity, 10), maxRecharge: n(p.MaxRechargeSpeed, 10), maxOut: n(p.MaxOutPut, 10), eff: n(p.Efficiency, 0.95), exp: bool(p.ExponentialRechargeSpeed, false),
+          charge: n(p.Charge, 0), prevCharge: n(p.Charge, 0), rate: 0, cpc: 0, out: 0, disabled: false, name: it.identifier + '#' + it.id });
+        this.setRecharge(b, n(p.RechargeSpeed, 0));
+        b.recv = (pin, sig) => {
+          if (pin === 'disable_output') b.disabled = sig.v !== '0';
+          else if (pin === 'set_rate') { const r = C.parseF(String(sig.v).replace(/,/g, '')); if (r.ok && Number.isFinite(r.v)) this.setRecharge(b, f(cl(f(r.v / 100), 0, 1) * b.maxRecharge)); }
+        };
+        d.kind = sc ? 'supercap' : 'battery'; d.batt = b; (sc ? this.caps : this.batteries).push(b); return;
+      }
+      if (k.PowerTransfer) { const p = first(it, 'PowerTransfer'); Object.assign(d.sim, { cond: 100, overloadV: n(p.OverloadVoltage, 1.7), prevP: 0, pSig: null, prevL: 0, lSig: null }); d.kind = 'junction'; this.jbs.push(d); return; }
+      if (k.RelayComponent) {
+        const p = first(it, 'RelayComponent'); d.kind = 'relay'; d.state.on = bool(p.IsOn, false); d.maxPower = n(p.MaxPower, 1000); this.relays.push(d);
+        d.sim.recv = (pin, sig) => {
+          const s = d.state;
+          if (pin === 'toggle') { if (sig.v !== '0') s.on = !s.on; }
+          else if (pin === 'set_state') s.on = sig.v !== '0';
+          else if (pin === 'signal_in1') this.send(d.sim, 'signal_out1', sig.v); else if (pin === 'signal_in2') this.send(d.sim, 'signal_out2', sig.v);
+        };
+        return;
+      }
+      DEVICE(this, d);
+    }
+    addWire(w) {
+      const a = this.byId.get(w.from.item), b = this.byId.get(w.to.item); if (!a || !b) return;
+      if (POWER.has(w.from.conn) && POWER.has(w.to.conn)) return; // power wiring: used by the grid builder
+      const ca = this.conn(a.sim, w.from.conn), cb = this.conn(b.sim, w.to.conn); this.wire(ca, cb);
+    }
+
+    // ---------- power grids (Powered.UpdatePower, per grid) ----------
+    buildGrids() {
+      const parent = new Map(), find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+      const node = (id, c) => { const k = id + '|' + c; if (!parent.has(k)) parent.set(k, k); return k; }, join = (a, b) => parent.set(find(a), find(b));
+      for (const w of this.ship.wires) if (POWER.has(w.from.conn) && POWER.has(w.to.conn)) join(node(w.from.item, w.from.conn), node(w.to.item, w.to.conn));
+      for (const d of this.relays) if (d.state.on) join(node(d.it.id, 'power_in'), node(d.it.id, 'power_out')); // a closed relay passes power through
+      for (const d of this.jbs) { const cs = d.it.conns.filter(c => POWER.has(c.name)).map(c => node(d.it.id, c.name)); for (let i = 1; i < cs.length; i++) join(cs[0], cs[i]); }
+      const grids = new Map(), grid = k => { const r = find(k); if (!grids.has(r)) grids.set(r, { id: r, load: 0, power: 0, voltage: 0, consumers: [], batteries: [], sources: [], reactor: false, jbs: [] }); return grids.get(r); };
+      const has = (it, c) => parent.has(it.id + '|' + c);
+      if (this.reactorItem && has(this.reactorItem, 'power_out')) grid(this.reactorItem.id + '|power_out').reactor = true;
+      for (const d of this.devs) {
+        const id = d.it.id;
+        if (d.batt) { if (has(d.it, 'power_in')) grid(id + '|power_in').batteries.push(d.batt); if (has(d.it, 'power_out')) grid(id + '|power_out').sources.push(d.batt); d.batt.inGrid = has(d.it, 'power_in') ? grid(id + '|power_in') : null; d.batt.outGrid = has(d.it, 'power_out') ? grid(id + '|power_out') : null; continue; }
+        if (d.kind === 'junction') { const c = d.it.conns.find(c => POWER.has(c.name)); if (c && has(d.it, c.name)) { d.grid = grid(id + '|' + c.name); d.grid.jbs.push(d); } continue; }
+        if (d.kind === 'relay') continue;
+        const pc = ['power_in', 'power'].find(c => has(d.it, c));
+        d.grid = pc ? grid(id + '|' + pc) : null; if (d.grid) d.grid.consumers.push(d);
+      }
+      this.grids = [...grids.values()];
+      this.reactorGrid = this.grids.find(g => g.reactor) || { load: 0, power: 0, voltage: 0, consumers: [], batteries: [], sources: [], jbs: [] };
+    }
+    // Plug bench circuit boxes (a .circ / Blueprints model) into the sub: each box pin is wired to the sub's real device,
+    // e.g. reactor.load_value_out -> the reactor, junction.* -> the main junction box (the one on the reactor's grid),
+    // battery.* -> every ship battery, nav.* -> the nav terminal, const.N -> a lever. Called before the first step.
+    attachCircuit(model) {
+      if (!model || !model.boxes.length) return;
+      if (!this.grids.length) this.buildGrids();
+      const jb = (this.reactorGrid.jbs || [])[0], built = {};
+      const devOf = name => {
+        if (name === 'reactor') return [this.reactor];
+        if (name === 'junction') return jb ? [jb.sim] : [];
+        if (name === 'battery') return this.batteries;
+        const m = /^battery(\d+)$/.exec(name); if (m) return this.batteries[+m[1] - 1] ? [this.batteries[+m[1] - 1]] : [];
+        if (name === 'nav') return this.nav ? [this.nav.sim] : [];
+        if (name === 'const') { if (!this.constItem) this.constItem = this.mkItem('const', {}); return [this.constItem]; }
+        return null;
+      };
+      for (const bm of model.boxes) {
+        if (bm.name === 'battery' && !this.batteries.length) { this.warnings.push('battery box ignored: this sub has no batteries'); continue; }
+        const box = this.buildBox(bm); this.boxes.push(box); built[bm.name] = box;
+        const pins = bm.pins || E.DEFAULT_PINS[bm.name] || {};
+        for (const [p, ep] of Object.entries(pins)) {
+          if (!ep || ep === 'none' || ep.startsWith('link.')) continue;
+          const di = ep.indexOf('.'), ds = devOf(ep.slice(0, di)), dpin = ep.slice(di + 1);
+          if (!ds) { this.warnings.push(`${bm.name}.${p}: "${ep}" is not on this sub (only reactor, junction, battery, nav, const)`); continue; }
+          for (const d of ds) this.wire(this.conn(box, 'signal_' + p), this.conn(d, dpin));
+          if (ep.startsWith('reactor.set_')) this.reactor.autoTemp = false; // the circuit runs the reactor now
+        }
+      }
+      for (const l of model.links || []) {
+        const [ab, ap] = l.from.split('.'), [bb, bp] = l.to.split('.');
+        if (built[ab] && built[bb]) this.wire(this.conn(built[ab], 'signal_' + ap), this.conn(built[bb], 'signal_' + bp));
+      }
+    }
+    get reactorItem() { return this.ship.items.find(i => i.comps.Reactor); }
+    updatePower() {
+      const key = this.relays.map(d => d.state.on ? 1 : 0).join('');
+      if (key !== this.gridsKey || !this.grids.length) { this.buildGrids(); this.gridsKey = key; }
+      const R = this.reactor, all = [...this.batteries, ...this.caps];
+      for (const b of all) { b.cpc = b.inGrid ? this.batteryConsumption(b) : 0; b.out = 0; b.isSrc = b.charge > 0; }
+      for (const g of this.grids) {
+        g.load = 0; g.power = 0;
+        for (const d of g.consumers) g.load = f(g.load + d.cpc);
+        for (const b of g.batteries) g.load = f(g.load + b.cpc);
+        if (g.reactor && R.cond > 0) { const mm = this.reactorMinMax(); g.power = f(g.power + this.reactorPowerOut(g.power, mm, g.load)); } else if (g.reactor) R.cpc = 0;
+        const bs = g.sources.filter(b => b.isSrc);
+        if (bs.length) {
+          let max = 0; for (const b of bs) max = f(max + this.battMinMax(b));
+          let added = 0;
+          for (const b of bs) { if (b.disabled || !(max > 0)) { b.out = 0; continue; } b.out = f(cl(f(f(g.load - g.power) / max), 0, 1) * this.battMinMax(b)); added = f(added + b.out); }
+          g.power = f(g.power + added);
+        }
+        let v = Math.min(f(g.power / Math.max(g.load, 1e-10)), 1000); if (!(v > 0)) v = 0;
+        g.voltage = g.load <= 0 ? (g.power > 0 || g.reactor || bs.length ? 1 : 0) : f(v);
+        for (const d of g.consumers) d.voltage = g.voltage;
+      }
+      for (const b of all) {
+        const vin = b.inGrid ? b.inGrid.voltage : 0;
+        b.charge = cl(f(b.charge + f(f(f(f(b.cpc * vin) / 60) * f(STEP)) * b.eff)), 0, b.capacity);
+        b.charge = cl(f(b.charge - f(f(b.out / 60) * f(STEP))), 0, b.capacity); b.prevCharge = b.charge;
+      }
+      // the bench's metrics follow the reactor's grid; demand = its load minus battery charging
+      const rg = this.reactorGrid;
+      this.grid = rg; this.demand = f(rg.load - rg.batteries.reduce((a, b) => a + b.cpc, 0)); this.shipLoad = rg.load;
+    }
+    updateJunction(dt) { // every junction box reports its own grid
+      for (const d of this.jbs) {
+        const J = d.sim, g = d.grid || { power: 0, load: 0, voltage: 0 };
+        if (J.prevP !== Math.trunc(g.power) || J.pSig === null) { J.prevP = Math.trunc(C.roundEven(g.power)); J.pSig = String(J.prevP); }
+        if (J.prevL !== Math.trunc(g.load) || J.lSig === null) { J.prevL = Math.trunc(C.roundEven(g.load)); J.lSig = String(J.prevL); }
+        this.send(J, 'power_value_out', J.pSig); this.send(J, 'load_value_out', J.lSig);
+        d.overloaded = g.voltage > Math.max(J.overloadV, 1) && this.time >= 5;
+        if (d.overloaded) this.metrics.overloadT += dt / Math.max(1, this.jbs.length);
+      }
+    }
+    updateBattery(b) {
+      const r = C.roundEven, g = b.outGrid || b.inGrid || { load: 0 };
+      this.send(b, 'power_value_out', String(r(b.out))); this.send(b, 'load_value_out', String(r(g.load)));
+      this.send(b, 'charge', String(r(b.charge))); this.send(b, 'charge_%', String(r(b.charge / b.capacity * 100))); this.send(b, 'charge_rate', String(r(b.rate / b.maxRecharge * 100)));
+    }
+    step() {
+      this.scenario.update(this.time);
+      for (const d of this.devs) if (d.update) d.update(STEP);
+      for (const b of this.caps) this.updateBattery(b);
+      super.step();
+    }
+    get done() { return this.time >= this.profile.duration; }
+    // per-device / per-grid readout for the viewer
+    deviceInfo(d) { return { id: d.it.id, kind: d.kind, kw: d.batt ? d.batt.cpc : d.cpc, voltage: d.voltage, state: d.state }; }
+  }
+
+  // ---------- device behaviours (power draw + signals); formulas: reference/DEVICES.md ----------
+  function DEVICE(sim, d) {
+    const it = d.it, k = it.comps, s = d.state, send = (pin, v) => sim.send(d.sim, pin, v);
+    const lights = (k.LightComponent || []).map(l => ({ on: bool(l.IsOn, true), kw: n(l.PowerConsumption, 0) }));
+    const lightKW = () => lights.reduce((a, l) => a + (l.on ? l.kw : 0), 0);
+    const powered = () => d.voltage >= 0.5;
+    const recvs = [];
+    // light inputs (on any item with a LightComponent)
+    recvs.push((pin, sig) => { if (pin === 'toggle') { if (sig.v !== '0') for (const l of lights) l.on = !l.on; } else if (pin === 'set_state' && !k.Door) for (const l of lights) l.on = sig.v !== '0'; });
+    let base = () => lightKW();
+    if (k.Engine) {
+      const e = first(it, 'Engine'), max = n(e.PowerConsumption, 0); d.kind = 'engine'; s.force = 0; s.target = 0;
+      recvs.push((pin, sig) => { if (pin === 'set_force') { const v = parse(sig.v); if (Number.isFinite(v)) { s.target = cl(v, -100, 100); s.lastSig = sim.time; } } });
+      d.update = () => { if (sim.time - (s.lastSig ?? -9) > 0.1) s.target = 0; s.force = s.target; d.cpc = f(max * Math.pow(Math.abs(s.force) / 100, 1.5) + lightKW()); };
+    } else if (k.Pump) {
+      const p = first(it, 'Pump'), max = n(p.PowerConsumption, 0); d.kind = 'pump';
+      s.active = bool(p.IsActive, false); s.flow = n(p.FlowPercentage, 0); s.level = 50; s.target = null;
+      recvs.push((pin, sig) => {
+        if (pin === 'set_active') s.active = sig.v !== '0';
+        else if (pin === 'toggle') { if (sig.v !== '0') s.active = !s.active; }
+        else if (pin === 'set_speed') { const v = parse(sig.v); if (Number.isFinite(v)) s.flow = cl(v, -100, 100); }
+        else if (pin === 'set_targetlevel') { const v = parse(sig.v); if (Number.isFinite(v)) { s.target = cl((v + 100) / 2, 0, 100); s.lastTarget = sim.time; s.active = true; } }
+      });
+      d.update = (dt) => {
+        if (s.target !== null) { s.flow = cl((s.target - s.level) * 10, -100, 100); s.level = cl(s.level + s.flow / 100 * 8 * dt * (powered() ? 1 : 0), 0, 100); } // ballast tank fills toward the target level
+        const hw = sim.hullWater[d.hull] || 0; if (s.target === null && s.active && hw > 0) s.flow = -100;          // bilge pump in a flooding room
+        d.cpc = f((s.active ? max * Math.abs(s.flow) / 100 : 0) + lightKW());
+      };
+    } else if (k.Steering) {
+      const st = first(it, 'Steering'), so = first(it, 'Sonar'), mm = first(it, 'MiniMap');
+      d.kind = 'nav'; sim.nav = d; s.tx = 0; s.ty = 0; s.vx = 0; s.vy = 0; s.sonarActive = false; s.nb = 0.5;
+      const kwSteer = n(st.PowerConsumption, 0), kwSonar = so ? n(so.PowerConsumption, 0) : 0;
+      const STEER = Math.pow(1 / (1 - 0.2), 2) * 10;
+      d.update = (dt) => {
+        const dx = s.tx - s.vx, dy = s.ty - s.vy, len = Math.hypot(dx, dy);
+        if (len > 0) { const stp = Math.min(STEER * dt, len); s.vx += dx / len * stp; s.vy += dy / len * stp; }
+        if (powered()) {
+          send('velocity_x_out', C.fmtF(s.vx));
+          const a = (s.nb * 100 - 50) * 2, b = -100 * Math.sign(s.vy);
+          send('velocity_y_out', C.fmtF(a + (b - a) * (Math.abs(s.vy) / 100)));
+        }
+        d.cpc = f(kwSteer + (s.sonarActive ? kwSonar : kwSonar * 0.1) + (mm ? n(mm.PowerConsumption, 0) : 0) + lightKW());
+      };
+    } else if (k.Turret || k.ElectricalDischarger) {
+      const t = first(it, k.Turret ? 'Turret' : 'ElectricalDischarger'), kw = n(t.PowerConsumption, 0);
+      d.kind = k.ElectricalDischarger ? 'discharger' : /searchlight/.test(it.identifier) ? 'light' : 'turret'; s.firing = 0;
+      recvs.push((pin, sig) => { if ((pin === 'trigger_in' || pin === 'activate') && sig.v !== '0') s.firing = Math.max(s.firing, d.kind === 'discharger' ? 0.5 : 1 / 60 * 2); });
+      d.update = (dt) => {
+        s.firing = Math.max(0, s.firing - dt);
+        d.cpc = f((d.kind === 'light' ? (lights.some(l => l.on) ? kw * 0.001 : 0) : s.firing > 0 ? kw : 0) + lightKW()); // firing draws from its (supercapacitor) grid
+      };
+    } else if (k.OxygenGenerator || k.Fabricator || k.Deconstructor || k.MiniMap || k.Powered || k.Door || k.Vent) {
+      const comp = first(it, 'OxygenGenerator') || first(it, 'Fabricator') || first(it, 'Deconstructor') || first(it, 'MiniMap') || first(it, 'Powered') || first(it, 'Door') || {};
+      d.kind = k.OxygenGenerator ? 'oxygen' : k.Fabricator || k.Deconstructor ? 'fabricator' : k.Door ? 'door' : 'powered';
+      const kw = n(comp.PowerConsumption, 0); s.active = d.kind === 'fabricator' ? false : bool(comp.IsActive, true);
+      if (k.Door) recvs.push((pin, sig) => { if (pin === 'set_state') { s.open = sig.v !== '0'; send('state_out', s.open ? '1' : '0'); } else if (pin === 'toggle') { if (sig.v !== '0') s.open = !s.open; send('state_out', s.open ? '1' : '0'); } });
+      recvs.push((pin, sig) => { if (pin === 'set_active') s.active = sig.v !== '0'; });
+      d.update = () => { d.cpc = f((s.active ? kw : 0) + lightKW()); };
+    } else if (k.WaterDetector || k.MotionSensor || k.SmokeDetector || k.OxygenDetector) {
+      d.kind = 'detector'; const det = Object.keys(k).find(x => /Detector|Sensor/.test(x));
+      const out = k.WaterDetector ? 'signal_out' : k.MotionSensor ? 'state_out' : 'signal_out';
+      d.update = () => {
+        const w = sim.hullWater[d.hull] || 0;
+        if (det === 'WaterDetector') { send('signal_out', w > 0 ? '1' : '0'); send('water_%', String(Math.round(w))); }
+        else if (det === 'MotionSensor') { if (s.motion) send(out, '1'); }
+        else if (det === 'SmokeDetector') { if (s.smoke) send(out, '1'); }
+        d.cpc = lightKW();
+      };
+    } else if (k.Controller) {
+      d.kind = /periscope/.test(it.identifier) ? 'periscope' : 'button'; s.pressed = 0;
+      d.press = () => { send(d.kind === 'button' ? 'signal_out' : 'trigger_out', '1'); };
+      d.update = () => { d.cpc = lightKW(); };
+    } else if (k.Terminal) {
+      d.kind = 'terminal'; d.type = text => send('signal_out', text); d.update = () => { d.cpc = 0; };
+    } else if (k.ItemLabel) {
+      d.kind = 'display'; recvs.push((pin, sig) => { if (pin === 'set_text') s.text = sig.v; }); d.update = () => { d.cpc = lightKW(); };
+    } else if (k.LightComponent) {
+      d.kind = 'light'; d.update = () => { d.cpc = lightKW(); };
+    } else { d.update = () => { d.cpc = base(); }; }
+    d.sim.recv = (pin, sig) => { for (const r of recvs) r(pin, sig); };
+    // which hull it is in (for water/motion)
+    const [cx, cy] = center(it); const h = sim.ship.hulls.find(h => cx >= h.rect[0] && cx <= h.rect[0] + h.rect[2] && cy <= h.rect[1] && cy >= h.rect[1] - h.rect[3]);
+    d.hull = h ? h.id : null;
+  }
+
+  // ---------- the practice round ----------
+  // A pilot steering (x: stop / part / full throttle, y: depth changes), fights (gunners firing every turret and the
+  // discharge coil, sonar active), and optional hull breaches (water detectors in that room read 100 %).
+  class Scenario {
+    constructor(sim, o) {
+      this.sim = sim; this.o = Object.assign({ fights: true, fightEvery: 240, firstFight: 90, breachAt: null, breachHull: null, pilot: true }, o);
+      let a = (o.seed || 7) >>> 0; this.r = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
+      this.nextX = 0; this.nextY = 0; this.fightEnd = -1; this.nextFight = this.o.firstFight; this.nextShot = 0; this.events = [];
+    }
+    update(t) {
+      const sim = this.sim, r = this.r, nav = sim.nav, fighting = t < this.fightEnd;
+      if (this.o.fights && !fighting && t >= this.nextFight) { this.fightEnd = t + 40 + r() * 120; this.nextFight = this.fightEnd + this.o.fightEvery * (0.5 + r()); sim.metrics.ev('fight starts'); }
+      if (nav && this.o.pilot) {
+        const s = nav.state;
+        if (t >= this.nextX) { const q = r(); s.tx = (r() < 0.85 ? 1 : -1) * (q < (fighting ? 0.25 : 0.45) ? 0 : q < 0.75 ? 15 + r() * 65 : 100); this.nextX = t + (fighting ? 3 + r() * 12 : 20 + r() * 100); }
+        if (t >= this.nextY) { const q = r(); s.ty = q < 0.35 ? 0 : (r() < 0.5 ? -1 : 1) * (q < 0.6 ? 5 + r() * 35 : q < 0.7 ? 40 + r() * 40 : 80 + r() * 20); this.nextY = t + 5 + r() * 35; }
+        s.sonarActive = fighting;
+      }
+      if (fighting && t >= this.nextShot) { // gunners
+        for (const d of sim.devs) if ((d.kind === 'turret' || d.kind === 'discharger') && r() < (d.kind === 'discharger' ? 0.15 : 0.7)) d.sim.recv('trigger_in', { v: '1', steps: 0, src: null });
+        this.nextShot = t + 0.5 + r() * 1.5;
+      }
+      if (this.o.breachAt !== null && t >= this.o.breachAt && !this.breached) {
+        this.breached = true; const hs = sim.ship.hulls; const h = hs.find(x => x.id === this.o.breachHull) || hs[Math.floor(r() * hs.length)];
+        sim.hullWater[h.id] = 100; sim.metrics.ev(`hull breach in ${h.name || 'hull ' + h.id}`);
+      }
+    }
+  }
+  return { ShipSim, Scenario };
+});

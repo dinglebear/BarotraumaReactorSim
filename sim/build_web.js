@@ -4,8 +4,8 @@
 const fs = require('fs'), path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
-const sim = ['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/project.js', 'sim/autopins.js'].map(read).join('\n;\n');
-const lib = { circuits: {}, profiles: {} };
+const sim = ['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/project.js', 'sim/autopins.js', 'sim/subfile.js', 'sim/ship.js'].map(read).join('\n;\n');
+const lib = { circuits: {}, profiles: {}, ships: {} };
 const list = d => fs.existsSync(path.join(ROOT, d)) ? fs.readdirSync(path.join(ROOT, d)).sort() : [];
 for (const f of list('circuits')) {
   if (f.endsWith('.circ')) lib.circuits[f.replace(/\.circ$/, '')] = { circ: read('circuits/' + f), group: 'AI' };
@@ -36,6 +36,12 @@ function thin(text, name) {
   }
   return L.join('\n') + '\n';
 }
+// submarines for the practice round: parsed from ships/**/*.sub (gzipped XML) into the light ship model
+{ const zlib = require('zlib'), SF = require('./subfile');
+  for (const dir of ['ships/vanilla', 'ships/custom']) for (const f of list(dir)) if (f.endsWith('.sub')) {
+    const buf = fs.readFileSync(path.join(ROOT, dir, f)), xml = (buf[0] === 0x1f && buf[1] === 0x8b ? zlib.gunzipSync(buf) : buf).toString('utf8');
+    const sh = SF.parseSub(xml); lib.ships[sh.name] = sh;
+  } }
 for (const f of list('load_profiles')) if (f.endsWith('.csv')) lib.profiles[f.replace(/\.csv$/, '')] = thin(read('load_profiles/' + f), f);
 const json = JSON.stringify(lib).replace(/</g, '\\u003c');
 const html = read('web/app.html').replace('/*__SIM__*/', () => sim.replace(/<\/script/gi, '<\\/script')).replace('/*__LIB__*/', () => json);

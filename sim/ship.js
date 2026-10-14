@@ -52,7 +52,7 @@
       if (it.box) { // circuit box: the bench's box model, wired by the sub's real wires
         const bm = Object.assign({}, it.box, { name: 'box' + it.id }); const box = this.buildBox(bm); this.boxes.push(box); d.kind = 'circuitbox'; d.sim = box; box.dev = d; d.box = bm; return;
       }
-      if (it.logic) { // a logic component placed in the sub (outside a circuit box)
+      if (it.logic && !k.RelayComponent) { // a logic component placed in the sub (outside a circuit box); relays are power devices too
         const def = C.byItem(it.identifier), props = {}; const attrs = first(it, def.cls) || {};
         for (const key of Object.keys(def.defaults)) if (attrs[key] !== undefined) props[key] = attrs[key];
         const box = this.buildBox({ name: 'logic' + it.id, components: [{ id: '0', item: def.item, props }], wires: [], pins: {} });
@@ -71,13 +71,15 @@
       }
       if (k.PowerTransfer) { const p = first(it, 'PowerTransfer'); Object.assign(d.sim, { cond: 100, overloadV: n(p.OverloadVoltage, 1.7), prevP: 0, pSig: null, prevL: 0, lSig: null }); d.kind = 'junction'; this.jbs.push(d); return; }
       if (k.RelayComponent) {
-        const p = first(it, 'RelayComponent'); d.kind = 'relay'; d.state.on = bool(p.IsOn, false); d.maxPower = n(p.MaxPower, 1000); this.relays.push(d);
+        const p = first(it, 'RelayComponent'); d.kind = 'relay'; d.maxPower = n(p.MaxPower, 1000); this.relays.push(d);
+        d.state.on = true; d.state.savedOn = bool(p.IsOn, true); // relays start ON (closed); toggle/set_state signals or the viewer can switch them
         d.sim.recv = (pin, sig) => {
           const s = d.state;
           if (pin === 'toggle') { if (sig.v !== '0') s.on = !s.on; }
           else if (pin === 'set_state') s.on = sig.v !== '0';
-          else if (pin === 'signal_in1') this.send(d.sim, 'signal_out1', sig.v); else if (pin === 'signal_in2') this.send(d.sim, 'signal_out2', sig.v);
+          else if (s.on && pin === 'signal_in1') this.send(d.sim, 'signal_out1', sig.v); else if (s.on && pin === 'signal_in2') this.send(d.sim, 'signal_out2', sig.v);
         };
+        d.update = () => { this.send(d.sim, 'state_out', d.state.on ? '1' : '0'); };
         return;
       }
       DEVICE(this, d);
@@ -106,6 +108,7 @@
         const pc = ['power_in', 'power'].find(c => has(d.it, c));
         d.grid = pc ? grid(id + '|' + pc) : null; if (d.grid) d.grid.consumers.push(d);
       }
+      this.connGrid = new Map(); for (const k of parent.keys()) this.connGrid.set(k, grid(k)); // for the viewer: which grid each power pin is on
       this.grids = [...grids.values()];
       this.reactorGrid = this.grids.find(g => g.reactor) || { load: 0, power: 0, voltage: 0, consumers: [], batteries: [], sources: [], jbs: [] };
     }

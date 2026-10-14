@@ -208,7 +208,9 @@
         <From name="signal_out" target="12" />
         <To name="signal_out1" target="" />
       </Wire>
-      <Label id="0" color="#FFB000" position="0,-900" size="500,250" header="SHIP-SPECIFIC VALUES" body="Exported for: reactor 3000 kW, 2 batteries (1600 kW recharge, 1300 kW output). On another ship edit: kb ($BATT_KW), kg ($BATT_KW), bias ($BATT_KW), kn ($BATT_N)" />
+      <Label id="0" color="#7ED3E0" position="-508,1116" size="784,568" header="BATTERY BOX: HOW IT WORKS" body="Keeps the batteries near 60 % so they can soak up surplus AND cover dips (a full battery can't absorb anything).&#xA;Demand = grid load - battery charging (charge rate % x total recharge).&#xA;Error = 60 - charge %. The reactor is asked for demand + error x recharge/50 (at most +/- half the recharge): more when the batteries are low, less when they are high.&#xA;It only asks for less than demand by what the batteries really deliver (+50 kW), so disabled or empty batteries never cause a brownout.&#xA;Surplus = reactor output - demand goes into the batteries: set_rate = surplus / total recharge.&#xA;It keeps battery output enabled (disable_output 0)." />
+      <Label id="1" color="#7ED3E0" position="196,980" size="504,296" header="WIRING" body="in1 charge_%, in2 charge_rate, in7 power_value_out (from ONE battery)&#xA;in3 main junction box load_value_out, in6 reactor power_value_out&#xA;out1 set_rate and out3 disable_output -&gt; EVERY battery&#xA;out2 -&gt; reactor box in8" />
+      <Label id="2" color="#FFB000" position="816,1031" size="616,398" header="VALUES FOR THIS SUB" body="Set for: reactor 3000 kW, 2 batteries (1600 kW recharge, 1300 kW output, 1000 kW*min). On another sub change:&#xA;Memory Value = 1600: total battery max recharge (kW)&#xA;Memory Value = 32: total battery max recharge (kW) / 50&#xA;Multiply ClampMin = -800: -total battery max recharge (kW) / 2&#xA;Multiply ClampMax = 800: total battery max recharge (kW) / 2&#xA;Memory Value = 2: number of batteries" />
     </CircuitBox>
     <itemstats />
   </Item>

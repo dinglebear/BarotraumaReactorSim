@@ -2,6 +2,15 @@
 
 `exports/<Sub>/` holds Blueprints files with that sub's own values already filled in: reactor max output, battery count, recharge, output and capacity, all read from the sub's `.sub` file. Copy them into `Barotrauma/LocalMods/Blueprints_saved_blueprints/` and load each one into its own circuit box.
 
+Each box carries labels you can read in game: **how it works**, **wiring**, and **values for this sub** (which part holds the max output or battery numbers, and what to change on another sub). Make files for any sub with `node sim/cli.js export <circuit> --sub <Name>`.
+
+## example_feedforward: reactor-only auto-reactor (12 parts)
+One circuit box:
+- turbine = load ÷ max output × 100;
+- fission = (actual turbine + 100 − temperature) × 50 ÷ fuel, which holds the temperature at 50.
+
+Wiring, all from the reactor: in1 `load_value_out`, in2 `power_value_out`, in3 `temperature_out`, in4 `fuel_out`. Outputs: out1 → `set_fissionrate`, out2 → `set_turbineoutput`. Turn the reactor's automatic control off.
+
 ## example_battery: auto-reactor that uses the batteries as a buffer
 Two circuit boxes. The **battery box** does the battery math and tells the **reactor box** what to make:
 - It keeps the batteries near 60 %, so they can both soak up surplus and cover dips.

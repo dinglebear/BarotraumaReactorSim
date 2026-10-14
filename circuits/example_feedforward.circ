@@ -3,6 +3,8 @@
 # actual turbine = power_value_out / maxKW * 100, so heat follows the turbine's real (slew-limited) position
 name example_feedforward
 box reactor
+note "HOW IT WORKS (12 parts)" "Turbine = load / max output x 100: the turbine always matches what the sub is using.\nFission = (actual turbine + 100 - temperature) x 50 / fuel: exactly the heat the turbine needs, and it pulls the temperature back to 50 (optimal 40-60).\nActual turbine = power output / max x 100, so heat follows the turbine as it really moves (turbines change at most 5 %/s) and the temperature does not overshoot.\nTurn the reactor's automatic control OFF."
+note "WIRING" "From the reactor: in1 load_value_out, in2 power_value_out, in3 temperature_out, in4 fuel_out\nout1 -> set_fissionrate, out2 -> set_turbineoutput"
 c tdiv div                    # load / max
 c tmax mem Value=$MAX         # $MAX = reactor max output kW (filled in automatically)
 c tpct mul                    # * 100

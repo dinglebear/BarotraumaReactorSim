@@ -128,7 +128,9 @@
         <From name="signal_out" target="11" />
         <To name="signal_out1" target="" />
       </Wire>
-      <Label id="0" color="#FFB000" position="0,-900" size="500,250" header="SHIP-SPECIFIC VALUES" body="Exported for: reactor 3000 kW, 2 batteries (1600 kW recharge, 1300 kW output). On another ship edit: tmax ($MAX)" />
+      <Label id="0" color="#7ED3E0" position="-640,997" size="520,330" header="REACTOR BOX: HOW IT WORKS (12 parts)" body="Makes what the battery box asks for (in8, kW).&#xA;Turbine = setpoint / max output x 100.&#xA;Fission = (actual turbine + 100 - temperature) x 50 / fuel: exactly the heat needed, temperature held at 50.&#xA;Turn the reactor's automatic control OFF." />
+      <Label id="1" color="#7ED3E0" position="-90,963" size="460,262" header="WIRING" body="From the reactor: in2 power_value_out, in3 temperature_out, in4 fuel_out&#xA;in8 &lt;- battery box out2&#xA;out1 -&gt; set_fissionrate, out2 -&gt; set_turbineoutput" />
+      <Label id="2" color="#FFB000" position="432,963" size="464,262" header="VALUES FOR THIS SUB" body="Set for: reactor 3000 kW, 2 batteries (1600 kW recharge, 1300 kW output, 1000 kW*min). On another sub change:&#xA;Memory Value = 3000: reactor max output (kW)" />
     </CircuitBox>
     <itemstats />
   </Item>

@@ -13,6 +13,8 @@
 #   The box also holds the batteries' disable_output at 0 (on vanilla subs, unwire the sub's own battery toggle).
 name example_battery
 box battery
+note "BATTERY BOX: HOW IT WORKS" "Keeps the batteries near 60 % so they can soak up surplus AND cover dips (a full battery can't absorb anything).\nDemand = grid load - battery charging (charge rate % x total recharge).\nError = 60 - charge %. The reactor is asked for demand + error x recharge/50 (at most +/- half the recharge): more when the batteries are low, less when they are high.\nIt only asks for less than demand by what the batteries really deliver (+50 kW), so disabled or empty batteries never cause a brownout.\nSurplus = reactor output - demand goes into the batteries: set_rate = surplus / total recharge.\nIt keeps battery output enabled (disable_output 0)."
+note "WIRING" "in1 charge_%, in2 charge_rate, in7 power_value_out (from ONE battery)\nin3 main junction box load_value_out, in6 reactor power_value_out\nout1 set_rate and out3 disable_output -> EVERY battery\nout2 -> reactor box in8"
 pin in1 battery.charge_%
 pin in2 battery.charge_rate
 pin in3 junction.load_value_out
@@ -78,6 +80,8 @@ w sur.out rate.1
 w rate.out pct.1
 w pct.out out1
 box reactor
+note "REACTOR BOX: HOW IT WORKS (12 parts)" "Makes what the battery box asks for (in8, kW).\nTurbine = setpoint / max output x 100.\nFission = (actual turbine + 100 - temperature) x 50 / fuel: exactly the heat needed, temperature held at 50.\nTurn the reactor's automatic control OFF."
+note "WIRING" "From the reactor: in2 power_value_out, in3 temperature_out, in4 fuel_out\nin8 <- battery box out2\nout1 -> set_fissionrate, out2 -> set_turbineoutput"
 c tdiv div                    # setpoint / max
 c tmax mem Value=$MAX
 c tpct mul ClampMin=0 ClampMax=100  # * 100 -> turbine

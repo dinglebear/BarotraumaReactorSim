@@ -43,6 +43,8 @@ function thin(text, name) {
     const sh = SF.parseSub(xml); lib.ships[sh.name] = sh;
   } }
 for (const f of list('load_profiles')) if (f.endsWith('.csv')) lib.profiles[f.replace(/\.csv$/, '')] = thin(read('load_profiles/' + f), f);
+// titles / groups / order for the circuit lists
+if (fs.existsSync(path.join(ROOT, 'circuits/catalog.json'))) lib.catalog = JSON.parse(read('circuits/catalog.json'));
 const json = JSON.stringify(lib).replace(/</g, '\\u003c');
 const html = read('web/app.html').replace('/*__SIM__*/', () => sim.replace(/<\/script/gi, '<\\/script')).replace('/*__LIB__*/', () => json);
 fs.writeFileSync(path.join(ROOT, 'web/index.html'), html);

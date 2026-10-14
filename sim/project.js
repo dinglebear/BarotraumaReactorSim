@@ -56,8 +56,18 @@
     if (typeof vals !== 'object') vals = { MAX: vals };
     const m = substitute(model, vals), out = [];
     m.boxes.forEach((b, bi) => { // in-game note for every value that came from a placeholder
-      const used = model.boxes[bi].components.map(c => [c.id, [...new Set(Object.values(c.props).join(' ').match(PH) || [])]]).filter(x => x[1].length);
-      if (used.length) b.labels.push({ header: 'SHIP-SPECIFIC VALUES', body: `Exported for: reactor ${vals.MAX} kW` + (vals.BATT_N ? `, ${vals.BATT_N} batteries (${vals.BATT_KW} kW recharge, ${vals.BATT_OUT} kW output)` : '') + `. On another ship edit: ` + used.map(([id, ph]) => `${id} (${ph.join(' ')})`).join(', '), color: '#FFB000' });
+      // say which parts hold sub-specific numbers, by kind and current value (component ids aren't visible in game)
+      const WORDS = { MAX: 'reactor max output (kW)', BATT_KW: 'total battery max recharge (kW)', BATT_OUT: 'total battery max output (kW)', BATT_N: 'number of batteries', BATT_CAP: 'total battery capacity (kW*min)' };
+      const KIND = { memorycomponent: 'Memory', multiplycomponent: 'Multiply', dividecomponent: 'Divide', addercomponent: 'Adder', subtractcomponent: 'Subtract' };
+      const lines = [];
+      model.boxes[bi].components.forEach((c, ci) => {
+        for (const [k, v] of Object.entries(c.props)) {
+          if (typeof v !== 'string' || !/\$[A-Z_]+/.test(v)) continue;
+          const now = m.boxes[bi].components[ci].props[k], what = v.replace(/\$(BATT_KW|BATT_OUT|BATT_CAP|BATT_N|MAX)/g, (x, n) => WORDS[n]).replace(/\*/g, ' x ').replace(/\//g, ' / ');
+          lines.push(`${KIND[c.item] || c.item} ${k} = ${now}: ${what}`);
+        }
+      });
+      if (lines.length) b.labels.push({ header: 'VALUES FOR THIS SUB', body: `Set for: reactor ${vals.MAX} kW` + (vals.BATT_N ? `, ${vals.BATT_N} batteries (${vals.BATT_KW} kW recharge, ${vals.BATT_OUT} kW output, ${vals.BATT_CAP} kW*min)` : '') + `. On another sub change:\n` + [...new Set(lines)].join('\n'), color: '#FFB000' });
     });
     for (const b of m.boxes) if (!b.pins) { // label used pins with the default harness so the in-game wiring is obvious
       const used = new Set(); for (const w of b.wires) { if (w.from.c === null) used.add(F.shortPin(w.from.pin)); if (w.to.c === null) used.add(F.shortPin(w.to.pin)); }

@@ -145,6 +145,21 @@ const COMMANDS = {
     const out = path.join(ROOT, 'logs', `${r.circuit}__${r.profile}.log`); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, P.fmtReport(r));
     process.stdout.write(P.fmtReport(r)); console.log('log: ' + rel(out));
   },
+  // export <circuit> --sub Dugong,Humpback,... : Blueprints files with that sub's values (from its .sub) -> exports/<Sub>/
+  export(a) {
+    const zlib = require('zlib'), SF = require('./subfile');
+    const f = resolve(a._[0], CIRC_DIRS), model = loadModel(f);
+    for (const name of String(a.sub || 'Dugong,Humpback,Typhon2').split(',')) {
+      const sf = [`ships/vanilla/${name}.sub`, `ships/custom/${name}.sub`, name].map(x => path.isAbsolute(x) ? x : path.join(ROOT, x)).find(x => fs.existsSync(x) && fs.statSync(x).isFile());
+      if (!sf) { console.log(`no sub "${name}"`); continue; }
+      const buf = fs.readFileSync(sf), sh = SF.parseSub((buf[0] === 0x1f && buf[1] === 0x8b ? zlib.gunzipSync(buf) : buf).toString('utf8'));
+      const R = (sh.items.find(i => i.comps.Reactor) || { comps: { Reactor: [{}] } }).comps.Reactor[0];
+      const bs = sh.items.filter(i => i.comps.PowerContainer && !/supercapacitor/.test(i.identifier)).map(i => i.comps.PowerContainer[0]), sum = k => bs.reduce((x, b) => x + Number(b[k]), 0);
+      const vals = { MAX: Number(R.MaxPowerOutput) || 5000, BATT_N: bs.length, BATT_KW: sum('MaxRechargeSpeed'), BATT_OUT: sum('MaxOutPut'), BATT_CAP: sum('Capacity') };
+      const dir = path.join(ROOT, 'exports', sh.name); fs.mkdirSync(dir, { recursive: true });
+      for (const o of P.exportBoxes(model, vals)) { fs.writeFileSync(path.join(dir, o.filename), o.text); console.log(rel(path.join(dir, o.filename)), JSON.stringify(vals)); }
+    }
+  },
   // verify <trace.csv>: replay a ReactorTrace recorded in game and show where the simulator differs
   verify(a) { const f = resolve(a._[0], ['traces', 'load_profiles']); process.stdout.write(require('./verify').verify(read(f), { from: a.from != null ? Number(a.from) : null, mode: a.physics ? 'physics' : a.autotemp ? 'autotemp' : null, debug: a.debug ? String(a.debug).split('-').map(Number) : null })); },
   profiles() { for (const p of listProfiles({})) { const pr = E.parseProfile(read(p), path.basename(p)); const d = pr.points.map(x => x.demand); console.log(`${path.basename(p, '.csv')} dur=${pr.duration.toFixed(0)}s max_kw=${pr.reactorMaxKW || '?'} sub=${pr.meta.sub || '?'} demand=${Math.min(...d).toFixed(0)}..${Math.max(...d).toFixed(0)}`); } },

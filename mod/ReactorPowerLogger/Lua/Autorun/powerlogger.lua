@@ -328,13 +328,17 @@ local function startRound()
             if t then fuelType = t end
         end
     end)
-    local battCap, battN, battMax, battOut, capsN, capsCap = 0, 0, 0, 0, 0, 0
-    for _, pc in ipairs(dev.batteries) do pcall(function() battCap = battCap + pc.Capacity; battMax = battMax + pc.MaxRechargeSpeed; battOut = battOut + pc.MaxOutPut; battN = battN + 1 end) end
+    local battCap, battN, battMax, battOut, battRate, capsN, capsCap = 0, 0, 0, 0, 0, 0, 0
+    for _, pc in ipairs(dev.batteries) do pcall(function() battCap = battCap + pc.Capacity; battMax = battMax + pc.MaxRechargeSpeed; battOut = battOut + pc.MaxOutPut; battRate = battRate + pc.RechargeSpeed; battN = battN + 1 end) end
     for _, pc in ipairs(dev.supercaps) do pcall(function() capsCap = capsCap + pc.Capacity; capsN = capsN + 1 end) end
     local engMax, pumpMax = 0, 0
     for _, e in ipairs(dev.engines) do pcall(function() engMax = engMax + e.PowerConsumption end) end
     for _, p in ipairs(dev.pumps) do pcall(function() pumpMax = pumpMax + p.PowerConsumption end) end
     local ri = dev.reactors[1].Item
+    -- the sub's own reactor timers and junction box overload limit (subs override the item defaults)
+    local subVals = ""
+    pcall(function() subVals = subVals .. "# reactor_meltdown_delay=" .. string.format("%g", dev.reactors[1].MeltdownDelay) .. "\n# reactor_fire_delay=" .. string.format("%g", dev.reactors[1].FireDelay) .. "\n" end)
+    pcall(function() if dev.junctions[1] then subVals = subVals .. "# junction_overload_voltage=" .. string.format("%g", dev.junctions[1].GetComponentString("PowerTransfer").OverloadVoltage) .. "\n" end end)
     local rate = 0.2
     pcall(function() rate = dev.reactors[1].FuelConsumptionRate end)
     header = "# BaroPowerLog v3\n"
@@ -344,10 +348,11 @@ local function startRound()
         .. "# fuel_rods=" .. rods .. "\n"
         .. "# fuel_type=" .. fuelType .. "\n"
         .. "# fuel_consumption_rate=" .. string.format("%.3f", rate) .. "\n"
-        .. "# ship_batteries=" .. battN .. " (capacity " .. string.format("%.0f", battCap) .. " kW*min, max recharge " .. string.format("%.0f", battMax) .. " kW, max output " .. string.format("%.0f", battOut) .. " kW)\n"
+        .. "# ship_batteries=" .. battN .. " (capacity " .. string.format("%.0f", battCap) .. " kW*min, max recharge " .. string.format("%.0f", battMax) .. " kW, max output " .. string.format("%.0f", battOut) .. " kW, recharge setting " .. string.format("%.0f", battRate) .. " kW)\n"
         .. "# supercapacitors=" .. capsN .. " (capacity " .. string.format("%.0f", capsCap) .. " kW*min)\n"
         .. "# engines=" .. #dev.engines .. " (max " .. string.format("%.0f", engMax) .. " kW) pumps=" .. #dev.pumps .. " (max " .. string.format("%.0f", pumpMax) .. " kW) turrets=" .. #dev.turrets .. " sonars=" .. #dev.sonars .. " junction_boxes=" .. #dev.junctions .. "\n"
         .. "# reactor_signal_wires=fission:" .. wired(ri, "set_fissionrate") .. " turbine:" .. wired(ri, "set_turbineoutput") .. " (0 = run by hand/AutoTemp)\n"
+        .. subVals
         .. gameInfo()
         .. "t," .. table.concat(COLS, ",") .. "\n"
     rows, roundTime, lastReal, lastRowT, last = {}, 0, Timer.GetTime(), -1e9, nil

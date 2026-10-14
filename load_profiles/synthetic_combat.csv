@@ -2,7 +2,10 @@
 # sub=Typhon2 (synthetic)
 # reactor_max_kw=5200
 # duration=1200
-# ship_batteries=2 (capacity 3000 kW*min)
+# ship_batteries=2 (capacity 3000 kW*min, max recharge 1000 kW, max output 3000 kW, recharge setting 500 kW)
+# reactor_meltdown_delay=90
+# reactor_fire_delay=15
+# junction_overload_voltage=1.7
 # scenario=Typhon2, frequent fights
 t,demand,nav.velocity_x_out,nav.velocity_y_out,engines.load_value_out,pumps.load_value_out,guns.load_value_out,sonar.load_value_out
 0.000,1840.0,0.0000,0.2604,0.0,0.0,0.0,100.0

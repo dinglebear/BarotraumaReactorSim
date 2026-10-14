@@ -48,15 +48,18 @@
     return Object.keys(out).length ? out : null;
   }
 
+  // first usable number: settings, then the test file's header (the sub's own values), then the default
+  function num(...v) { for (const x of v) { const n = Number(x); if (x !== undefined && x !== null && x !== '' && Number.isFinite(n)) return n; } return undefined; }
   // Batteries for a test: the settings, or (batteries.ship) the recorded ship's own: header
   // "ship_batteries=N (capacity C kW*min[, max recharge R kW][, max output O kW])" split evenly over N batteries.
   function batterySpec(cfg, profile) {
     const bc = (cfg && cfg.batteries) || {}, type = Object.assign({}, BATT[bc.type || 'battery'] || BATT.battery, bc.custom || {});
-    const m = bc.ship && /^(\d+)\s*\(capacity\s*([\d.]+)[^,)]*(?:,\s*max recharge\s*([\d.]+)[^,)]*)?(?:,\s*max output\s*([\d.]+)[^,)]*)?/.exec(((profile && profile.meta) || {}).ship_batteries || '');
+    const sb = ((profile && profile.meta) || {}).ship_batteries || '', m = bc.ship && /^(\d+)\s*\(capacity\s*([\d.]+)/.exec(sb);
     if (m && Number(m[1]) > 0) {
-      const n = Number(m[1]);
-      Object.assign(type, { capacity: Number(m[2]) / n }, m[3] ? { maxRecharge: Number(m[3]) / n } : {}, m[4] ? { maxOut: Number(m[4]) / n } : {});
-      return { count: n, type, ship: true };
+      const n = Number(m[1]), g = re => { const x = re.exec(sb); return x ? Number(x[1]) / n : undefined; };
+      const rec = g(/max recharge\s*([\d.]+)/), out = g(/max output\s*([\d.]+)/), rate = g(/recharge setting\s*([\d.]+)/);
+      Object.assign(type, { capacity: Number(m[2]) / n }, rec ? { maxRecharge: rec } : {}, out ? { maxOut: out } : {});
+      return { count: n, type, ship: true, startRateKW: rate };
     }
     return { count: bc.count || 1, type, ship: false };
   }
@@ -89,7 +92,7 @@
       const rodCount = cfg.rods != null ? cfg.rods : !cfg.recordedRods ? 2 : p0.rods !== undefined ? p0.rods : (Number(meta.fuel_rods) || 1);
       this.reactor = this.mkItem('reactor', {
         maxPower: cfg.reactorMaxKW || this.profile.reactorMaxKW || 5000, fuelRate: cfg.fuelConsumptionRate || 0.2,
-        meltdownDelay: 120, fireDelay: 20, dos: clamp(cfg.skill || 0, 0, 1),
+        meltdownDelay: num(cfg.meltdownDelay, meta.reactor_meltdown_delay, 120), fireDelay: num(cfg.fireDelay, meta.reactor_fire_delay, 20), dos: clamp(cfg.skill || 0, 0, 1),
         fission: 0, turbine: 0, temp: 0, tf: 0, tt: 0, autoTemp: false, powerOn: true, load: 0, cpc: 0, cto: 0,
         availFuel: 0, prevAvailFuel: 0, sigF: null, sigT: null, lastF: -1e9, lastT: -1e9, melt: 0, fire: 0, boost: 0,
         cond: 100, wearDelay: 120 + this.rand() * 600, minOut: 0, maxOut: 0, optT: [0, 0], allT: [0, 0], optTemp: [40, 60], allTemp: [30, 70], optF: [0, 0], allF: [0, 0],
@@ -98,7 +101,7 @@
       if (cfg.recordedRods && p0.rodFuel) for (const r of this.reactor.rods) r.fuel = p0.rodFuel; // rod type recorded/inferred for the start of the round
       this.reactor.availFuel = this.rodFuel();
       // ---- junction box ----
-      this.junction = this.mkItem('junction', { cond: 100, wearDelay: 120 + this.rand() * 600, overloadV: 2, prevP: 0, pSig: null, prevL: 0, lSig: null, cooldown: 0, breaks: 0 });
+      this.junction = this.mkItem('junction', { cond: 100, wearDelay: 120 + this.rand() * 600, overloadV: num(cfg.overloadVoltage, meta.junction_overload_voltage, 1.7), prevP: 0, pSig: null, prevL: 0, lSig: null, cooldown: 0, breaks: 0 });
       // ---- batteries ----
       this.batteries = [];
       const bc = cfg.batteries || {};
@@ -110,7 +113,7 @@
             capacity: bt.capacity, maxRecharge: bt.maxRecharge, maxOut: bt.maxOut, eff: bt.efficiency == null ? 0.95 : bt.efficiency, exp: !!bt.exponential,
             charge: bt.capacity * clamp(bc.startCharge == null ? 0.5 : bc.startCharge, 0, 1), prevCharge: 0, rate: 0, cpc: 0, out: 0, disabled: false,
           });
-          b.prevCharge = b.charge; this.setRecharge(b, (bc.startRate == null ? 0 : bc.startRate) / 100 * b.maxRecharge);
+          b.prevCharge = b.charge; this.setRecharge(b, spec.startRateKW != null ? spec.startRateKW : (bc.startRate == null ? 0 : bc.startRate) / 100 * b.maxRecharge); // the sub's own preset rate, else the setting
           this.batteries.push(b);
         }
       }

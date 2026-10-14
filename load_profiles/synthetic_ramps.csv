@@ -2,7 +2,10 @@
 # sub=Humpback (synthetic)
 # reactor_max_kw=3100
 # duration=1200
-# ship_batteries=5 (capacity 2060 kW*min)
+# ship_batteries=4 (capacity 2000 kW*min, max recharge 2000 kW, max output 2000 kW, recharge setting 0 kW)
+# reactor_meltdown_delay=30
+# reactor_fire_delay=10
+# junction_overload_voltage=1.7
 # scenario=Humpback sprints, stops and fights
 t,demand,nav.velocity_x_out,nav.velocity_y_out,engines.load_value_out,pumps.load_value_out,guns.load_value_out,sonar.load_value_out
 0.000,1530.0,0.0000,0.0000,0.0,0.0,0.0,100.0

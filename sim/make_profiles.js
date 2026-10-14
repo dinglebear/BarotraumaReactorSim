@@ -15,10 +15,10 @@ const fs = require('fs'), path = require('path');
 const out = process.argv[2] || path.join(__dirname, '..', 'load_profiles');
 function rng(seed) { let a = seed; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; }
 const STEER = Math.pow(1 / (1 - 0.2), 2) * 10; // Steering default adjust speed 0.2 -> 15.6 units/s
-const SHIPS = { // from the real logs: base = demand minus devices (median), device maxima, supercapacitor count
-  dugong: { sub: 'Dugong (synthetic)', maxKW: 3000, batteries: '2 (capacity 1000 kW*min)', base: 1375, engineKW: 600, ballastKW: 800, bilgeKW: 350, caps: 2, railKW: 0 },
-  humpback: { sub: 'Humpback (synthetic)', maxKW: 3100, batteries: '5 (capacity 2060 kW*min)', base: 1430, engineKW: 1500, ballastKW: 700, bilgeKW: 400, caps: 2, railKW: 0 },
-  typhon: { sub: 'Typhon2 (synthetic)', maxKW: 5200, batteries: '2 (capacity 3000 kW*min)', base: 1740, engineKW: 2600, ballastKW: 1000, bilgeKW: 700, caps: 7, railKW: 1900 },
+const SHIPS = { // from the real logs (base = demand minus devices, device maxima) and the subs' .sub files (batteries, reactor timers)
+  dugong: { sub: 'Dugong (synthetic)', maxKW: 3000, batteries: '2 (capacity 1000 kW*min, max recharge 1600 kW, max output 1300 kW, recharge setting 320 kW)', header: ["reactor_meltdown_delay=30", "reactor_fire_delay=10", "junction_overload_voltage=1.7"], base: 1375, engineKW: 600, ballastKW: 800, bilgeKW: 350, caps: 2, railKW: 0 },
+  humpback: { sub: 'Humpback (synthetic)', maxKW: 3100, batteries: '4 (capacity 2000 kW*min, max recharge 2000 kW, max output 2000 kW, recharge setting 0 kW)', header: ["reactor_meltdown_delay=30", "reactor_fire_delay=10", "junction_overload_voltage=1.7"], base: 1430, engineKW: 1500, ballastKW: 700, bilgeKW: 400, caps: 2, railKW: 0 },
+  typhon: { sub: 'Typhon2 (synthetic)', maxKW: 5200, batteries: '2 (capacity 3000 kW*min, max recharge 1000 kW, max output 3000 kW, recharge setting 500 kW)', header: ["reactor_meltdown_delay=90", "reactor_fire_delay=15", "junction_overload_voltage=1.7"], base: 1740, engineKW: 2600, ballastKW: 1000, bilgeKW: 700, caps: 7, railKW: 1900 },
 };
 const CAP_KW = 160, CAP_FADE = 0.78; // per supercapacitor; recharge fades to 78 % per second after firing stops
 
@@ -26,7 +26,7 @@ function ship(name, S, o) {
   const r = rng(o.seed), dt = 1 / 60, pick = (a, b) => a + r() * (b - a);
   const cols = ['demand', 'nav.velocity_x_out', 'nav.velocity_y_out', 'engines.load_value_out', 'pumps.load_value_out', 'guns.load_value_out', 'sonar.load_value_out'];
   const L = ['# BaroPowerLog v2 (synthetic ship model, sim/make_profiles.js)', `# sub=${S.sub}`, `# reactor_max_kw=${S.maxKW}`, `# duration=${o.dur}`,
-    `# ship_batteries=${S.batteries}`, `# scenario=${o.note}`, 't,' + cols.join(',')];
+    `# ship_batteries=${S.batteries}`, ...S.header.map(l => '# ' + l), `# scenario=${o.note}`, 't,' + cols.join(',')];
   // pilot
   let inX = 0, inY = 0, vx = 0, vy = 0, prevVx = 0, prevVy = 0, nextX = 0, nextY = 0;
   // fights: episodes in which each supercapacitor's gunner fires bursts

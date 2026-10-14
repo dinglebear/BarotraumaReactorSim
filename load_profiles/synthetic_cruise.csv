@@ -2,7 +2,10 @@
 # sub=Dugong (synthetic)
 # reactor_max_kw=3000
 # duration=1200
-# ship_batteries=2 (capacity 1000 kW*min)
+# ship_batteries=2 (capacity 1000 kW*min, max recharge 1600 kW, max output 1300 kW, recharge setting 320 kW)
+# reactor_meltdown_delay=30
+# reactor_fire_delay=10
+# junction_overload_voltage=1.7
 # scenario=Dugong travelling, no combat
 t,demand,nav.velocity_x_out,nav.velocity_y_out,engines.load_value_out,pumps.load_value_out,guns.load_value_out,sonar.load_value_out
 0.000,1475.0,0.2604,0.0000,0.0,0.0,0.0,100.0

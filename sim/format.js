@@ -254,5 +254,5 @@
     if (/<CircuitBox/.test(text)) { const b = parseTxt(text, boxName); return { name: boxName || 'imported', boxes: [b], links: [], meta: {} }; }
     return parseCirc(text);
   }
-  return { parseTxt, toTxt, parseCirc, toCirc, load, shortPin, longPin, autoLayout };
+  return { parseTxt, toTxt, parseCirc, toCirc, load, shortPin, longPin, autoLayout, parseXml };
 });

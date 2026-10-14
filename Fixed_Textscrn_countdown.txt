@@ -1,0 +1,139 @@
+<Root>
+  <Item name="" identifier="circuitbox" ID="2539" markedfordeconstruction="false" rect="-896,-8,32,32" NonInteractable="False" NonPlayerTeamInteractable="False" AllowSwapping="True" Rotation="0" ImpactTolerance="0" ImpactDamage="0" ImpactDamageProbability="1" Scale="0.5" SpriteColor="255,255,255,255" InventoryIconColor="255,255,255,255" ContainerColor="255,255,255,255" HasBeenInstantiatedOnce="True" InvulnerableToDamage="False" Tags="smallitem" DisplaySideBySideWhenLinked="False" DisallowedUpgrades="" SpriteDepth="0.8" HiddenInGame="False" conditionpercentage="100">
+    <Holdable Attached="True" DisallowAttachingOverTags="" DisallowAttachingOverSize="0,0" SpriteDepthWhenDropped="0.55" MsgWhenDropped="ItemMsgPickupSelect" PickingTime="5" CanBePicked="True" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgDetachWrench">
+      <requireditem items="wrench,deattachtool" type="Equipped" characterinventoryslottype="None" optional="false" ignoreineditor="false" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" excludedidentifiers="multitool" />
+    </Holdable>
+    <ConnectionPanel Locked="False" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgRewireScrewdriver">
+      <requireditem items="screwdriver" type="Equipped" characterinventoryslottype="None" optional="false" ignoreineditor="false" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" />
+      <input name="signal_in1">
+        <link w="2536" i="1" />
+      </input>
+      <input name="signal_in2" />
+      <input name="signal_in3" />
+      <input name="signal_in4" />
+      <input name="signal_in5" />
+      <input name="signal_in6" />
+      <input name="signal_in7" />
+      <input name="signal_in8" />
+      <output name="signal_out1" />
+      <output name="signal_out2" />
+      <output name="signal_out3" />
+      <output name="signal_out4" />
+      <output name="signal_out5" />
+      <output name="signal_out6" />
+      <output name="signal_out7" />
+      <output name="signal_out8" />
+      <input name="signal_in0">
+        <link w="2534" i="0" />
+      </input>
+      <input name="signal_in9" />
+      <output name="signal_out0">
+        <link w="2535" i="0" />
+      </output>
+      <output name="signal_out9" />
+    </ConnectionPanel>
+    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="1914,1961,1972,2066,1906,1946,1947,1949,1975,1848,2003,2151,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ExtraStackSize="0" />
+    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="2254;2259;2294;2399;2400;2406;2450;2542;2543;2549;2558;2565;2566;2567;2568;2011,,,,,,,,," ExtraStackSize="0" />
+    <CircuitBox Locked="False" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgInteractSelect">
+      <requireditem items="idcard" type="Picked" characterinventoryslottype="None" optional="false" ignoreineditor="true" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" msg="UNAUTHORIZED ACCESS" />
+      <InputNode pos="-1460,-217">
+        <ConnectionLabelOverride name="signal_in0" value="<<<STRINGSTART>>>Terminal<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_in2" value="<<<STRINGSTART>>>Auto restart<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_in1" value="<<<STRINGSTART>>>Reset button<<<STRINGEND>>>" />
+      </InputNode>
+      <OutputNode pos="2037,21">
+        <ConnectionLabelOverride name="signal_out1" value="<<<STRINGSTART>>>sprinkler<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_out0" value="<<<STRINGSTART>>>textscrn<<<STRINGEND>>>" />
+      </OutputNode>      <Component id="0" position="1195,32" backingitemid="0,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>ModuloComponent<<<STRINGEND>>> Modulus=<<<STRINGSTART>>>60<<<STRINGEND>>> item=<<<STRINGSTART>>>modulocomponent<<<STRINGEND>>> />
+      <Component id="1" position="-29,-197" backingitemid="1,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>OscillatorComponent<<<STRINGEND>>> OutputType=<<<STRINGSTART>>>Pulse<<<STRINGEND>>> Frequency=<<<STRINGSTART>>>1<<<STRINGEND>>> item=<<<STRINGSTART>>>oscillator<<<STRINGEND>>> />
+      <Component id="2" position="-11,262" backingitemid="2,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="3" position="463,34" backingitemid="3,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
+      <Component id="4" position="827,242" backingitemid="4,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
+      <Component id="5" position="412,247" backingitemid="5,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>60<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="6" position="1219,239" backingitemid="6,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>FunctionComponent<<<STRINGEND>>> item=<<<STRINGSTART>>>floorcomponent<<<STRINGEND>>> />
+      <Component id="7" position="-468,46" backingitemid="7,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="8" position="410,-274" backingitemid="8,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>RelayComponent<<<STRINGEND>>> IsOn=<<<STRINGSTART>>>false<<<STRINGEND>>> item=<<<STRINGSTART>>>relaycomponent<<<STRINGEND>>> />
+      <Component id="9" position="3,36" backingitemid="9,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SignalCheckComponent<<<STRINGEND>>> Output=<<<STRINGSTART>>>120<<<STRINGEND>>> FalseOutput=<<<STRINGSTART>>><<<STRINGEND>>> TargetSignal=<<<STRINGSTART>>>1<<<STRINGEND>>> item=<<<STRINGSTART>>>signalcheckcomponent<<<STRINGEND>>> />
+      <Component id="10" position="1715,168" backingitemid="10,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>ConcatComponent<<<STRINGEND>>> Separator=<<<STRINGSTART>>>:<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>concatcomponent<<<STRINGEND>>> />
+      <Component id="11" position="830,18" backingitemid="11,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DelayComponent<<<STRINGEND>>> Delay=<<<STRINGSTART>>>0.009999999776482582<<<STRINGEND>>> ResetWhenSignalReceived=<<<STRINGSTART>>>false<<<STRINGEND>>> ResetWhenDifferentSignalReceived=<<<STRINGSTART>>>false<<<STRINGEND>>> item=<<<STRINGSTART>>>delaycomponent<<<STRINGEND>>> />      <Wire id="0" backingitemid="0,0" prefab="redwire">
+        <From name="signal_out" target="5" />
+        <To name="signal_in2" target="4" />
+      </Wire>
+      <Wire id="1" backingitemid="0,1" prefab="redwire">
+        <From name="signal_out" target="4" />
+        <To name="signal_in" target="6" />
+      </Wire>
+      <Wire id="2" backingitemid="0,2" prefab="redwire">
+        <From name="signal_out" target="7" />
+        <To name="set_output" target="9" />
+      </Wire>
+      <Wire id="3" backingitemid="" prefab="redwire">
+        <From name="signal_in0" target="" />
+        <To name="signal_in1" target="7" />
+      </Wire>
+      <Wire id="4" backingitemid="0,3" prefab="redwire">
+        <From name="signal_out" target="5" />
+        <To name="signal_in2" target="7" />
+      </Wire>
+      <Wire id="5" backingitemid="" prefab="redwire">
+        <From name="signal_out" target="10" />
+        <To name="signal_out0" target="" />
+      </Wire>
+      <Wire id="6" backingitemid="" prefab="redwire">
+        <From name="signal_in1" target="" />
+        <To name="signal_in" target="9" />
+      </Wire>
+      <Wire id="7" backingitemid="0,4" prefab="redwire">
+        <From name="signal_out" target="9" />
+        <To name="signal_in" target="2" />
+      </Wire>
+      <Wire id="8" backingitemid="0,5" prefab="redwire">
+        <From name="signal_out" target="6" />
+        <To name="signal_in1" target="10" />
+      </Wire>
+      <Wire id="9" backingitemid="0,6" prefab="redwire">
+        <From name="signal_out" target="11" />
+        <To name="signal_in" target="0" />
+      </Wire>
+      <Wire id="10" backingitemid="0,7" prefab="redwire">
+        <From name="signal_out" target="11" />
+        <To name="signal_in1" target="4" />
+      </Wire>
+      <Wire id="11" backingitemid="0,8" prefab="redwire">
+        <From name="signal_out" target="3" />
+        <To name="signal_in" target="11" />
+      </Wire>
+      <Wire id="12" backingitemid="0,9" prefab="redwire">
+        <From name="signal_out" target="1" />
+        <To name="signal_in1" target="8" />
+      </Wire>
+      <Wire id="13" backingitemid="0,10" prefab="redwire">
+        <From name="signal_out1" target="8" />
+        <To name="signal_in2" target="3" />
+      </Wire>
+      <Wire id="14" backingitemid="0,11" prefab="redwire">
+        <From name="signal_out" target="2" />
+        <To name="signal_in2" target="8" />
+      </Wire>
+      <Wire id="15" backingitemid="0,12" prefab="redwire">
+        <From name="signal_out2" target="8" />
+        <To name="signal_in1" target="3" />
+      </Wire>
+      <Wire id="16" backingitemid="0,13" prefab="redwire">
+        <From name="signal_out" target="2" />
+        <To name="set_state" target="8" />
+      </Wire>
+      <Wire id="17" backingitemid="0,14" prefab="redwire">
+        <From name="signal_out" target="11" />
+        <To name="signal_in" target="2" />
+      </Wire>
+      <Wire id="18" backingitemid="0,15" prefab="redwire">
+        <From name="signal_out" target="0" />
+        <To name="signal_in2" target="10" />
+      </Wire>
+      <Label id="0" color="#7ED3E0" position="-530,637" size="397,147" header="<<<STRINGSTART>>>Made by dingle<<<STRINGEND>>>" body="Please don't delete this, I would like to be credited for my time. I encorage downloading blueprint mod to save this and use on other servers! I have cheaper versions and vanilla versions. Msg me on discord @sirdinglebear" />
+      <Label id="1" color="#0082FF" position="2630,73" size="512,256" header="<<<STRINGSTART>>>Blueprints<<<STRINGEND>>>" body="Circuit made with Blueprints. &#xA; &#xA; Get it now on the steam workshop!" />
+    </CircuitBox>
+    <itemstats />
+  </Item>
+</Root>

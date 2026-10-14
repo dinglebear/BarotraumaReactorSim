@@ -6,9 +6,11 @@
   'use strict';
   // texts: {main: text, mainName, battery?: text}. main may be .circ or Blueprints .txt.
   // pinsText: optional sidecar "<box> <pin> <device.pin>" lines, e.g. "reactor in1 reactor.load_value_out"
+  //   or "prop <box> <componentId> <Property> <value>" to retune a community circuit per ship (value may use $MAX etc.)
   function applyPins(model, pinsText) {
     for (const raw of String(pinsText || '').split(/\r?\n/)) {
       const t = raw.replace(/#.*/, '').trim().split(/\s+/); if (t.length < 3) continue;
+      if (t[0] === 'prop') { const b = model.boxes.find(x => x.name === t[1]); const c = b && b.components.find(x => String(x.id) === t[2]); if (c) c.props[t[3]] = t.slice(4).join(' '); continue; }
       const b = model.boxes.find(x => x.name === t[0]); if (!b) continue;
       b.pins = b.pins || {}; b.pins[t[1]] = t[2];
     }

@@ -43,3 +43,29 @@ console.log('all tests passed');
   assert(tempRms < 0.5, 'verify replay error too high:\n' + out);
 }
 console.log('verify self-check passed');
+// real game data: replaying the recorded Dugong round (AutoTemp, 1 -> 4 uranium rods at 37 s) must stay close to the game
+{
+  const V = require('./verify');
+  const out = V.verify(fs.readFileSync(path.join(ROOT, 'load_profiles/Dugong_round001.csv'), 'utf8'), { mode: 'autotemp' }); // that round ran on AutoTemp
+  const g = k => Number(new RegExp('\\n' + k + '\\t([\\d.]+)\\t([\\d.]+)').exec(out)[1]);
+  assert(g('temp') < 2 && g('fission') < 1.5 && g('turbine') < 1.5, 'simulator drifted from the real Dugong round:\n' + out);
+  assert(/FIRE started/.test(out), 'the real round caught fire after the rods went in; the simulator should too:\n' + out);
+}
+// physics check on every recorded round: the simulator's heat/temperature/output must follow the game
+for (const [name, maxRms] of [['Dugong_round001', 0.5], ['Humpback_round001', 1.5], ['Typhon2_round001', 1.0]]) {
+  const V = require('./verify'), f = path.join(ROOT, 'load_profiles', name + '.csv');
+  if (!fs.existsSync(f)) continue;
+  const out = V.verify(fs.readFileSync(f, 'utf8'), { mode: 'physics' });
+  const rms = Number(/\ntemp\t([\d.]+)/.exec(out)[1]);
+  assert(rms < maxRms, `${name}: temperature drifted from the game (rms ${rms}):\n` + out);
+}
+console.log('real-game checks passed');
+// pin finder: strip Rimuru's harness (its lever pin has no label) and it must find a working one by trial and error
+{
+  const A = require('./autopins'), P = require('./project'), E = require('./engine'), f = path.join(ROOT, 'context/reactor_circuits/rimuru_autoreactor.txt');
+  const m = P.loadModel(fs.readFileSync(f, 'utf8'), 'rimuru_autoreactor.txt'); for (const b of m.boxes) b.pins = null;
+  const res = A.solve(m, { reactorMaxKW: 3000 }, { guess: E.guessPins });
+  assert(!res.initialWorks && res.works, 'autopins did not repair Rimuru:\n' + res.log.join('\n'));
+  assert(/^const\./.test(res.pins.reactor.in9) && res.pins.reactor.out0 === 'reactor.set_turbineoutput' && res.pins.reactor.out1 === 'reactor.set_fissionrate', 'autopins found odd pins: ' + JSON.stringify(res.pins));
+  console.log('autopins check passed');
+}

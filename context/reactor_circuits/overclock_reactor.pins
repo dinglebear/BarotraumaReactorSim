@@ -1,0 +1,7 @@
+# Lammert overclock reactor: always 1.15x the load.
+reactor in1 reactor.load_value_out
+reactor in2 reactor.fuel_out
+reactor in3 reactor.power_value_out
+reactor in4 reactor.temperature_out
+reactor out1 reactor.set_fissionrate
+reactor out2 reactor.set_turbineoutput

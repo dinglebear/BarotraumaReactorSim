@@ -29,6 +29,8 @@ To test something, for example 4 fuel rods in a 5200 kW reactor on automatic:
 2. Copy the `_reactor.csv` into the simulator's `traces/` folder.
 3. Run `node sim/cli.js verify <file>`.
 
-`verify` replays the trace through the simulator's reactor and prints the error for each value, the first moment the temperature differs by more than 5, and the game's events next to the simulator's. Type `reactortrace` in the console to turn it off or on.
+`verify` replays the trace through the simulator's reactor and prints the error for each value, the first moment the temperature differs by more than 5, and the game's events next to the simulator's. Type `reactortrace` in the console to turn it off or on. If a value can't be read, its cell stays empty and the first error is printed to the console and written at the top of the file. Send that line if a trace comes out empty.
+
+`verify` also accepts a normal round file: `node sim/cli.js verify Dugong_round001`. Without a trace it assumes AutoTemp was on.
 
 Copy the CSVs into the simulator's `load_profiles/` folder. Then run `node sim/build_web.js` so they appear on the master page, or load them with the page's "Load CSV…" button.

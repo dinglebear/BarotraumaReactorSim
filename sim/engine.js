@@ -37,7 +37,7 @@
   const GUESS = [
     [/fuel.*(%|perc|left)|rod.*(%|cond)/i, 'reactor.fuel_percentage_left', 'in'], [/fuel/i, 'reactor.fuel_out', 'in'], [/temp/i, 'reactor.temperature_out', 'in'],
     [/charge.*rate|rate/i, 'battery.charge_rate', 'in'], [/charge|batt/i, 'battery.charge_%', 'in'],
-    [/junction.*load|jb.*load/i, 'junction.load_value_out', 'in'], [/load/i, 'reactor.load_value_out', 'in'], [/power|output|out/i, 'reactor.power_value_out', 'in'],
+    [/velocity|speed|nav/i, 'nav.velocity_x_out', 'in'], [/junction.*load|jb.*load/i, 'junction.load_value_out', 'in'], [/load/i, 'reactor.load_value_out', 'in'], [/power|output|out/i, 'reactor.power_value_out', 'in'],
     [/fission/i, 'reactor.set_fissionrate', 'out'], [/turbine/i, 'reactor.set_turbineoutput', 'out'], [/shut|scram/i, 'reactor.shutdown', 'out'],
     [/rate|charge|batt/i, 'battery.set_rate', 'out'], [/disable/i, 'battery.disable_output', 'out'],
   ];
@@ -79,6 +79,7 @@
         cond: 100, wearDelay: 120 + this.rand() * 600, minOut: 0, maxOut: 0, optT: [0, 0], allT: [0, 0], optTemp: [40, 60], allTemp: [30, 70], optF: [0, 0], allF: [0, 0],
         rods: Array.from({ length: rodCount }, () => ({ fuel: (cfg.rodFuel || rodType.fuel), cond: rodType.cond, max: rodType.cond })),
       });
+      if (p0.rodFuel) for (const r of this.reactor.rods) r.fuel = p0.rodFuel; // rod type recorded/inferred for the start of the round
       this.reactor.availFuel = this.rodFuel();
       // ---- junction box ----
       this.junction = this.mkItem('junction', { cond: 100, wearDelay: 120 + this.rand() * 600, overloadV: 2, prevP: 0, pSig: null, prevL: 0, lSig: null, cooldown: 0, breaks: 0 });
@@ -186,6 +187,8 @@
       if (name === 'junction') return [this.junction];
       if (name === 'battery') return this.batteries;
       const m = /^battery(\d+)$/.exec(name); if (m) return this.batteries[+m[1] - 1] ? [this.batteries[+m[1] - 1]] : [];
+      // const.<value>: a lever/switch or any fixed signal source, sends <value> every tick (e.g. const.1 = lever on)
+      if (name === 'const') { if (!this.constItem) this.constItem = this.mkItem('const', {}); return [this.constItem]; }
       // recorded devices: test-file columns named "<device>.<pin>" (nav terminal, engines, pumps, guns, sonar, ...)
       const chans = (this.profile.channels || []).filter(c => c.startsWith(name + '.'));
       if (chans.length || RECORDED.includes(name)) {
@@ -201,7 +204,7 @@
         pins = pins || DEFAULT_PINS[box.model.name] || {};
         for (const [p, ep] of Object.entries(pins)) {
           if (!ep || ep === 'none' || ep.startsWith('link.')) continue; // links are wired below
-          const [dev, dpin] = ep.split('.');
+          const di = ep.indexOf('.'), dev = ep.slice(0, di), dpin = ep.slice(di + 1); // split at the first dot (const.1.5)
           const ds = this.devices(dev);
           if (!ds) { this.warnings.push(`unknown device "${dev}" in pin ${box.model.name}.${p}`); continue; }
           const full = /^in\d$/.test(p) ? 'signal_' + p : /^out\d$/.test(p) ? 'signal_' + p : p;
@@ -322,7 +325,7 @@
       const fCtl = R.sigF !== null && R.lastF > T - 1, tCtl = R.sigT !== null && R.lastT > T - 1;
       this.metrics.ctl(fCtl, tCtl);
       // round-start fast sync: first 5 s of a round, AutoTemp on, no player user, no signal control
-      if (T < 5 && R.powerOn && R.autoTemp && !fCtl && !tCtl) this.autoTemp(100, f(STEP * 10));
+      if (T + (this.cfg.roundTimeOffset || 0) < 5 && R.powerOn && R.autoTemp && !fCtl && !tCtl) this.autoTemp(100, f(STEP * 10));
       const mx = R.maxPower;
       if (fCtl) R.tf = adjustNoOvershoot(R.tf, R.sigF, f(dt * 5)); else R.sigF = null;
       if (tCtl) R.tt = adjustNoOvershoot(R.tt, R.sigT, f(dt * 5)); else R.sigT = null;
@@ -406,9 +409,21 @@
     updateRods() {
       const pt = this.profile.points[this.pIdx]; if (!pt || pt.rods === undefined || this.cfg.lockRods) return;
       const R = this.reactor, want = Math.max(0, Math.min(4, Math.round(pt.rods)));
+      // same count but the recorded fuel % jumped up: the player swapped a used rod for a fresh one
+      const fp = pt.g && pt.g.fuelPct, swapped = want === R.rods.length && want > 0 && Number.isFinite(fp) && Number.isFinite(this.lastFuelPct) && fp - this.lastFuelPct > 20;
+      if (Number.isFinite(fp)) this.lastFuelPct = fp;
+      if (swapped) {
+        let k = 0; R.rods.forEach((r, i) => { if (r.cond < R.rods[k].cond) k = i; });
+        const fuel = pt.rodFuel || R.rods[k].fuel, tt = Object.values(FUEL).find(x => x.fuel === fuel) || FUEL.uranium;
+        R.rods[k] = { fuel, cond: tt.cond, max: tt.cond };
+        this.metrics.ev('fresh rod swapped in (as in the recorded round)');
+        return;
+      }
       if (want === R.rods.length) return;
-      const from = R.rods.length, t = FUEL[this.fuelType] || FUEL.uranium;
-      while (R.rods.length < want) R.rods.push({ fuel: t.fuel, cond: t.cond, max: t.cond });
+      const from = R.rods.length, t = FUEL[this.fuelType] || FUEL.uranium, fuel = pt.rodFuel || t.fuel;
+      const tt = Object.values(FUEL).find(x => x.fuel === fuel) || t;
+      if (pt.rodFuel) for (const r of R.rods) r.fuel = fuel; // a swap to another rod type (e.g. uranium -> fulgurium)
+      while (R.rods.length < want) R.rods.push({ fuel, cond: tt.cond, max: tt.cond });
       while (R.rods.length > want) { let k = 0; R.rods.forEach((r, i) => { if (r.cond < R.rods[k].cond) k = i; }); R.rods.splice(k, 1); }
       this.metrics.ev(`rods ${from} -> ${want} (as in the recorded round)`);
     }
@@ -455,6 +470,7 @@
       // delayed (stepsTaken > 10) signals from the previous frame
       if (this.pending.length) { const p = this.pending; this.pending = []; for (const e of p) this.connSend(e.conn, e.sig); }
       this.updateRecorded();
+      if (this.constItem) for (const v of Object.keys(this.constItem.conns)) this.send(this.constItem, v, v);
       this.updateRods();
       this.updateReactor(dt);
       this.updateJunction(dt);
@@ -477,7 +493,7 @@
   class Metrics {
     constructor(sim) { this.sim = sim; this.reset(); }
     reset() {
-      Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, eRSurplus: 0, eRShort: 0, eAbsorbed: 0, eCovered: 0, eChargeInShort: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
+      Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, eUnavoidable: 0, eAvoidable: 0, eRSurplus: 0, eRShort: 0, eAbsorbed: 0, eCovered: 0, eChargeInShort: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
         overloadT: 0, junctionBreaks: 0, reactorCondMin: 100, fires: 0, meltdownAt: null, tempMax: 0, tAboveOpt: 0, tCritical: 0, noCtlF: 0, noCtlT: 0, events: [], timeline: [], nextTl: 0, outAbs: 0, battMin: Infinity, battMax: -Infinity, lowRun: 0, worstLow: 0 });
       if (this.sim.reactor) this.fuelStart = this.sim.reactor.rods.reduce((a, r) => a + r.cond, 0);
       Object.assign(this, { socSum: 0, tFull: 0, tEmpty: 0, tLow20: 0, tHigh90: 0, eLostFull: 0, eLostEmpty: 0, fullRun: 0, emptyRun: 0 });
@@ -491,6 +507,12 @@
       this.eDemand += dem * dt; this.eReactor += -R.cpc * dt;
       const sh = Math.max(0, g.load - g.power), su = Math.max(0, g.power - g.load);
       this.eUnmet += Math.min(sh, dem) * dt; this.eSurplus += su * dt;
+      // what the hardware could deliver right now: reactor max at the best temperature for its fuel
+      // (max heat = min(100, fuel) * fuel / 50; output <= heat/150 of max) plus what the batteries can give
+      const maxHeat = Math.min(100, R.availFuel) * R.availFuel / 50, cap = R.cond > 0 ? R.maxPower * Math.min(1, maxHeat / 150) : 0;
+      let bcap = 0; for (const b of s.batteries) bcap += this.sim.battMinMax(b);
+      const unavoidable = Math.max(0, dem - cap - bcap);
+      this.eUnavoidable += unavoidable * dt; this.eAvoidable += Math.max(0, Math.min(sh, dem) - unavoidable) * dt;
       // battery buffering: surplus = reactor output above demand (would be overvoltage), shortfall = demand above reactor output
       const rOut = -R.cpc, rs = Math.max(0, rOut - dem), rd = Math.max(0, dem - rOut);
       this.eRSurplus += rs * dt; this.eRShort += rd * dt;
@@ -525,6 +547,8 @@
         circuit: s.cfg.circuitName || '', profile: s.profile.name || '', duration_s: +T.toFixed(1), reactor_max_kw: s.reactor.maxPower,
         rods: `${s.reactor.rods.length}x ${s.fuelType}`, batteries: s.batteries.length ? `${s.batteries.length}x ${(s.cfg.batteries || {}).type || 'battery'}` : 'off',
         demand_kwh: +kwh(this.eDemand).toFixed(1), unmet_kwh: +kwh(this.eUnmet).toFixed(2), unmet_pct: +(this.eUnmet / Math.max(this.eDemand, 1e-9) * 100).toFixed(2),
+        unmet_avoidable_pct: +(this.eAvoidable / Math.max(this.eDemand, 1e-9) * 100).toFixed(2), // the controller's fault
+        unmet_unavoidable_pct: +(this.eUnavoidable / Math.max(this.eDemand, 1e-9) * 100).toFixed(2), // demand above reactor capacity (fuel/max) + batteries
         surplus_kwh: +kwh(this.eSurplus).toFixed(2), reactor_kwh: +kwh(this.eReactor).toFixed(1),
         fuel_condition_used: +fuelUsed.toFixed(2), fuel_rods_used: +(fuelUsed / (s.reactor.rods[0] ? s.reactor.rods[0].max : 100)).toFixed(3),
         fuel_per_mwh: delivered > 0 ? +(fuelUsed / (delivered / 1000)).toFixed(2) : null,
@@ -549,7 +573,7 @@
         battery_net_kwh: s.batteries.length ? +((s.batteries.reduce((a, b) => a + b.charge, 0) - this.chargeStart) / 60).toFixed(2) : null, // + = ended with more stored energy
       };
       // scores 0-100 (higher is better)
-      r.score_reliability = +Math.max(0, 100 - r.unmet_pct * 10 - r.voltage_mean_abs_dev * 200 - r.fluctuation_events / (T / 60) * 2 - (r.meltdown_at_s !== null ? 100 : 0) - r.fires * 10 - r.junction_breaks * 10).toFixed(1);
+      r.score_reliability = +Math.max(0, 100 - r.unmet_avoidable_pct * 10 - r.voltage_mean_abs_dev * 200 - r.fluctuation_events / (T / 60) * 2 - (r.meltdown_at_s !== null ? 100 : 0) - r.fires * 10 - r.junction_breaks * 10).toFixed(1);
       r.kwh_per_rod = r.fuel_rods_used > 0 ? +(delivered / r.fuel_rods_used).toFixed(0) : null; // fuel efficiency: higher is better
       // fair fuel efficiency: energy borrowed from (or banked into) the batteries is counted, so draining them is not free
       if (s.batteries.length) r.kwh_per_rod_adjusted = r.fuel_rods_used > 0 ? +((delivered + r.battery_net_kwh) / r.fuel_rods_used).toFixed(0) : null;
@@ -567,6 +591,42 @@
   }
   function fmtT(t) { const m = Math.floor(t / 60), s = t - m * 60; return `[${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}]`; }
 
+  // Rod type per stretch of the round: newer logs record avail_fuel; for older ones it is worked out from the reactor's
+  // own steady state: AvailableFuel = (temp + turbine) / (fission * 2 / 100), snapped to 80/100/150 per rod.
+  function inferRodFuel(prof) {
+    const pts = prof.points, per = [80, 100, 150, 150];
+    let seg = [], lastPerRod;
+    const flush = () => {
+      if (!seg.length) return;
+      const n = seg[0].rods || 0;
+      let perRod;
+      const known = seg.find(p => p.availFuel !== undefined);
+      if (known && n > 0) perRod = known.availFuel / n;
+      else if (n > 0) {
+        const est = [], t0 = seg[0].t;
+        for (let i = 1; i < seg.length; i++) {
+          const p = seg[i], q = seg[i - 1], g = p.g, dt = p.t - q.t;
+          // only settled running: a few seconds after the rods changed, temperature moving < 0.5/s
+          if (p.t - t0 < 3 || !(g.fission > 5) || !(g.temp > 5 && g.temp < 95) || !(dt > 0) || Math.abs(g.temp - q.g.temp) / dt > 0.5 || !Number.isFinite(p.turbine)) continue;
+          est.push((g.temp + p.turbine) / (g.fission * 0.02) / n);
+        }
+        if (est.length >= 5) { est.sort((a, b) => a - b); const m = est[est.length >> 1]; const snap = per.reduce((a, b) => Math.abs(b - m) < Math.abs(a - m) ? b : a); if (Math.abs(snap - m) / snap < 0.25) perRod = snap; }
+      }
+      if (perRod === undefined && n > 0) perRod = lastPerRod; // not enough settled data: same rod type as before
+      if (perRod !== undefined) lastPerRod = perRod;
+      for (const p of seg) p.rodFuel = perRod;
+      seg = [];
+    };
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[i - 1];
+      if (q && (p.rods !== q.rods || (p.g.fuelPct - q.g.fuelPct) > 20)) flush(); // rods added/removed/swapped
+      seg.push(p);
+    }
+    flush();
+    const types = [...new Set(pts.map(p => p.rodFuel).filter(Boolean))];
+    if (types.length) prof.meta.rod_fuel_inferred = types.join('/');
+  }
+
   // ---------- load profiles (CSV written by the PowerLogger mod) ----------
   function parseProfile(text, name) {
     const prof = { name: name || 'profile', points: [], meta: {} };
@@ -580,9 +640,11 @@
       const demand = Number.isFinite(row.demand) ? row.demand : row.load;
       if (!Number.isFinite(row.t) || !Number.isFinite(demand)) continue;
       const ch = {}; for (const c of cols) if (c.includes('.') && Number.isFinite(row[c])) ch[c] = row[c];
-      prof.points.push({ t: row.t, demand: Math.max(0, demand), turbine: row.turbine, out: row.reactor_out, rods: Number.isFinite(row.rods) ? row.rods : undefined, ch });
+      prof.points.push({ t: row.t, demand: Math.max(0, demand), turbine: row.turbine, out: row.reactor_out, rods: Number.isFinite(row.rods) ? row.rods : undefined,
+        availFuel: Number.isFinite(row.avail_fuel) ? row.avail_fuel : undefined, g: { temp: row.temp, fission: row.fission, fuelPct: row.fuel }, ch });
     }
     prof.channels = cols ? cols.filter(c => c.includes('.')) : [];
+    inferRodFuel(prof);
     if (!prof.points.length) prof.points.push({ t: 0, demand: 0, ch: {} });
     const t0 = prof.points[0].t; for (const p of prof.points) p.t -= t0;
     prof.duration = Number(prof.meta.duration) || (prof.points[prof.points.length - 1].t + 1);
@@ -593,5 +655,5 @@
     return prof;
   }
 
-  return { Sim, parseProfile, FUEL_IDS, DEFAULT_PINS, DEVICE_OUTS, DEVICE_INS, FUEL, BATT, STEP };
+  return { Sim, parseProfile, guessPins, FUEL_IDS, DEFAULT_PINS, DEVICE_OUTS, DEVICE_INS, FUEL, BATT, STEP };
 });

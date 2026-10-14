@@ -9,7 +9,7 @@ node sim/cli.js run <circuit> --profile <name>      # one test, prints the full 
 node sim/cli.js compare a,b,vanilla --profile all   # side-by-side table (vanilla = game's own auto control)
 node sim/cli.js check <circuit>                     # fast syntax/wiring check, no run
 ```
-Other: `decompile <file.txt>` (in-game file -> .circ text), `build <circuit>` (export only), `profiles` (list test files), `verify <trace.csv>` (replay a reactor trace recorded in game and show where the simulator differs; traces go in `traces/`).
+Other: `autopins <file.txt>` (find which pin goes where by trial and error, writes `.pins`), `decompile <file.txt>` (in-game file -> .circ text), `build <circuit>` (export only), `profiles` (list test files), `verify <trace.csv>` (replay a reactor trace recorded in game and show where the simulator differs; traces go in `traces/`).
 Flags: `--batteries N` (0 = off), `--btype battery|supercapacitor`, `--max KW`, `--rods N`, `--fuel uranium|thorium|fulgurium|volatile`, `--link wire|wifi`, `--start warm|cold`, `--duration S`, `--timeline` (also write a 1 Hz CSV), `--battery file.txt`.
 Defaults come from `sim.config.json` (the web page's "Save settings" writes this file). The test file supplies the reactor max output and the rod count unless overridden.
 
@@ -64,6 +64,7 @@ Any box pin can be rewired with `pin` lines. Any device pin can go to either box
 | `battery.set_rate/disable_output` | battery inputs |
 | `nav.velocity_x_out` / `nav.velocity_y_out` | **nav terminal** outputs (-100..100) that drive the engines / ballast pumps. Engine kW = (\|velocity_x_out\|/100)^1.5 × engine max, starting 1 tick later. Pump kW = \|flow\|/100 × pump max. **They predict engine and pump load.** |
 | `nav.current_velocity_x/y`, `nav.current_position_y` | nav terminal: speed (km/h) and depth |
+| `const.<value>` | a lever, switch or any fixed signal, sent every tick (e.g. `pin in9 const.1`). Wire levers this way: a signal-check fed by an unwired lever never fires. |
 | `engines.load_value_out`, `pumps.load_value_out`, `guns.load_value_out`, `sonar.load_value_out` | power drawn by that group. In game: a relay or junction box that feeds only that group, wired from its `load_value_out` |
 
 Recorded devices (`nav`, `engines`, `pumps`, `guns`, `sonar`, and any other `device.pin` column in the test file) replay what the PowerLogger mod recorded each tick, formatted like the game sends it. They are open-loop: your circuit can read them but not change them. If a test file lacks a column, the log shows a WARNING and that pin stays silent. The `synthetic_*` files have them all.
@@ -93,6 +94,12 @@ Timing: **U** = outputs every tick in its Update (needs fresh inputs; adds 0-1 t
 Number output format: shortest float32 text (`0.1`, `0.33333334`, `1E-05`). Unparsable numeric input counts as 0. Signals propagate instantly (depth-first). A chain of more than 10 hops is delayed 1 tick.
 
 ## 6. Reactor physics (dt = 1/60 s, all % are 0-100)
+Checked against real rounds in `load_profiles/`:
+- **Dugong** (3000 kW, AutoTemp, 1 → 4 rods): temp RMS 0.04.
+- **Humpback** (3100 kW, manual/circuit, rod swaps): temp RMS 0.9.
+- **Typhon2** (5200 kW, 64 min, demand up to 8.9 MW in an endworm fight, uranium then fulgurium, `fixitems` refills): temp RMS 0.5.
+
+How to check: `node sim/cli.js verify <round>` drives fission and turbine from the recording and compares the temperature and output. The remaining spikes are game-side events the log doesn't capture: multiplayer server corrections and the player's temperature-boost button. `node sim/test.js` re-checks all three.
 - `heat = fission * fuel/100 * 2`. Temperature moves toward `heat - turbine` at ≤ 10 %/s. One uranium rod (fuel 80) gives heat = 1.6 × fission.
 - Fission and turbine follow their targets with a ~1 s lag (`x += (target - x)*dt`). Fission is capped at AvailableFuel (80 per uranium rod).
 - **Output kW = MaxOutput × clamp(turbine ± tol, ≤ temp/50) / 100**. Below temp 50, output is capped at `temp/50` of max. tol = 1 % of max, or 3 % when turbine is within CTO±2.5 AND temp is 40-60. The reactor does NOT follow load by itself: the turbine must equal `load/max*100`.
@@ -100,6 +107,7 @@ Number output format: shortest float32 text (`0.1`, `0.33333334`, `1E-05`). Unpa
 - Fuel burn per rod: `fission/100 * 0.2` condition/s, for EVERY rod present. Fewer rods = less burn; more fuel = more heat per % fission. **Fuel efficiency = keep fission as low as the needed heat allows.**
 - Danger: temp > 60 for 20 s starts a fire (repeats). Temp > 70 runs the meltdown timer (120 s → meltdown). Temp < 40 is outside the optimal range (no ±3 % bonus).
 - **Wear** (as in game): the reactor loses 0.125 condition/s while running, after a random 120-720 s delay, down to 10 %. The fire and meltdown timers run `lerp(2x, 1x, condition)` faster, so a worn reactor catches fire after ~10.5 s above 60 and melts down after ~63 s above 70. `reactor_condition_min_pct` is in the log. The junction box wears too (0.1/s).
+- **Real rounds are the real test.** `Dugong_round001`, `Humpback_round001` and `Typhon2_round001` are recorded rounds. Rod type is worked out from the log, so fulgurium counts as 150 fuel. Rod refills (swaps, `fixitems`) replay too. Typhon2's demand goes far above the reactor's 5200 kW, so only stored battery energy can cover that.
 - **Rods can change mid-round.** A test file's `rods` column adds or removes rods when the player did. Heat = fission × fuel/100 × 2 jumps at once (1 → 4 uranium rods = 4× heat), while fission can only fall ~5 %/s. Watch `fuel_out` (in4) and cut fission the moment it jumps. `synthetic_rodswap`: 5200 kW, 1 rod, 4 rods at 2:00 (the game's own automatic control overheats and starts a fire), 2 rods at 7:00.
 - Warm start = sub saved mid-round in a steady state (temp 50, turbine = load). With AutoTemp on, the game's round-start fast sync also runs for the first 5 s.
 - Grid: voltage = supply/load. < 0.5 devices shut off, < 0.9 brownout, > 2 junction boxes take random damage.
@@ -144,7 +152,7 @@ reactor_setpoint_kW = demand_kW + bias_kW          -> send to the reactor box (l
 Key lines (`k=v`):
 - `score_reliability` (0-100, higher is better)
 - `kwh_per_rod` (fuel efficiency, higher is better)
-- `unmet_pct` (% of demand energy not supplied)
+- `unmet_pct` (% of demand energy not supplied), split into `unmet_avoidable_pct` (the controller's fault; the score uses this) and `unmet_unavoidable_pct` (demand above what the reactor's fuel/max plus the batteries could give)
 - `voltage_mean_abs_dev` (average |V-1|)
 - `fluctuation_events` (times V left 0.95-1.05)
 - `brownout_s_v_lt_0_9`, `blackout_s_v_lt_0_5`, `overvolt_s_v_gt_1_1`, `junction_overload_s_v_gt_2`, `junction_breaks`
@@ -191,7 +199,25 @@ Put the in-game `.txt` (or a `_reactor.txt` + `_battery.txt` pair) in `context/r
 2. a `name.pins` file with lines like `reactor in1 reactor.load_value_out`;
 3. a guess from the circuit's own labels, reported in WARNINGS (check it).
 
+**Auto pins.** Before running a `.txt`, the CLI tests its pins on a 170 s load-step test (about 0.2 s). If the reactor doesn't follow the load clearly better than vanilla AutoTemp, the CLI moves the pins around by trial and error:
+- every source on every input (temp, power, load, fuel, fuel %, `const.1`/`const.0` for levers, none);
+- swapped pairs;
+- every fission/turbine layout on the outputs.
+
+It keeps the best result and writes it to `name.pins`, backing up any old file as `.pins.bak` and keeping its `prop` lines. This takes 5–60 s once; later runs reuse the file. Pins labelled in the circuit only move for a clear gain. Box links and recorded devices (nav terminal etc.) never move.
+- `node sim/cli.js autopins <name> [--force] [--write]`: run the search on its own; `--force` searches even when the pins work.
+- `--no-autopins` on `run` or `compare` turns the search off.
+
+`.circ` files are never changed: their pins are yours.
+
+A `.pins` file can also retune a circuit per ship: `prop reactor <componentId> <Property> <value>`. The value may use `$MAX`, e.g. `prop reactor 3 Value $MAX/100`.
+
 `node sim/cli.js decompile <name>` shows it as .circ text.
+
+**Benchmark and analysis of the community circuits: `context/reactor_circuits/STUDY.md`.** Read it before designing. It covers which designs are fuel-efficient, which meet demand, and why each one fails. The current bar to beat:
+- reliability: `overclock_reactor` (avoidable unmet 0.4–1.5 %, but heavy overvolt and fuel);
+- fuel: `basic_reactor` / `lammert_arc_hts` (~25 % better than vanilla).
+Compare with: `node sim/cli.js compare vanilla,basic_reactor,lammert_arc_hts,overclock_reactor,rimuru_autoreactor,<yours> --profile Dugong_round001,Humpback_round001,Typhon2_round001`.
 
 ## 10. Web bench (for the human)
 `web/index.html` is the master page. Rebuild it with `node sim/build_web.js` after adding circuits or profiles. It has:

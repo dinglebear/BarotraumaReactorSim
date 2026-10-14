@@ -1,43 +1,69 @@
--- Reactor Power Logger (client-side, needs Lua For Barotrauma / LuaCs with client-side Lua).
--- Every round it records, every tick (60/s), how much power the main submarine's reactor grid asks for,
--- what the main junction box reads, and the signals that predict power spikes (nav terminal, engines,
--- pumps, guns, sonar). A row is written only when something changes, plus a heartbeat every 5 s.
+-- Reactor Power Logger v3 (client-side only; needs Lua For Barotrauma / LuaCs with client-side Lua).
+-- Works in singleplayer and as a client in multiplayer (nothing runs on the server).
+-- Every round it records how much power the main submarine asks for, what the reactor and main junction box do,
+-- and the signals and situations that predict power spikes. A row is written when something changes
+-- (at most 20 rows a second, big jumps always), plus a heartbeat every 5 s.
 -- Drop the CSV into the simulator's load_profiles/ folder to replay the round.
 --
--- Columns ("device.pin" columns become wireable pins in the simulator, same names as in game):
+-- Columns ("device.pin" columns are things a circuit can read in game; they become wireable pins in the simulator):
 --   t                       round time (s)
 --   demand                  kW the ship's devices ask for (battery charging excluded; gun supercapacitors included)
 --   load, power, voltage    main junction box: load_value_out, power_value_out, power/load
 --   reactor_out, turbine, fission, temp, fuel   reactor (fuel = sum of rod condition %)
---   rods                    fuel rods in the reactor right now (the simulator adds/removes rods when this changes)
---   avail_fuel              fuel the reactor gets from rods that still have condition (80 per uranium rod)
---   autotemp, power_on, target_fission, target_turbine   control state (lets "verify" replay exactly how it was run)
---   batt_in, batt_out       kW into / out of the batteries on the reactor grid
+--   rods, avail_fuel        fuel rods in the reactor; heat-giving fuel (80 per uranium rod with condition left)
+--   autotemp, power_on, target_fission, target_turbine   control state (target = what the sliders/circuit ask for)
+--   reactor_cond            reactor condition % (worn reactors catch fire/melt down sooner)
+--   batt_in, batt_out       kW into / out of the ship batteries
+--   batt_charge_pct, batt_rate_pct    ship batteries: average charge %, average recharge-rate setting %
+--   caps_charge_pct         gun supercapacitors: average charge % (low = big recharge draw coming)
 --   nav.velocity_x_out, nav.velocity_y_out      nav terminal outputs (-100..100) -> engines / ballast pumps
 --   nav.current_velocity_x, nav.current_velocity_y, nav.current_position_y      nav terminal outputs (km/h, depth m)
---   engines.load_value_out, pumps.load_value_out, guns.load_value_out, sonar.load_value_out
---                           kW drawn by each group (what a relay/junction box feeding only that group would read)
+--   engines.load_value_out, pumps.load_value_out, guns.load_value_out, sonar.load_value_out   kW per device group
+--   oxygen_kw, fabricators_kw, lights_kw, other_kw   the rest of the load, by kind (4x a second)
+--   autopilot               nav terminal autopilot / maintain position on (1/0)
+--   enemies_near            living non-crew creatures within ~100 m of the sub (once a second): fights coming
+--   flooding_pct            water in the sub's hulls, % of volume (bilge pumps)
+--   jb_broken               broken junction boxes on the main sub
+--   event                   what happened: rods changed, autotemp/power toggled, junction box broke, enemies arrived...
+-- Footer: duration, and reactor_max_kw_formula = median of Output / (Turbine/100) (the max-output formula), as a check
+-- on the reactor_max_kw read from the game.
 if SERVER then return end
 
 local modPath = ...
 local PL = {
     heartbeat = 5,           -- always write a row at least this often
+    minRowGap = 0.05,        -- at most 20 rows a second ...
+    bigJumpKW = 50,          -- ... unless the demand jumps this much
     flushInterval = 30,      -- rewrite the file this often so a crash loses little
-    kwThreshold = 2,         -- kW change that counts as "changed"
-    sigThreshold = 0.5,      -- signal change that counts as "changed" (signals are -100..100)
     rescanInterval = 10,     -- re-find devices (repairs, new items)
+    slowInterval = 0.25,     -- other loads, batteries
+    situationInterval = 1,   -- enemies, flooding, junction boxes
+    enemyRange = 10000,      -- game units (100 units = 1 m)
 }
-local COLS = { "demand", "load", "power", "reactor_out", "turbine", "fission", "temp", "fuel", "rods", "avail_fuel", "autotemp", "power_on", "target_fission", "target_turbine",
-    "voltage", "batt_in", "batt_out",
+local COLS = { "demand", "load", "power", "reactor_out", "turbine", "fission", "temp", "fuel", "rods", "avail_fuel",
+    "autotemp", "power_on", "target_fission", "target_turbine", "reactor_cond",
+    "voltage", "batt_in", "batt_out", "batt_charge_pct", "batt_rate_pct", "caps_charge_pct",
     "nav.velocity_x_out", "nav.velocity_y_out", "nav.current_velocity_x", "nav.current_velocity_y", "nav.current_position_y",
-    "engines.load_value_out", "pumps.load_value_out", "guns.load_value_out", "sonar.load_value_out" }
+    "engines.load_value_out", "pumps.load_value_out", "guns.load_value_out", "sonar.load_value_out",
+    "oxygen_kw", "fabricators_kw", "lights_kw", "other_kw", "autopilot", "enemies_near", "flooding_pct", "jb_broken", "event" }
+-- change needed before a new row is written
 local KW = { demand = true, load = true, power = true, reactor_out = true, batt_in = true, batt_out = true,
-    ["engines.load_value_out"] = true, ["pumps.load_value_out"] = true, ["guns.load_value_out"] = true, ["sonar.load_value_out"] = true }
+    ["engines.load_value_out"] = true, ["pumps.load_value_out"] = true, ["guns.load_value_out"] = true, ["sonar.load_value_out"] = true,
+    oxygen_kw = true, fabricators_kw = true, lights_kw = true, other_kw = true }
+local THRESH = { ["nav.current_velocity_x"] = 2, ["nav.current_velocity_y"] = 2, ["nav.current_position_y"] = 2,
+    batt_charge_pct = 1, caps_charge_pct = 2, flooding_pct = 1, reactor_cond = 1, fuel = 1 }
+local INTS = { rods = true, autotemp = true, power_on = true, avail_fuel = true, autopilot = true, enemies_near = true, jb_broken = true }
+-- component kinds for the "rest of the load" columns (the device groups have their own columns)
+local KIND = { OxygenGenerator = "oxygen_kw", Fabricator = "fabricators_kw", Deconstructor = "fabricators_kw", LightComponent = "lights_kw" }
+local SKIP = { Reactor = true, PowerTransfer = true, PowerContainer = true, Engine = true, Pump = true, Turret = true, Sonar = true, Relay = true }
+local FUELS = { fuelrod = 80, thoriumfuelrod = 100, fulguriumfuelrod = 150, fulguriumfuelrodvolatile = 150 }
 
-local active, rows, roundTime, lastReal, lastRowT, last, nextFlush, nextScan, filePath, header
-local dev = {}
+local active, rows, roundTime, lastReal, lastRowT, last, nextFlush, nextScan, nextSlow, nextSit, filePath, header
+local dev, slow, sit, maxEst = {}, {}, {}, {}
+local pendingEvents = {}
 
 local function log(msg) print("[PowerLogger] " .. msg) end
+local function event(e) table.insert(pendingEvents, e) end
 
 local function logDir()
     local base = (type(modPath) == "string" and modPath ~= "") and modPath or "LocalMods/ReactorPowerLogger"
@@ -48,7 +74,7 @@ end
 
 -- find and cache the main sub's devices (iterating every item each tick would be too slow)
 local function scan()
-    dev = { reactors = {}, steering = nil, engines = {}, pumps = {}, batteries = {}, supercaps = {}, turrets = {}, sonars = {} }
+    dev = { reactors = {}, steering = nil, engines = {}, pumps = {}, batteries = {}, supercaps = {}, turrets = {}, sonars = {}, others = {}, junctions = {} }
     local sub = Submarine.MainSub
     for item in Item.ItemList do
         if item.Submarine == sub then
@@ -69,6 +95,17 @@ local function scan()
             if t ~= nil then table.insert(dev.turrets, t) end
             local so = item.GetComponentString("Sonar")
             if so ~= nil then table.insert(dev.sonars, so) end
+            if item.GetComponentString("PowerTransfer") ~= nil and string.find(tostring(item.Prefab.Identifier), "junction") then table.insert(dev.junctions, item) end
+            -- everything else that draws power, by kind
+            pcall(function()
+                for comp in item.Components do
+                    local name = tostring(comp.Name)
+                    if not SKIP[name] then
+                        local ok, cpc = pcall(function() return comp.CurrPowerConsumption end)
+                        if ok and type(cpc) == "number" then table.insert(dev.others, { comp = comp, col = KIND[name] or "other_kw" }) end
+                    end
+                end
+            end)
         end
     end
 end
@@ -84,6 +121,60 @@ local function powerOutConn(reactor)
         if c.IsPower and c.IsOutput then return c end
     end
     return nil
+end
+
+-- slower-changing values, 4x a second
+local function sampleSlow()
+    local s = { oxygen_kw = 0, fabricators_kw = 0, lights_kw = 0, other_kw = 0 }
+    for _, o in ipairs(dev.others) do
+        pcall(function() s[o.col] = s[o.col] + math.max(0, o.comp.CurrPowerConsumption) end)
+    end
+    local function avgCharge(list)
+        local c, cap, rate, n = 0, 0, 0, 0
+        for _, pc in ipairs(list) do
+            pcall(function()
+                c = c + pc.Charge; cap = cap + pc.Capacity
+                if pc.MaxRechargeSpeed > 0 then rate = rate + pc.RechargeSpeed / pc.MaxRechargeSpeed * 100; n = n + 1 end
+            end)
+        end
+        return cap > 0 and c / cap * 100 or nil, n > 0 and rate / n or nil
+    end
+    s.batt_charge_pct, s.batt_rate_pct = avgCharge(dev.batteries)
+    s.caps_charge_pct = avgCharge(dev.supercaps)
+    pcall(function() s.autopilot = (dev.steering ~= nil and (dev.steering.AutoPilot or dev.steering.MaintainPos)) and 1 or 0 end)
+    pcall(function() s.reactor_cond = dev.reactors[1].Item.ConditionPercentage end)
+    slow = s
+end
+
+-- the situation around the sub, once a second
+local function sampleSituation()
+    local s = { enemies_near = 0, flooding_pct = 0, jb_broken = 0 }
+    local sub = Submarine.MainSub
+    pcall(function()
+        local sp = sub.WorldPosition
+        for c in Character.CharacterList do
+            if not c.IsDead and not c.IsHuman and c.Submarine ~= sub then
+                local p = c.WorldPosition
+                local dx, dy = p.X - sp.X, p.Y - sp.Y
+                if dx * dx + dy * dy < PL.enemyRange * PL.enemyRange then s.enemies_near = s.enemies_near + 1 end
+            end
+        end
+    end)
+    pcall(function()
+        local water, vol = 0, 0
+        for h in Hull.HullList do
+            if h.Submarine == sub then water = water + h.WaterVolume; vol = vol + h.Volume end
+        end
+        if vol > 0 then s.flooding_pct = water / vol * 100 end
+    end)
+    for _, jb in ipairs(dev.junctions) do pcall(function() if jb.Condition <= 0 then s.jb_broken = s.jb_broken + 1 end end) end
+    if sit.enemies_near ~= nil then
+        if s.enemies_near > 0 and sit.enemies_near == 0 then event("enemies near " .. s.enemies_near) end
+        if s.enemies_near == 0 and sit.enemies_near > 0 then event("enemies gone") end
+        if s.jb_broken > sit.jb_broken then event("junction box broke") end
+        if s.jb_broken < sit.jb_broken then event("junction box repaired") end
+    end
+    sit = s
 end
 
 local function sample()
@@ -106,7 +197,6 @@ local function sample()
     for _, rr in ipairs(dev.reactors) do v.reactor_out = v.reactor_out + (-rr.CurrPowerConsumption) end
     v.turbine, v.fission, v.temp = r.TurbineOutput, r.FissionRate, r.Temperature
     v.fuel, v.rods, v.avail_fuel = 0, 0, 0
-    local FUELS = { fuelrod = 80, thoriumfuelrod = 100, fulguriumfuelrod = 150, fulguriumfuelrodvolatile = 150 }
     pcall(function()
         for rod in r.Item.OwnInventory.AllItems do
             v.fuel = v.fuel + rod.ConditionPercentage; v.rods = v.rods + 1
@@ -141,36 +231,88 @@ local function sample()
     v["pumps.load_value_out"] = sumConsumption(dev.pumps)
     v["guns.load_value_out"] = sumConsumption(dev.supercaps) + sumConsumption(dev.turrets)
     v["sonar.load_value_out"] = sumConsumption(dev.sonars)
+    for k, x in pairs(slow) do v[k] = x end
+    for k, x in pairs(sit) do v[k] = x end
+    -- max-output formula samples: Output = Turbine/100 * Max holds while the reactor runs at its turbine limit
+    if v.turbine ~= nil and v.turbine > 10 and v.reactor_out > 0 and (v.voltage or 1) < 0.98 and #maxEst < 20000 then
+        table.insert(maxEst, v.reactor_out / (v.turbine / 100))
+    end
     return v
 end
 
 local function changed(v)
     if last == nil then return true end
     for _, c in ipairs(COLS) do
-        local a, b = v[c] or 0, last[c] or 0
-        if math.abs(a - b) >= (KW[c] and PL.kwThreshold or PL.sigThreshold) then return true end
+        if c ~= "event" then
+            local a, b = v[c] or 0, last[c] or 0
+            local th = KW[c] and 2 or THRESH[c] or (INTS[c] and 0.5) or 0.5
+            if math.abs(a - b) >= th then return true end
+        end
     end
     return false
 end
 
 local function fmt(c, n)
     if n == nil then return "" end
+    if c == "event" then return n end
     if KW[c] then return string.format("%.1f", n) end
-    if c == "rods" or c == "autotemp" or c == "power_on" or c == "avail_fuel" then return tostring(math.floor(n + 0.5)) end
+    if INTS[c] then return tostring(math.floor(n + 0.5)) end
     return string.format("%.4f", n)
 end
 
-local function flush()
+local function median(t)
+    if #t == 0 then return nil end
+    local s = {}
+    for i, x in ipairs(t) do s[i] = x end
+    table.sort(s)
+    return s[math.floor(#s / 2) + 1]
+end
+
+local function footer()
+    local f = "# duration=" .. string.format("%.2f", roundTime)
+    local m = median(maxEst)
+    if m then f = f .. "\n# reactor_max_kw_formula=" .. string.format("%.0f", m) .. " (median of Output/(Turbine/100) over " .. #maxEst .. " samples)" end
+    return f
+end
+
+local function flush(final)
     if not active or filePath == nil then return end
-    local ok, err = pcall(function() File.Write(filePath, header .. table.concat(rows, "\n") .. "\n") end)
+    local ok, err = pcall(function() File.Write(filePath, header .. table.concat(rows, "\n") .. "\n" .. (final and (footer() .. "\n") or "")) end)
     if not ok then log("could not write " .. tostring(filePath) .. ": " .. tostring(err)) end
+end
+
+local function wired(item, name)
+    local n = 0
+    pcall(function()
+        for c in item.Connections do
+            if c.Name == name then for w in c.Wires do n = n + 1 end end
+        end
+    end)
+    return n
+end
+
+local function gameInfo()
+    local L = {}
+    pcall(function() table.insert(L, "# mode=" .. (Game.IsMultiplayer and "multiplayer client" or "singleplayer")) end)
+    pcall(function() table.insert(L, "# level_difficulty=" .. string.format("%.1f", Level.Loaded.Difficulty)) end)
+    pcall(function() table.insert(L, "# biome=" .. tostring(Level.Loaded.LevelData.Biome.Identifier)) end)
+    pcall(function() table.insert(L, "# level_type=" .. tostring(Level.Loaded.Type)) end)
+    pcall(function()
+        local m = {}
+        for mission in Game.GameSession.Missions do table.insert(m, tostring(mission.Prefab.Identifier)) end
+        table.insert(L, "# missions=" .. table.concat(m, " "))
+    end)
+    return #L > 0 and (table.concat(L, "\n") .. "\n") or ""
 end
 
 local function startRound()
     scan()
     if #dev.reactors == 0 then log("no reactor on the main sub, not recording"); active = false; return end
     local maxKW, maxEach = 0, {}
-    for _, r in ipairs(dev.reactors) do maxKW = maxKW + r.MaxPowerOutput; table.insert(maxEach, string.format("%.1f", r.MaxPowerOutput)) end
+    for _, r in ipairs(dev.reactors) do
+        local ok, m = pcall(function() return r.MaxPowerOutput end)
+        if ok and m then maxKW = maxKW + m; table.insert(maxEach, string.format("%.1f", m)) end
+    end
     local subName = (Submarine.MainSub and Submarine.MainSub.Info and Submarine.MainSub.Info.Name) or "unknown"
     local safe = tostring(subName):gsub("[^%w_%-]", "_")
     local dir = logDir()
@@ -186,27 +328,43 @@ local function startRound()
             if t then fuelType = t end
         end
     end)
-    local battCap, battN = 0, 0
-    for _, pc in ipairs(dev.batteries) do battCap = battCap + pc.Capacity; battN = battN + 1 end
-    header = "# BaroPowerLog v2\n"
+    local battCap, battN, battMax, battOut, battRate, capsN, capsCap = 0, 0, 0, 0, 0, 0, 0
+    for _, pc in ipairs(dev.batteries) do pcall(function() battCap = battCap + pc.Capacity; battMax = battMax + pc.MaxRechargeSpeed; battOut = battOut + pc.MaxOutPut; battRate = battRate + pc.RechargeSpeed; battN = battN + 1 end) end
+    for _, pc in ipairs(dev.supercaps) do pcall(function() capsCap = capsCap + pc.Capacity; capsN = capsN + 1 end) end
+    local engMax, pumpMax = 0, 0
+    for _, e in ipairs(dev.engines) do pcall(function() engMax = engMax + e.PowerConsumption end) end
+    for _, p in ipairs(dev.pumps) do pcall(function() pumpMax = pumpMax + p.PowerConsumption end) end
+    local ri = dev.reactors[1].Item
+    -- the sub's own reactor timers and junction box overload limit (subs override the item defaults)
+    local subVals = ""
+    pcall(function() subVals = subVals .. "# reactor_meltdown_delay=" .. string.format("%g", dev.reactors[1].MeltdownDelay) .. "\n# reactor_fire_delay=" .. string.format("%g", dev.reactors[1].FireDelay) .. "\n" end)
+    pcall(function() if dev.junctions[1] then subVals = subVals .. "# junction_overload_voltage=" .. string.format("%g", dev.junctions[1].GetComponentString("PowerTransfer").OverloadVoltage) .. "\n" end end)
+    local rate = 0.2
+    pcall(function() rate = dev.reactors[1].FuelConsumptionRate end)
+    header = "# BaroPowerLog v3\n"
         .. "# sub=" .. tostring(subName) .. "\n"
-        .. "# reactor_max_kw=" .. string.format("%.1f", maxKW) .. "\n"
+        .. (maxKW > 0 and ("# reactor_max_kw=" .. string.format("%.1f", maxKW) .. "\n") or "")
         .. "# reactors=" .. #dev.reactors .. " (" .. table.concat(maxEach, "+") .. ")\n"
         .. "# fuel_rods=" .. rods .. "\n"
         .. "# fuel_type=" .. fuelType .. "\n"
-        .. "# fuel_consumption_rate=" .. string.format("%.3f", dev.reactors[1].FuelConsumptionRate) .. "\n"
-        .. "# ship_batteries=" .. battN .. " (capacity " .. string.format("%.0f", battCap) .. " kW*min)\n"
-        .. "# engines=" .. #dev.engines .. " pumps=" .. #dev.pumps .. " supercapacitors=" .. #dev.supercaps .. " turrets=" .. #dev.turrets .. "\n"
+        .. "# fuel_consumption_rate=" .. string.format("%.3f", rate) .. "\n"
+        .. "# ship_batteries=" .. battN .. " (capacity " .. string.format("%.0f", battCap) .. " kW*min, max recharge " .. string.format("%.0f", battMax) .. " kW, max output " .. string.format("%.0f", battOut) .. " kW, recharge setting " .. string.format("%.0f", battRate) .. " kW)\n"
+        .. "# supercapacitors=" .. capsN .. " (capacity " .. string.format("%.0f", capsCap) .. " kW*min)\n"
+        .. "# engines=" .. #dev.engines .. " (max " .. string.format("%.0f", engMax) .. " kW) pumps=" .. #dev.pumps .. " (max " .. string.format("%.0f", pumpMax) .. " kW) turrets=" .. #dev.turrets .. " sonars=" .. #dev.sonars .. " junction_boxes=" .. #dev.junctions .. "\n"
+        .. "# reactor_signal_wires=fission:" .. wired(ri, "set_fissionrate") .. " turbine:" .. wired(ri, "set_turbineoutput") .. " (0 = run by hand/AutoTemp)\n"
+        .. subVals
+        .. gameInfo()
         .. "t," .. table.concat(COLS, ",") .. "\n"
-    rows, roundTime, lastReal, lastRowT, last, nextFlush, nextScan = {}, 0, Timer.GetTime(), -1e9, nil, PL.flushInterval, PL.rescanInterval
+    rows, roundTime, lastReal, lastRowT, last = {}, 0, Timer.GetTime(), -1e9, nil
+    nextFlush, nextScan, nextSlow, nextSit = PL.flushInterval, PL.rescanInterval, 0, 0
+    slow, sit, maxEst, pendingEvents = {}, {}, {}, {}
     active = true
     log("recording " .. tostring(subName) .. " (max " .. string.format("%.0f", maxKW) .. " kW) -> " .. filePath)
 end
 
 local function stopRound()
     if not active then return end
-    table.insert(rows, "# duration=" .. string.format("%.2f", roundTime))
-    flush()
+    flush(true)
     log("saved " .. #rows .. " rows to " .. tostring(filePath))
     active = false
 end
@@ -223,16 +381,27 @@ Hook.Add("think", "PowerLogger.think", function()
     roundTime = roundTime + math.min(dt, 0.1)  -- pauses / hitches don't stretch the timeline
     if roundTime >= nextScan then nextScan = roundTime + PL.rescanInterval; scan() end
     if #dev.reactors == 0 then return end
+    if roundTime >= nextSlow then nextSlow = roundTime + PL.slowInterval; pcall(sampleSlow) end
+    if roundTime >= nextSit then nextSit = roundTime + PL.situationInterval; pcall(sampleSituation) end
 
     local ok, v = pcall(sample)
     if not ok then return end
-    if changed(v) or roundTime - lastRowT >= PL.heartbeat then
+    if last ~= nil then
+        if v.rods ~= last.rods then event("rods " .. tostring(last.rods) .. "->" .. tostring(v.rods)) end
+        if v.autotemp ~= last.autotemp then event(v.autotemp == 1 and "autotemp on" or "autotemp off") end
+        if v.power_on ~= last.power_on then event(v.power_on == 1 and "reactor on" or "reactor off") end
+        if (v.temp or 0) > 70 and (last.temp or 0) <= 70 then event("temp > 70") end
+    end
+    local gap = roundTime - lastRowT
+    local big = last ~= nil and math.abs((v.demand or 0) - (last.demand or 0)) >= PL.bigJumpKW
+    if #pendingEvents > 0 or gap >= PL.heartbeat or (changed(v) and (gap >= PL.minRowGap or big)) then
+        v.event = table.concat(pendingEvents, "; "); pendingEvents = {}
         local cells = { string.format("%.3f", roundTime) }
         for _, c in ipairs(COLS) do table.insert(cells, fmt(c, v[c])) end
         table.insert(rows, table.concat(cells, ","))
         last, lastRowT = v, roundTime
     end
-    if roundTime >= nextFlush then nextFlush = roundTime + PL.flushInterval; flush() end
+    if roundTime >= nextFlush then nextFlush = roundTime + PL.flushInterval; flush(false) end
 end)
 
 -- started mid-round (e.g. "reloadlua")

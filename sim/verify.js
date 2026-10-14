@@ -51,7 +51,7 @@ function verify(text, opts) {
   const r0 = rows[0], t0 = r0.t;
   const profile = { name: 'trace', points: rows.map(r => ({ t: r.t - t0, demand: Math.max(0, r.load || 0), ch: {} })), duration: rows[rows.length - 1].t - t0, channels: [], meta: {} };
   let idx = 0, lastRods = null;
-  const cfg = { roundTimeOffset: t0, profile, reactorMaxKW: r0.max_kw, rods: Math.max(1, r0.rods || 1), start: 'cold', wear: false, vanilla: false,
+  const cfg = { roundTimeOffset: t0, profile, reactorMaxKW: r0.max_kw, rods: Math.max(1, r0.rods || 1), recordedRods: true, fuelDrain: true, start: 'cold', wear: false, vanilla: false,
     beforeTick(sim) {
       const t = sim.time + t0;
       while (idx + 1 < rows.length && rows[idx + 1].t <= t) idx++;

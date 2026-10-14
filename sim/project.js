@@ -35,8 +35,7 @@
   //   $MAX      reactor max output kW          $BATT_N    number of batteries
   //   $BATT_KW  total max recharge kW (all)    $BATT_OUT  total max output kW (all)    $BATT_CAP total capacity kW·min
   function placeholders(cfg) {
-    const bc = (cfg && cfg.batteries) || {}, n = bc.enabled ? (bc.count || 1) : 0;
-    const t = Object.assign({}, E.BATT[bc.type || 'battery'] || E.BATT.battery, bc.custom || {});
+    const bc = (cfg && cfg.batteries) || {}, spec = E.batterySpec(cfg, cfg && cfg.profile), n = bc.enabled ? spec.count : 0, t = spec.type; // settings, or the ship's own
     return { MAX: (cfg && cfg.reactorMaxKW) || 5000, BATT_N: n, BATT_KW: n * t.maxRecharge, BATT_OUT: n * t.maxOut, BATT_CAP: n * t.capacity };
   }
   const PH = /\$(BATT_KW|BATT_OUT|BATT_CAP|BATT_N|MAX)/g;

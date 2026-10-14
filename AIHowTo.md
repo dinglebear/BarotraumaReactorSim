@@ -10,7 +10,7 @@ node sim/cli.js compare a,b,vanilla --profile all   # side-by-side table (vanill
 node sim/cli.js check <circuit>                     # fast syntax/wiring check, no run
 ```
 Other: `autopins <file.txt>` (find which pin goes where by trial and error, writes `.pins`), `decompile <file.txt>` (in-game file -> .circ text), `build <circuit>` (export only), `profiles` (list test files), `verify <trace.csv>` (replay a reactor trace recorded in game and show where the simulator differs; traces go in `traces/`).
-Flags: `--batteries N` (0 = off), `--btype battery|supercapacitor`, `--max KW`, `--rods N`, `--fuel uranium|thorium|fulgurium|volatile`, `--link wire|wifi`, `--start warm|cold`, `--duration S`, `--timeline` (also write a 1 Hz CSV), `--battery file.txt`.
+Flags: `--batteries N` (0 = off) or `--batteries ship` (the recorded sub's own batteries, from the test file's `ship_batteries` header), `--btype battery|supercapacitor`, `--max KW`, `--rods N`, `--fuel uranium|thorium|fulgurium|volatile`, `--link wire|wifi`, `--start warm|cold`, `--duration S`, `--timeline` (also write a 1 Hz CSV), `--battery file.txt`.
 Defaults come from `sim.config.json` (the web page's "Save settings" writes this file). The test file supplies the reactor max output and the rod count unless overridden.
 
 `<circuit>` is a name in `circuits/` (no extension), or a path. Results are deterministic: same inputs give the same log.
@@ -19,7 +19,7 @@ Defaults come from `sim.config.json` (the web page's "Save settings" writes this
 | Path | What |
 |---|---|
 | `circuits/<name>.circ` | YOUR circuits (edit these). A run exports `<name>.txt` (1 box) or `<name>_reactor.txt` + `<name>_battery.txt` (2 boxes) in the in-game Blueprints format. |
-| `load_profiles/*.csv` | Test files: the ship's power demand over a round (from the mod in `mod/`, or `synthetic_*`). |
+| `load_profiles/*.csv` | Test files: the ship's power demand over a round. Real ones come from the mod in `mod/`. `synthetic_*` are made by `sim/make_profiles.js` from a ship model calibrated on the real rounds, and they rank circuits like the real rounds do (avoidable unmet: rank correlation 0.98). Use them for fast iteration and confirm on the real ones. |
 | `logs/<circuit>__<profile>.log` | Result of each run (read this). |
 | `context/reactor_circuits/` | Community reactor circuits (`.txt`, optional `name.pins`) to beat. `compare` can run them by name. |
 | `context/community_circuits/` | Non-reactor example circuits (format reference only). |
@@ -107,8 +107,8 @@ How to check: `node sim/cli.js verify <round>` drives fission and turbine from t
 - Fuel burn per rod: `fission/100 * 0.2` condition/s, for EVERY rod present. Fewer rods = less burn; more fuel = more heat per % fission. **Fuel efficiency = keep fission as low as the needed heat allows.**
 - Danger: temp > 60 for 20 s starts a fire (repeats). Temp > 70 runs the meltdown timer (120 s → meltdown). Temp < 40 is outside the optimal range (no ±3 % bonus).
 - **Wear** (as in game): the reactor loses 0.125 condition/s while running, after a random 120-720 s delay, down to 10 %. The fire and meltdown timers run `lerp(2x, 1x, condition)` faster, so a worn reactor catches fire after ~10.5 s above 60 and melts down after ~63 s above 70. `reactor_condition_min_pct` is in the log. The junction box wears too (0.1/s).
-- **Real rounds are the real test.** `Dugong_round001`, `Humpback_round001` and `Typhon2_round001` are recorded rounds. Rod type is worked out from the log, so fulgurium counts as 150 fuel. Rod refills (swaps, `fixitems`) replay too. Typhon2's demand goes far above the reactor's 5200 kW, so only stored battery energy can cover that.
-- **Rods can change mid-round.** A test file's `rods` column adds or removes rods when the player did. Heat = fission × fuel/100 × 2 jumps at once (1 → 4 uranium rods = 4× heat), while fission can only fall ~5 %/s. Watch `fuel_out` (in4) and cut fission the moment it jumps. `synthetic_rodswap`: 5200 kW, 1 rod, 4 rods at 2:00 (the game's own automatic control overheats and starts a fire), 2 rods at 7:00.
+- **Test files are about demand.** A test file is the sub's real (or modelled) power demand. Rods and rod type come from the settings (`--rods`, `--fuel`; default 2 uranium), whatever the player had in that round. Rods do not run down during a test, but the fuel burned is still counted (`kwh_per_rod`). To replay a recorded round's own rods and refuelling (for checking the simulator), use `--recorded-rods --fuel-drain`; `verify` does this itself.
+- **Real rounds are the real test.** `Dugong_round001`, `Dugong_round002_rimuru`, `Humpback_round001` and `Typhon2_round001` are recorded rounds. Typhon2's demand goes far above the reactor's 5200 kW, so only stored battery energy can cover that. The `synthetic_*` rounds come from a ship model calibrated on them.
 - Warm start = sub saved mid-round in a steady state (temp 50, turbine = load). With AutoTemp on, the game's round-start fast sync also runs for the first 5 s.
 - Grid: voltage = supply/load. < 0.5 devices shut off, < 0.9 brownout, > 2 junction boxes take random damage.
 - Batteries (exactly as in game, all on the reactor's grid):
@@ -118,7 +118,8 @@ How to check: `node sim/cli.js verify <round>` drives fission and turbine from t
   - `set_rate` is **rounded to 10 % steps** (banker's rounding). Every battery wired to the pin gets the same rate.
   - **Charging and discharging happen at once:** if `set_rate` > 0 during a shortfall, the batteries cover their own charging load and lose 5 % on the round trip (`battery_self_drain_kwh`). Set the rate to 0 when short.
   - Battery charging is part of `load_value_out` (reactor and junction). Ship demand = load − charging, and charging = charge_rate % × `$BATT_KW` / 100. A reactor box that follows the raw load will also chase the battery charging. See `circuits/example_battery.circ`: the battery box computes demand and sends it to the reactor box over a `link`.
-  - Battery: 2000 kW·min, 500 kW recharge, 1000 kW out, 95 % efficient.
+  - Battery (vanilla): 2000 kW·min, 500 kW recharge, 1000 kW out, 95 % efficient. **Every sub has a different number and size of batteries.** `--batteries ship` uses the sub's own from the test file (e.g. Dugong 2 × 500 kW·min, Humpback 5 × 412). Never hard-code battery numbers: use `$BATT_N`, `$BATT_KW`, `$BATT_OUT`, `$BATT_CAP`.
+  - **A full battery cannot absorb anything.** Keep the charge around **80 %** (a little lower if overvolt is likely, a little higher before expected fights): room to soak surplus, and enough stored to ride out an outage.
   - Supercapacitors power the **guns** (railgun/coilgun). They are not a reactor buffer: their charging is part of demand and shows up on `guns.load_value_out`. Gun fire is a big, sudden load, so watch that pin.
 
 ### Battery math (the AI must design this; batteries have no brain of their own)
@@ -186,6 +187,11 @@ The reactor turbine can only move 5 %/s, so every load step it hasn't anticipate
 - **Engine load:** predicted engine kW = (|velocity_x_out|/100)^1.5 × engine max. Engine max = `engines.load_value_out` at full throttle; the `synthetic_*` headers list it.
 - **Guns:** `guns.load_value_out` jumps when supercapacitors start charging. Let batteries take those bursts rather than chasing them with the reactor.
 - **Main junction box:** `junction.load_value_out` − battery charging = the whole ship's demand, the same tick it changes.
+- **Sonar monitor / nav terminal x movement:** the most popular prediction. The engine is the sub's #1 power user, and the terminal's steering part sends `velocity_x_out` (the sonar part sends nothing). In the simulator that pin is `nav.velocity_x_out`, whichever terminal it comes from in game. |velocity_x_out| rising means an engine spike is coming.
+- **Predict outages with batteries.** Batteries cover a shortfall automatically, as long as they have charge and `disable_output` is off. The best designs:
+  - when a spike is predicted (throttle going up, guns charging) and the reactor can't ramp in time, let the batteries carry it: keep `disable_output` off and the charge near 80 %;
+  - when a big load drops away (throttle cut), turn recharge ON (`set_rate` up) to soak the reactor's surplus while the turbine winds down, then lower `set_rate` step by step (10 % steps) as the turbine catches up. This avoids overvoltage;
+  - demand above `$MAX` can only come from stored energy, so charge up before it (e.g. while stopped).
 
 Tips:
 - Feed-forward on turbine (`turbine = load/$MAX*100`) plus feedback on temperature (target ~50 = 5000 on in3) is the usual base.
@@ -221,7 +227,27 @@ Compare with: `node sim/cli.js compare vanilla,basic_reactor,lammert_arc_hts,ove
 
 ## 10. Web bench (for the human)
 `web/index.html` is the master page. Rebuild it with `node sim/build_web.js` after adding circuits or profiles. It has:
-- master settings: batteries on/off, reactor max output, test file, circuit;
+- master settings: test file, reactor max output, rods, batteries (the sub's own or set by hand);
+- a **reactor circuit** and a separate **battery circuit** dropdown. Any circuit's battery box can pair with any reactor circuit;
 - live charts at x1/x5/x10/x25/Max speed (all speeds give the same result);
+- a **Circuit box** tab that draws each box with live signal values. Its Edit mode is a visual editor: add/move/delete components, wire pins, set properties and box pin connections, then Apply & test. The result is saved as the "Edited: my_circuit" entry; positions go into the .circ as `@x,y` and into the exported .txt;
 - an editor for the circuit text;
 - saving of the in-game .txt files and the log.
+
+## 11. Whole-sub practice rounds
+`node sim/cli.js ship <Dugong|Humpback|Typhon2|path.sub> [--circuit name] [--battery-circuit name] [--duration s] [--no-fights] [--breach s]`. Add `--summary` to only list what the sub has.
+
+The sub mock (`sim/subfile.js` reads the `.sub`, `sim/ship.js` simulates it) runs every electrical item of a real sub with that sub's own settings and wiring:
+- reactor, batteries, supercapacitors, junction boxes, relays (start closed), engines, pumps, nav terminal/sonar;
+- turrets and discharge coils on their supercapacitor grids;
+- lights, oxygen generator, fabricators, doors, detectors and buttons;
+- standalone logic components, and the sub's own circuit boxes.
+
+How the round plays:
+- Power is solved per grid. Relays join grids when closed.
+- No water or crew. A scenario plays the round: a pilot, fights (gunners fire, sonar goes active), and an optional hull breach (the water detectors in that room read 100 %).
+- Without `--circuit`, the crew's automatic control runs the reactor.
+- With `--circuit`, the circuit's box pins are wired to the sub's real devices: `reactor.*`, `junction.*` (the main junction box), `battery.*` (all ship batteries), `nav.*` (the nav terminal), `const.N`.
+- `$MAX`/`$BATT_*` are filled from the sub. The log has the same metrics as a test-file run.
+
+Each sub sets its own reactor fire/meltdown delays, junction-box overload voltage (1.7) and battery sizes. Test-file headers carry them too (`reactor_fire_delay`, `junction_overload_voltage`, `ship_batteries`).

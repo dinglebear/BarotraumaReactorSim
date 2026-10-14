@@ -5,8 +5,12 @@
 # fuel_rods=1
 # fuel_type=uranium
 # fuel_consumption_rate=0.200
-# ship_batteries=5 (capacity 2060 kW*min)
 # engines=1 pumps=5 supercapacitors=2 turrets=5
+# reactor_meltdown_delay=30
+# reactor_fire_delay=10
+# junction_overload_voltage=1.7
+# ship_batteries=4 (capacity 2000 kW*min, max recharge 2000 kW, max output 2000 kW, recharge setting 0 kW)
+# (sub values from the game's .sub file)
 t,demand,load,power,reactor_out,turbine,fission,temp,fuel,rods,voltage,batt_in,batt_out,nav.velocity_x_out,nav.velocity_y_out,nav.current_velocity_x,nav.current_velocity_y,nav.current_position_y,engines.load_value_out,pumps.load_value_out,guns.load_value_out,sonar.load_value_out
 0.017,1415.0,1415.0,0.0,0.0,0.0000,0.0000,0.0000,100.0000,1,0.0000,0.0,0.0,0.0000,-22.8000,0.0000,-0.0084,-0.0000,0.0,180.0,0.0,10.0
 0.033,1415.0,1415.0,1415.0,0.0,0.0000,0.0000,0.0000,100.0000,1,1.0000,0.0,1415.0,0.0000,-22.8000,0.0000,-0.0167,-0.0001,0.0,180.0,0.0,10.0

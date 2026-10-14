@@ -24,10 +24,24 @@ local COLS = { "t", "temp", "fission", "turbine", "target_fission", "target_turb
     "sig_fission", "sig_turbine", "last_user_player", "voltage", "event" }
 
 local active, rows, tick, roundTime, lastReal, nextFlush, filePath, reactor, prev
+local firstError = nil
 local function log(m) print("[ReactorTrace] " .. m) end
+local function noteError(where, err)
+    if firstError == nil then firstError = where .. ": " .. tostring(err); log("first error (please report): " .. firstError) end
+end
 
-local function num(x, fmt) if x == nil then return "" end return string.format(fmt or "%.3f", x) end
-local function get(obj, field) local ok, v = pcall(function() return obj[field] end); if ok then return v end return nil end
+-- every read is protected: a value the game won't give us becomes an empty cell instead of losing the whole row
+local function num(x, fmt)
+    local n = tonumber(x)
+    if n == nil then return "" end
+    return string.format(fmt or "%.3f", n)
+end
+local function get(obj, field)
+    local ok, v = pcall(function() return obj[field] end)
+    if ok then return v end
+    noteError("read " .. field, v)
+    return nil
+end
 local function vx(v) if v == nil then return nil end local ok, r = pcall(function() return v.X end); return ok and r or nil end
 local function vy(v) if v == nil then return nil end local ok, r = pcall(function() return v.Y end); return ok and r or nil end
 local function opt(v) -- float? (Nullable) -> number or nil
@@ -69,32 +83,38 @@ end
 local function snapshot(r)
     local n, conds = rodsInfo(r)
     local lu = get(r, "LastUser")
+    local isPlayer = 0
+    pcall(function() if lu ~= nil and lu.IsPlayer then isPlayer = 1 end end)
+    local cpc = tonumber(get(r, "CurrPowerConsumption"))
+    local item = get(r, "Item")
     local s = {
-        t = roundTime, temp = r.Temperature, fission = r.FissionRate, turbine = r.TurbineOutput,
-        target_fission = r.TargetFissionRate, target_turbine = r.TargetTurbineOutput, correct_turbine = r.CorrectTurbineOutput,
-        load = r.Load, output = -r.CurrPowerConsumption, max_kw = r.MaxPowerOutput,
+        t = roundTime, temp = get(r, "Temperature"), fission = get(r, "FissionRate"), turbine = get(r, "TurbineOutput"),
+        target_fission = get(r, "TargetFissionRate"), target_turbine = get(r, "TargetTurbineOutput"), correct_turbine = get(r, "CorrectTurbineOutput"),
+        load = get(r, "Load"), output = cpc and -cpc or nil, max_kw = get(r, "MaxPowerOutput"),
         avail_fuel = get(r, "prevAvailableFuel"), rods = n, rod_cond = conds,
-        autotemp = r.AutoTemp and 1 or 0, power_on = r.PowerOn and 1 or 0, condition = r.Item.ConditionPercentage,
+        autotemp = get(r, "AutoTemp") and 1 or 0, power_on = get(r, "PowerOn") and 1 or 0, condition = item and get(item, "ConditionPercentage") or nil,
         meltdown_timer = get(r, "meltDownTimer"), fire_timer = get(r, "fireTimer"), dos = get(r, "degreeOfSuccess"),
         opt_temp_lo = vx(get(r, "optimalTemperature")), opt_temp_hi = vy(get(r, "optimalTemperature")), allowed_temp_hi = vy(get(r, "allowedTemperature")),
         opt_turb_lo = vx(get(r, "optimalTurbineOutput")), opt_turb_hi = vy(get(r, "optimalTurbineOutput")),
         opt_fission_lo = vx(get(r, "optimalFissionRate")), opt_fission_hi = vy(get(r, "optimalFissionRate")),
         sig_fission = opt(get(r, "signalControlledTargetFissionRate")), sig_turbine = opt(get(r, "signalControlledTargetTurbineOutput")),
-        last_user_player = (lu ~= nil and lu.IsPlayer) and 1 or 0, voltage = voltage(r),
+        last_user_player = isPlayer, voltage = voltage(r),
     }
     return s
 end
 
 local function events(s)
     local e = {}
-    if prev ~= nil then
+    local ok = pcall(function()
+    if prev ~= nil and tonumber(s.temp) and tonumber(prev.temp) then
         if s.rods ~= prev.rods then table.insert(e, "rods " .. prev.rods .. "->" .. s.rods) end
         if s.autotemp ~= prev.autotemp then table.insert(e, s.autotemp == 1 and "autotemp on" or "autotemp off") end
         if s.power_on ~= prev.power_on then table.insert(e, s.power_on == 1 and "power on" or "power off") end
         if s.fire_timer ~= nil and prev.fire_timer ~= nil and prev.fire_timer > 1 and s.fire_timer < prev.fire_timer - 1 then table.insert(e, "FIRE started") end
-        if s.condition <= 0 and prev.condition > 0 then table.insert(e, "MELTDOWN") end
+        if tonumber(s.condition) and tonumber(prev.condition) and s.condition <= 0 and prev.condition > 0 then table.insert(e, "MELTDOWN") end
         if s.temp > 70 and prev.temp <= 70 then table.insert(e, "temp > 70 (meltdown timer running)") end
     end
+    end)
     return table.concat(e, "; ")
 end
 
@@ -102,8 +122,8 @@ local function row(s)
     local out = {}
     for _, c in ipairs(COLS) do
         local v = s[c]
-        if c == "rod_cond" or c == "event" then out[#out + 1] = v or ""
-        elseif c == "rods" or c == "autotemp" or c == "power_on" or c == "last_user_player" then out[#out + 1] = tostring(v or "")
+        if c == "rod_cond" or c == "event" then out[#out + 1] = tostring(v or ""):gsub(",", ";")
+        elseif c == "rods" or c == "autotemp" or c == "power_on" or c == "last_user_player" then out[#out + 1] = v == nil and "" or tostring(v)
         else out[#out + 1] = num(v) end
     end
     return table.concat(out, ",")
@@ -111,7 +131,8 @@ end
 
 local function flush()
     if not active or filePath == nil then return end
-    local ok, err = pcall(function() File.Write(filePath, "# ReactorTrace v1\n# sub=" .. tostring(Submarine.MainSub.Info.Name) .. "\n" .. table.concat(COLS, ",") .. "\n" .. table.concat(rows, "\n") .. "\n") end)
+    local note = firstError and ("# first error: " .. tostring(firstError):gsub("[\r\n]", " ") .. "\n") or ""
+    local ok, err = pcall(function() File.Write(filePath, "# ReactorTrace v1\n# sub=" .. tostring(Submarine.MainSub.Info.Name) .. "\n" .. note .. table.concat(COLS, ",") .. "\n" .. table.concat(rows, "\n") .. "\n") end)
     if not ok then log("write failed: " .. tostring(err)) end
 end
 
@@ -146,9 +167,12 @@ Hook.Add("think", "ReactorTrace.think", function()
     roundTime = roundTime + math.min(dt, 0.1)
     tick = tick + 1
     local ok, s = pcall(snapshot, reactor)
-    if not ok then return end
+    if not ok then noteError("snapshot", s); return end
     s.event = events(s)
-    if tick % TR.interval == 0 or s.event ~= "" then rows[#rows + 1] = row(s) end
+    if tick % TR.interval == 0 or s.event ~= "" then
+        local ok2, line = pcall(row, s)
+        if ok2 then rows[#rows + 1] = line else noteError("row", line) end
+    end
     prev = s
     if roundTime >= nextFlush then nextFlush = roundTime + TR.flushInterval; flush() end
 end)

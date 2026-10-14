@@ -43,3 +43,12 @@ console.log('all tests passed');
   assert(tempRms < 0.5, 'verify replay error too high:\n' + out);
 }
 console.log('verify self-check passed');
+// real game data: replaying the recorded Dugong round (AutoTemp, 1 -> 4 uranium rods at 37 s) must stay close to the game
+{
+  const V = require('./verify');
+  const out = V.verify(fs.readFileSync(path.join(ROOT, 'load_profiles/Dugong_round001.csv'), 'utf8'));
+  const g = k => Number(new RegExp('\\n' + k + '\\t([\\d.]+)\\t([\\d.]+)').exec(out)[1]);
+  assert(g('temp') < 2 && g('fission') < 1.5 && g('turbine') < 1.5, 'simulator drifted from the real Dugong round:\n' + out);
+  assert(/FIRE started/.test(out), 'the real round caught fire after the rods went in; the simulator should too:\n' + out);
+}
+console.log('real-game check (Dugong round) passed');

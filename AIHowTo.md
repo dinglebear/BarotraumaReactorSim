@@ -93,6 +93,7 @@ Timing: **U** = outputs every tick in its Update (needs fresh inputs; adds 0-1 t
 Number output format: shortest float32 text (`0.1`, `0.33333334`, `1E-05`). Unparsable numeric input counts as 0. Signals propagate instantly (depth-first). A chain of more than 10 hops is delayed 1 tick.
 
 ## 6. Reactor physics (dt = 1/60 s, all % are 0-100)
+Checked against a real game round (`load_profiles/Dugong_round001.csv`: 3000 kW, AutoTemp, 1 → 4 uranium rods at 37 s). Replaying it, the simulator stays within 0.9 RMS on temperature, and 0.5 % RMS on fission and turbine. It reproduces the spike to 100, the fire, and the settle at 50. `node sim/test.js` re-checks this.
 - `heat = fission * fuel/100 * 2`. Temperature moves toward `heat - turbine` at ≤ 10 %/s. One uranium rod (fuel 80) gives heat = 1.6 × fission.
 - Fission and turbine follow their targets with a ~1 s lag (`x += (target - x)*dt`). Fission is capped at AvailableFuel (80 per uranium rod).
 - **Output kW = MaxOutput × clamp(turbine ± tol, ≤ temp/50) / 100**. Below temp 50, output is capped at `temp/50` of max. tol = 1 % of max, or 3 % when turbine is within CTO±2.5 AND temp is 40-60. The reactor does NOT follow load by itself: the turbine must equal `load/max*100`.

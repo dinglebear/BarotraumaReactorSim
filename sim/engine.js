@@ -322,7 +322,7 @@
       const fCtl = R.sigF !== null && R.lastF > T - 1, tCtl = R.sigT !== null && R.lastT > T - 1;
       this.metrics.ctl(fCtl, tCtl);
       // round-start fast sync: first 5 s of a round, AutoTemp on, no player user, no signal control
-      if (T < 5 && R.powerOn && R.autoTemp && !fCtl && !tCtl) this.autoTemp(100, f(STEP * 10));
+      if (T + (this.cfg.roundTimeOffset || 0) < 5 && R.powerOn && R.autoTemp && !fCtl && !tCtl) this.autoTemp(100, f(STEP * 10));
       const mx = R.maxPower;
       if (fCtl) R.tf = adjustNoOvershoot(R.tf, R.sigF, f(dt * 5)); else R.sigF = null;
       if (tCtl) R.tt = adjustNoOvershoot(R.tt, R.sigT, f(dt * 5)); else R.sigT = null;

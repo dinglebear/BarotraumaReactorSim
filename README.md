@@ -8,6 +8,7 @@ A playground for testing Barotrauma auto-reactor circuits outside the game. It s
   - Live charts at x1/x5/x10/x25/Max speed.
   - Save the in-game `.txt` files and the logs.
 - **Power logger mod:** [`mod/ReactorPowerLogger`](mod/ReactorPowerLogger). It records each round's power demand. Put the CSV into `load_profiles/` to replay that round.
+- **Checked against the game:** a real Dugong round (`load_profiles/Dugong_round001.csv`) replays with about 0.9 temperature error, including the fire after 4 rods went in. `node sim/cli.js verify <round or trace file>` compares any recorded round.
 - **Game mechanics reference:** [`reference/BAROTRAUMA_MECHANICS.md`](reference/BAROTRAUMA_MECHANICS.md).
 
 ```

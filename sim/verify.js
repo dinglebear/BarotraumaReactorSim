@@ -5,25 +5,40 @@
 const E = require('./engine');
 
 function parseTrace(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim() && !l.startsWith('#'));
+  const all = text.split(/\r?\n/);
+  const meta = {}; for (const l of all) { const m = /^#\s*([\w.]+)\s*=\s*(.*)$/.exec(l); if (m) meta[m[1]] = m[2].trim(); }
+  const lines = all.filter(l => l.trim() && !l.startsWith('#'));
   const cols = lines[0].split(',');
-  return lines.slice(1).map(l => {
+  let rows = lines.slice(1).map(l => {
     const p = l.split(','), r = {};
     cols.forEach((c, i) => { const v = p[i] === undefined ? '' : p[i]; r[c] = (c === 'rod_cond' || c === 'event') ? v : (v === '' ? null : Number(v)); });
     return r;
   });
+  // A PowerLogger round file (has "demand") also records the reactor: use it as a coarse trace.
+  // It doesn't record AutoTemp/power/targets, so AutoTemp is assumed on and the targets are left to the simulator.
+  if (cols.includes('demand') && !cols.includes('target_fission')) {
+    const id = Object.keys(E.FUEL_IDS).find(k => E.FUEL_IDS[k] === (meta.fuel_type || 'uranium')) || 'fuelrod';
+    const max = Number(meta.reactor_max_kw) || 5000, rodMax = (E.FUEL[meta.fuel_type] || E.FUEL.uranium).cond;
+    rows = rows.map(r => ({ t: r.t, temp: r.temp, fission: r.fission, turbine: r.turbine, load: r.load, output: r.reactor_out, max_kw: max, rods: r.rods,
+      rod_cond: Array.from({ length: r.rods || 0 }, () => `${id}:${(r.fuel / Math.max(1, r.rods) / 100 * rodMax).toFixed(1)}`).join(' '),
+      autotemp: 1, power_on: 1, event: '', powerlog: true }));
+  }
+  return rows;
 }
 function rodsFrom(s) { // "fuelrod:87.2 thoriumfuelrod:200.0"
   return String(s || '').trim().split(/\s+/).filter(Boolean).map(x => { const [id, c] = x.split(':'); const t = E.FUEL[E.FUEL_IDS[id]] || E.FUEL.uranium; return { fuel: E.FUEL_IDS[id] ? t.fuel : 0, cond: Number(c), max: t.cond }; });
 }
 
-function verify(text) {
-  const rows = parseTrace(text);
+function verify(text, opts) {
+  opts = opts || {};
+  let rows = parseTrace(text);
+  if (opts.from != null) rows = rows.filter(r => r.t >= opts.from);
+  else if (rows[0] && rows[0].powerlog) { const k = rows.findIndex(r => r.temp > 1); if (k > 0) rows = rows.slice(k); } // skip the time the reactor was off
   if (rows.length < 2) throw new Error('trace has no rows');
   const r0 = rows[0], t0 = r0.t;
   const profile = { name: 'trace', points: rows.map(r => ({ t: r.t - t0, demand: Math.max(0, r.load || 0), ch: {} })), duration: rows[rows.length - 1].t - t0, channels: [], meta: {} };
   let idx = 0, lastRods = null;
-  const cfg = { profile, reactorMaxKW: r0.max_kw, rods: Math.max(1, r0.rods || 1), start: 'cold', wear: false, vanilla: false,
+  const cfg = { roundTimeOffset: t0, profile, reactorMaxKW: r0.max_kw, rods: Math.max(1, r0.rods || 1), start: 'cold', wear: false, vanilla: false,
     beforeTick(sim) {
       const t = sim.time + t0;
       while (idx + 1 < rows.length && rows[idx + 1].t <= t) idx++;
@@ -44,7 +59,7 @@ function verify(text) {
     } };
   const sim = new E.Sim({ name: 'trace', boxes: [], links: [] }, cfg);
   const R = sim.reactor;
-  Object.assign(R, { temp: r0.temp, fission: r0.fission, turbine: r0.turbine, tf: r0.target_fission, tt: r0.target_turbine, cto: r0.correct_turbine, load: r0.load,
+  Object.assign(R, { temp: r0.temp, fission: r0.fission, turbine: r0.turbine, tf: r0.target_fission ?? r0.fission, tt: r0.target_turbine ?? r0.turbine, cto: r0.correct_turbine ?? r0.load / r0.max_kw * 100, load: r0.load,
     melt: r0.meltdown_timer || 0, fire: r0.fire_timer || 0, dos: r0.dos || 0, cond: r0.condition == null ? 100 : r0.condition });
   R.rods = rodsFrom(r0.rod_cond).length ? rodsFrom(r0.rod_cond) : R.rods; R.availFuel = R.prevAvailFuel = sim.rodFuel(); lastRods = r0.rod_cond;
   sim.metrics.reset();

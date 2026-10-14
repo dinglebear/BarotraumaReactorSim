@@ -1,15 +1,39 @@
-# Example with batteries: reactor box = feed-forward, battery box charges when below 80%.
+# Example: battery buffer. Batteries soak up reactor surplus (would be overvoltage) and
+# cover shortfalls (they discharge on their own whenever supply < load).
+# Battery box: demand = grid load - our own charging; surplus = reactor output - demand;
+#              set_rate = surplus / total recharge kW * 100  (0 when short -> no charge/discharge cycling)
+# Reactor box: follows the real demand (sent over the link), not the load inflated by charging.
 name example_battery
-box reactor
-c tdiv div
-c tmax mem Value=$MAX
-c tpct mul
+box battery
+c kb mem Value=$BATT_KW       # total max recharge of all batteries (kW)
 c k100 mem Value=100
-c fadd add
+c chg mul                     # charge_rate% * BATT_KW
+c chgk div                    # / 100 -> kW the batteries draw now
+c dem sub                     # grid load - charging = ship demand
+c sur sub                     # reactor output - demand = surplus
+c rate div                    # surplus / BATT_KW
+c pct mul ClampMin=0 ClampMax=100   # * 100 -> set_rate
+w in2 chg.1
+w kb.out chg.2 rate.2
+w chg.out chgk.1
+w k100.out chgk.2 pct.2
+w in3 dem.1
+w chgk.out dem.2
+w in6 sur.1
+w dem.out sur.2 out2
+w sur.out rate.1
+w rate.out pct.1
+w pct.out out1
+box reactor
+c tdiv div                    # demand / max
+c tmax mem Value=$MAX
+c tpct mul                    # * 100 -> turbine
+c k100 mem Value=100
+c fadd add                    # turbine + 50
 c k50 mem Value=50
-c fmul mul
-c fdiv div ClampMin=0 ClampMax=100
-w in1 tdiv.1
+c fmul mul                    # * 50
+c fdiv div ClampMin=0 ClampMax=100   # / fuel -> fission (aims for temperature 50)
+w in8 tdiv.1
 w tmax.out tdiv.2
 w tdiv.out tpct.1
 w k100.out tpct.2
@@ -19,9 +43,4 @@ w fadd.out fmul.1
 w fmul.out fdiv.1
 w in4 fdiv.2
 w fdiv.out out1
-box battery
-c low greater Output=40 FalseOutput=0   # 80 > charge% -> charge at 40%
-c k80 mem Value=80
-w k80.out low.1
-w in1 low.2
-w low.out out1
+link battery.out2 reactor.in8

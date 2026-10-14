@@ -35,9 +35,9 @@ function loadModel(file, batteryFile) {
   const pinsFile = file.replace(/(_reactor)?\.(txt|circ)$/, '.pins');
   return P.loadModel(read(file), path.basename(file), batteryFile ? read(batteryFile) : null, fs.existsSync(pinsFile) ? read(pinsFile) : null);
 }
-function exportTxt(model, file, maxKW) {
+function exportTxt(model, file, vals) {
   if (!file.endsWith('.circ')) return [];
-  return P.exportBoxes(model, maxKW).map(o => { const p = path.join(path.dirname(file), o.filename); fs.writeFileSync(p, o.text); return rel(p); });
+  return P.exportBoxes(model, vals).map(o => { const p = path.join(path.dirname(file), o.filename); fs.writeFileSync(p, o.text); return rel(p); });
 }
 
 function runOne(circuitFile, profileFile, a, quiet) {
@@ -48,9 +48,10 @@ function runOne(circuitFile, profileFile, a, quiet) {
   const maxKW = cfg.reactorMaxKW || prof.reactorMaxKW || 5000;
   Object.assign(cfg, { reactorMaxKW: maxKW, profile: prof, circuitName: model.name });
   if (!circuitFile) cfg.vanilla = true;
-  const sim = new E.Sim(P.substitute(model, maxKW), cfg);
+  const vals = P.placeholders(cfg);
+  const sim = new E.Sim(P.substitute(model, vals), cfg);
   const r = sim.runToEnd();
-  if (circuitFile && !quiet) r.exported = exportTxt(model, circuitFile, maxKW).join(',');
+  if (circuitFile && !quiet) r.exported = exportTxt(model, circuitFile, vals).join(',');
   const name = `${model.name}__${prof.name}`;
   fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
   const logFile = path.join(ROOT, 'logs', name + '.log');
@@ -82,11 +83,11 @@ const COMMANDS = {
   },
   // compare a,b,vanilla [--profile all]
   compare(a) { const rows = []; for (const n of a._[0].split(',')) for (const p of listProfiles(a)) rows.push(runOne(circ(n), p, a, true)); printTable(rows); },
-  build(a) { const f = resolve(a._[0], ['circuits']); console.log(exportTxt(F.parseCirc(read(f)), f, loadConfig(a).reactorMaxKW || 5000).join('\n')); },
+  build(a) { const f = resolve(a._[0], ['circuits']); console.log(exportTxt(F.parseCirc(read(f)), f, P.placeholders(loadConfig(a))).join('\n')); },
   decompile(a) { const f = resolve(a._[0], CIRC_DIRS); process.stdout.write(F.toCirc(loadModel(f, a.battery && resolve(a.battery, CIRC_DIRS)))); },
   check(a) {
     const f = resolve(a._[0], CIRC_DIRS), m = loadModel(f), cfg = loadConfig(a); cfg.start = 'cold';
-    const s = new E.Sim(P.substitute(m, cfg.reactorMaxKW || 5000), cfg);
+    const s = new E.Sim(P.substitute(m, P.placeholders(cfg)), cfg);
     console.log(`ok: ${m.boxes.map(b => `${b.name}(${b.components.length} comps, ${b.wires.length} wires)`).join(' ')}` + (s.warnings.length ? '\n' + s.warnings.join('\n') : ''));
   },
   profiles() { for (const p of listProfiles({})) { const pr = E.parseProfile(read(p), path.basename(p)); const d = pr.points.map(x => x.demand); console.log(`${path.basename(p, '.csv')} dur=${pr.duration.toFixed(0)}s max_kw=${pr.reactorMaxKW || '?'} sub=${pr.meta.sub || '?'} demand=${Math.min(...d).toFixed(0)}..${Math.max(...d).toFixed(0)}`); } },

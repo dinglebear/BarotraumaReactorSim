@@ -39,7 +39,7 @@ link reactor.out5 battery.in1          # wire between the boxes (or use wifi com
 pin in1 reactor.load_value_out         # optional: override the default pin wiring for this box
 ```
 Component pin shorthand: `1`/`2` = `signal_in1/2`, `in` = `signal_in`, `out` = `signal_out`, plus named pins (`set_output`, `lock_state`, `set_targetsignal`, `set_frequency`, `move_input`, `signal_in3`, `signal_out0`...).
-`$MAX` in any value is replaced by the reactor max output (kW) of the test. The export bakes in the number and adds an in-game note saying which component to edit for another ship.
+Placeholders in any value, filled from the test settings: `$MAX` (reactor max output kW), `$BATT_KW` (total max recharge kW of all batteries), `$BATT_OUT` (total max output kW), `$BATT_CAP` (total capacity kW·min), `$BATT_N` (battery count). The export bakes in the numbers and adds an in-game note saying which components to edit for another ship.
 
 ## 4. Box pins (default wiring)
 | reactor box | | battery box | |
@@ -88,7 +88,14 @@ Number output format: shortest float32 text (`0.1`, `0.33333334`, `1E-05`). Unpa
 - Fuel burn per rod: `fission/100 * 0.2` condition/s, for EVERY rod present. Fewer rods = less burn; more fuel = more heat per % fission. **Fuel efficiency = keep fission as low as the needed heat allows.**
 - Danger: temp > 60 for 20 s starts a fire (repeats). Temp > 70 runs the meltdown timer (120 s → meltdown). Temp < 40 is outside the optimal range (no ±3 % bonus).
 - Grid: voltage = supply/load. < 0.5 devices shut off, < 0.9 brownout, > 2 junction boxes take random damage.
-- Batteries: they supply what the reactor doesn't cover (in proportion to their max output). Charging adds load: `set_rate` % × max recharge, **rounded to 10 % steps**. They output less below 10 % charge. Battery: 2000 kW·min, 500 kW recharge, 1000 kW out, 95 % efficient. Supercapacitor: 20 kW·min, 1000 recharge (squared curve), huge output, 10 % efficient.
+- Batteries (exactly as in game, all on the reactor's grid):
+  - **Shortfall is automatic.** When reactor supply < load, batteries discharge to cover the gap with no signal needed. They share it in proportion to max output, give less below 10 % charge, and stop when empty. `disable_output` (any value except "0") turns this off.
+  - **Surplus is NOT automatic.** A battery only charges at `set_rate` % × max recharge, and that draw is added to the grid LOAD, which pulls the voltage back to 1. To soak up overvoltage, the battery box must raise `set_rate` while the reactor makes more than the ship needs.
+  - Stored energy = draw × voltage × efficiency, so overvoltage charges faster.
+  - `set_rate` is **rounded to 10 % steps** (banker's rounding). Every battery wired to the pin gets the same rate.
+  - **Charging and discharging happen at once:** if `set_rate` > 0 during a shortfall, the batteries cover their own charging load and lose 5 % on the round trip (`battery_self_drain_kwh`). Set the rate to 0 when short.
+  - Battery charging is part of `load_value_out` (reactor and junction). Ship demand = load − charging, and charging = charge_rate % × `$BATT_KW` / 100. A reactor box that follows the raw load will also chase the battery charging. See `circuits/example_battery.circ`: the battery box computes demand and sends it to the reactor box over a `link`.
+  - Battery: 2000 kW·min, 500 kW recharge, 1000 kW out, 95 % efficient. Supercapacitor: 20 kW·min, 1000 kW recharge (squared curve: 50 % rate draws 25 %), effectively unlimited output, 10 % efficient.
 
 ### Nerfs on circuit control (all simulated)
 1. `set_fissionrate`/`set_turbineoutput` move the target at most 5 %/s (0→100 takes 20 s), then the ~1 s lag applies on top. **Plan ahead; you cannot step instantly.**
@@ -108,7 +115,12 @@ Key lines (`k=v`):
 - `brownout_s_v_lt_0_9`, `blackout_s_v_lt_0_5`, `overvolt_s_v_gt_1_1`, `junction_overload_s_v_gt_2`, `junction_breaks`
 - `temp_max`, `temp_above_optimal_s`, `temp_critical_s`, `fires`, `meltdown_at_s`
 - `no_fission_signal_s` / `no_turbine_signal_s` (seconds your circuit wasn't controlling)
-- `battery_*`
+- `battery_*`:
+  - `reactor_surplus_kwh` / `reactor_shortfall_kwh`: reactor output above / below ship demand
+  - `surplus_into_batteries_pct`: share of that surplus the batteries absorbed (higher is better)
+  - `shortfall_covered_by_batteries_pct`: share of the shortfall they covered
+  - `battery_self_drain_kwh`: energy cycled by charging while discharging (lower is better)
+  - `battery_charge_min/max_pct`
 - `WARNINGS` (wiring problems) and `EVENTS` (brownouts > 1 s, fires, meltdowns, timestamped)
 
 `--timeline` adds a 1 Hz CSV with these columns: t, demand, power, voltage, temp, fission, turbine, tf/tt (targets), cto, fuel, batt.
@@ -117,7 +129,7 @@ Key lines (`k=v`):
 1. Read the user's goal (e.g. "best fuel efficiency", "no fluctuations").
 2. `node sim/cli.js compare vanilla,<community circuits...> --profile all` gives the baseline to beat.
 3. Write `circuits/<name>.circ`, then `check`, then `run --profile all`. Read the table and the worst log, change one thing, repeat.
-4. Test with batteries when asked (`--batteries 2`; add `box battery`). Two boxes give two .txt files.
+4. Test with batteries when asked (`--batteries 2`; add `box battery`). Two boxes give two .txt files. Battery goal: high `surplus_into_batteries_pct` and `shortfall_covered_by_batteries_pct`, `battery_self_drain_kwh` near 0, and charge kept away from 0 % and 100 % so there is room both ways.
 5. Report the table vs the baseline, plus the exported .txt path(s). Exported files load in game with the Blueprints mod. The box pins are labelled with what to wire them to in game.
 
 Tips:

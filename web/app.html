@@ -7,7 +7,7 @@
 :root {
   --bg: #e9eef0; --panel: #fbfcfc; --sunk: #dfe6e9; --ink: #13222b; --muted: #57707b; --line: #c6d2d7;
   --accent: #0a7069; --accent-ink: #ffffff; --amber: #b86e00; --bad: #b93225; --good: #2b7a3d;
-  --c-demand: #6b7f88; --c-supply: #0a7069; --c-volt: #b86e00; --c-temp: #c2412d; --c-fission: #6b4fb3; --c-turbine: #1f78b4; --c-batt: #2b7a3d;
+  --c-demand: #6b7f88; --c-supply: #0a7069; --c-volt: #b86e00; --c-temp: #c2412d; --c-fission: #6b4fb3; --c-turbine: #1f78b4; --c-batt: #2b7a3d; --c-battin: #9a7b00;
   --f-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
   --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
@@ -16,11 +16,11 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
   --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
-  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; color-scheme: dark } }
+  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; --c-battin: #d9c25a; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
   --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
-  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; color-scheme: dark }
+  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; --c-battin: #d9c25a; color-scheme: dark }
 * { box-sizing: border-box }
 [hidden] { display: none !important }
 body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 40px }
@@ -126,6 +126,8 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
         <label class="row">Count<input type="number" id="battN" min="1" max="8" value="2"></label>
         <label class="row">Type<select id="battType"><option value="battery">Battery</option><option value="supercapacitor">Supercapacitor</option></select></label>
         <label class="row">Start charge %<input type="number" id="battStart" min="0" max="100" value="50"></label>
+        <label class="row">Start charge rate %<input type="number" id="battRate" min="0" max="100" step="10" value="0"></label>
+        <p class="hint">Batteries cover any shortfall on their own. To soak up surplus (overvoltage), the battery box has to raise <code>set_rate</code>.</p>
         <label class="row">Box link<select id="linkMode"><option value="wire">Wire</option><option value="wifi">Wifi components</option></select></label>
       </fieldset>
       <fieldset>
@@ -149,7 +151,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
 
       <section class="panel chartbox" aria-label="Charts">
         <div class="legend">
-          <span><i style="background:var(--c-demand)"></i>Demand kW</span><span><i style="background:var(--c-supply)"></i>Supply kW</span><span><i style="background:var(--c-batt)"></i>Battery out kW</span>
+          <span><i style="background:var(--c-demand)"></i>Demand kW</span><span><i style="background:var(--c-supply)"></i>Supply kW</span><span><i style="background:var(--c-batt)"></i>Battery out kW</span><span><i style="background:var(--c-battin)"></i>Battery charging kW</span>
           <span><i style="background:var(--c-volt)"></i>Voltage</span><span><i style="background:var(--c-temp)"></i>Temperature</span><span><i style="background:var(--c-fission)"></i>Fission %</span><span><i style="background:var(--c-turbine)"></i>Turbine %</span>
         </div>
         <canvas id="chart" role="img" aria-label="Power, voltage and reactor charts over time"></canvas>
@@ -167,7 +169,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
           <div class="bar"><button id="btnSaveLog" data-dl>Save log</button><button id="btnSaveTl" data-dl>Save timeline CSV</button><button id="btnCopyLog">Copy log</button></div>
         </div>
         <div class="tabpane" data-pane="circ" hidden>
-          <p class="hint">Edit the compact circuit text and press Apply. <code>$MAX</code> is replaced by the reactor max output. Syntax is in AIHowTo.md.</p>
+          <p class="hint">Edit the compact circuit text and press Apply. <code>$MAX</code> (reactor kW) and <code>$BATT_KW</code> / <code>$BATT_OUT</code> / <code>$BATT_N</code> (battery totals) are filled in from the settings. Syntax is in AIHowTo.md.</p>
           <textarea id="circText" spellcheck="false" aria-label="Circuit source"></textarea>
           <div class="bar"><button id="btnApply" class="primary">Apply &amp; reset</button><button id="btnSaveCirc" data-dl>Save .circ</button><span id="circMsg" class="hint"></span></div>
         </div>
@@ -205,14 +207,14 @@ function config() {
   return {
     reactorMaxKW: Number($('maxKW').value) || 5000, rods: Number($('rods').value), fuelType: $('fuelType').value, start: $('start').value,
     linkMode: $('linkMode').value, seed: 12345,
-    batteries: { enabled: $('battOn').checked, count: Math.max(1, Number($('battN').value) || 1), type: $('battType').value, startCharge: (Number($('battStart').value) || 0) / 100 },
+    batteries: { enabled: $('battOn').checked, count: Math.max(1, Number($('battN').value) || 1), type: $('battType').value, startCharge: (Number($('battStart').value) || 0) / 100, startRate: Number($('battRate').value) || 0 },
   };
 }
 function saveSettings() { const c = config(); store.set('settings', { ...c, maxAuto: $('maxAuto').checked }); store.set('profile', $('profileSel').value); store.set('circuit', $('circSel').value); }
 function loadSettings() {
   const s = store.get('settings', null); if (!s) return;
   $('maxKW').value = s.reactorMaxKW; $('maxAuto').checked = s.maxAuto !== false; $('rods').value = s.rods; $('fuelType').value = s.fuelType; $('start').value = s.start; $('linkMode').value = s.linkMode;
-  $('battOn').checked = !!s.batteries.enabled; $('battN').value = s.batteries.count; $('battType').value = s.batteries.type; $('battStart').value = Math.round(s.batteries.startCharge * 100);
+  $('battOn').checked = !!s.batteries.enabled; $('battN').value = s.batteries.count; $('battType').value = s.batteries.type; $('battStart').value = Math.round(s.batteries.startCharge * 100); $('battRate').value = s.batteries.startRate || 0;
 }
 function selectProfile() {
   const key = $('profileSel').value; if (!key) return;
@@ -241,7 +243,7 @@ function build() {
     model = cfg.vanilla ? { name: 'vanilla_autotemp', boxes: [], links: [] } : F.parseCirc($('circText').value);
     if (!cfg.vanilla && !model.boxes.length) throw new Error('the circuit has no components');
     cfg.circuitName = model.name;
-    sim = new E.Sim(P.substitute(model, cfg.reactorMaxKW), cfg);
+    sim = new E.Sim(P.substitute(model, P.placeholders(cfg)), cfg);
     $('circMsg').textContent = model.boxes.length ? `${model.boxes.map(b => `${b.name}: ${b.components.length} components, ${b.wires.length} wires`).join(' · ')}` : '';
     const w = sim.warnings.length ? ' Warnings: ' + sim.warnings.join('; ') : '';
     status(`Ready: ${model.name} on ${profile.name} with a ${cfg.reactorMaxKW} kW reactor.${w}`, !!w);
@@ -305,7 +307,7 @@ function draw() {
   const x = t => L + (W - L - Rr) * t / dur;
   const maxKW = sim ? Math.max(sim.reactor.maxPower, ...tl.map(p => Math.max(p.demand, p.power))) : 5000;
   const panels = [
-    { y0: top, name: 'kW', min: 0, max: Math.ceil(maxKW / 1000) * 1000, ticks: 4, series: [['demand', '--c-demand'], ['power', '--c-supply'], ['battOut', '--c-batt']] },
+    { y0: top, name: 'kW', min: 0, max: Math.ceil(maxKW / 1000) * 1000, ticks: 4, series: [['demand', '--c-demand'], ['power', '--c-supply'], ['battOut', '--c-batt'], ['battIn', '--c-battin']] },
     { y0: top + ph + gap, name: 'V', min: 0, max: 2, ticks: 4, band: [0.9, 1.1], series: [['voltage', '--c-volt']] },
     { y0: top + 2 * (ph + gap), name: '%', min: 0, max: 100, ticks: 4, band: sim ? [sim.reactor.optTemp[0], sim.reactor.optTemp[1]] : [40, 60], series: [['temp', '--c-temp'], ['fission', '--c-fission'], ['turbine', '--c-turbine']] },
   ];
@@ -317,7 +319,7 @@ function draw() {
     for (let i = 0; i <= p.ticks; i++) { const v = p.min + (p.max - p.min) * i / p.ticks, yy = Math.round(y(v)) + .5; ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(W - Rr, yy); ctx.stroke(); ctx.fillText(p.name === 'kW' ? (v >= 1000 ? (v / 1000) + 'k' : v) : (p.name === 'V' ? v.toFixed(1) : v), L - 6, yy); }
     ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
     for (const [key, col] of p.series) {
-      if (!tl.length || tl[0][key] == null) continue;
+      if (!tl.length || tl[0][key] == null || ((key === 'battOut' || key === 'battIn') && !sim.batteries.length)) continue;
       ctx.strokeStyle = css(col); ctx.beginPath();
       tl.forEach((pt, i) => { const xx = x(pt.t), yy = y(pt[key]); if (i) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); });
       ctx.stroke();
@@ -338,7 +340,7 @@ async function copy(text, what) { try { await navigator.clipboard.writeText(text
 function renderFiles() {
   const box = $('fileCards'); box.innerHTML = '';
   if (!model || !model.boxes.length) { box.innerHTML = '<p class="hint">The vanilla baseline has no circuit files.</p>'; return; }
-  let files; try { files = P.exportBoxes(model, config().reactorMaxKW); } catch (e) { box.textContent = e.message; return; }
+  let files; try { files = P.exportBoxes(model, P.placeholders(config())); } catch (e) { box.textContent = e.message; return; }
   for (const f of files) {
     const card = document.createElement('div'); card.className = 'filecard';
     const h = document.createElement('h3'); h.textContent = f.filename;
@@ -361,7 +363,7 @@ $('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return
 document.querySelector('.tabs').onclick = e => { const b = e.target.closest('[role=tab]'); if (b) showTab(b.dataset.tab); };
 $('profileSel').onchange = () => { selectProfile(); build(); };
 $('circSel').onchange = () => { selectCircuit(); build(); };
-for (const id of ['maxKW', 'rods', 'fuelType', 'start', 'battOn', 'battN', 'battType', 'battStart', 'linkMode']) $(id).onchange = () => { if (id === 'maxKW') $('maxAuto').checked = false; build(); };
+for (const id of ['maxKW', 'rods', 'fuelType', 'start', 'battOn', 'battN', 'battType', 'battStart', 'battRate', 'linkMode']) $(id).onchange = () => { if (id === 'maxKW') $('maxAuto').checked = false; build(); };
 $('maxAuto').onchange = () => { selectProfile(); build(); };
 $('profileFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;

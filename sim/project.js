@@ -29,18 +29,28 @@
     if (pinsText) applyPins(model, pinsText);
     return model;
   }
-  // "$MAX" in any component property = reactor max output (kW) of the test.
-  function substitute(model, maxKW) {
+  // Placeholders usable in any component property value (filled from the test settings):
+  //   $MAX      reactor max output kW          $BATT_N    number of batteries
+  //   $BATT_KW  total max recharge kW (all)    $BATT_OUT  total max output kW (all)    $BATT_CAP total capacity kW·min
+  function placeholders(cfg) {
+    const bc = (cfg && cfg.batteries) || {}, n = bc.enabled ? (bc.count || 1) : 0;
+    const t = Object.assign({}, E.BATT[bc.type || 'battery'] || E.BATT.battery, bc.custom || {});
+    return { MAX: (cfg && cfg.reactorMaxKW) || 5000, BATT_N: n, BATT_KW: n * t.maxRecharge, BATT_OUT: n * t.maxOut, BATT_CAP: n * t.capacity };
+  }
+  const PH = /\$(BATT_KW|BATT_OUT|BATT_CAP|BATT_N|MAX)/g;
+  function substitute(model, vals) {
+    if (typeof vals !== 'object') vals = { MAX: vals };
     const m = JSON.parse(JSON.stringify(model));
-    for (const b of m.boxes) for (const c of b.components) for (const k in c.props) if (typeof c.props[k] === 'string' && c.props[k].includes('$MAX')) c.props[k] = c.props[k].replace(/\$MAX/g, String(maxKW));
+    for (const b of m.boxes) for (const c of b.components) for (const k in c.props) if (typeof c.props[k] === 'string') c.props[k] = c.props[k].replace(PH, (x, n) => vals[n] == null ? x : String(vals[n]));
     return m;
   }
   // -> [{filename, text}]  one box: <name>.txt ; two boxes: <name>_reactor.txt + <name>_battery.txt
-  function exportBoxes(model, maxKW) {
-    const m = substitute(model, maxKW), out = [];
-    m.boxes.forEach((b, bi) => { // in-game note for every value that came from $MAX
-      const ids = model.boxes[bi].components.filter(c => Object.values(c.props).some(v => String(v).includes('$MAX'))).map(c => c.id);
-      if (ids.length) b.labels.push({ header: 'REACTOR MAX OUTPUT', body: `Exported for a ${maxKW} kW reactor. If your reactor's max output differs, edit: ${ids.join(', ')}`, color: '#FFB000' });
+  function exportBoxes(model, vals) {
+    if (typeof vals !== 'object') vals = { MAX: vals };
+    const m = substitute(model, vals), out = [];
+    m.boxes.forEach((b, bi) => { // in-game note for every value that came from a placeholder
+      const used = model.boxes[bi].components.map(c => [c.id, [...new Set(Object.values(c.props).join(' ').match(PH) || [])]]).filter(x => x[1].length);
+      if (used.length) b.labels.push({ header: 'SHIP-SPECIFIC VALUES', body: `Exported for: reactor ${vals.MAX} kW` + (vals.BATT_N ? `, ${vals.BATT_N} batteries (${vals.BATT_KW} kW recharge, ${vals.BATT_OUT} kW output)` : '') + `. On another ship edit: ` + used.map(([id, ph]) => `${id} (${ph.join(' ')})`).join(', '), color: '#FFB000' });
     });
     for (const b of m.boxes) if (!b.pins) { // label used pins with the default harness so the in-game wiring is obvious
       const used = new Set(); for (const w of b.wires) { if (w.from.c === null) used.add(F.shortPin(w.from.pin)); if (w.to.c === null) used.add(F.shortPin(w.to.pin)); }
@@ -63,5 +73,5 @@
     const cols = ['t', 'demand', 'power', 'voltage', 'temp', 'fission', 'turbine', 'tf', 'tt', 'cto', 'fuel', 'batt', 'battOut', 'battIn'];
     return cols.join(',') + '\n' + tl.map(p => cols.map(c => p[c] == null ? '' : (Math.round(p[c] * 100) / 100)).join(',')).join('\n') + '\n';
   }
-  return { loadModel, applyPins, substitute, exportBoxes, fmtReport, timelineCsv };
+  return { loadModel, applyPins, placeholders, substitute, exportBoxes, fmtReport, timelineCsv };
 });

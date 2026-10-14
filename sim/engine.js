@@ -7,11 +7,14 @@
 })(typeof self !== 'undefined' ? self : this, function (C) {
   'use strict';
   const STEP = 1 / 60;
+  const f = Math.fround;
   const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const cl = (v, a, b) => { v = v > b ? b : v; return v < a ? a : v; }; // MathHelper.Clamp (min wins), keeps NaN
+  const lerp = (a, b, t) => f(a + f(f(b - a) * t));
+  const nearlyEq = (a, b, eps = 1e-4) => { if (a === b) return true; const d = Math.abs(a - b), s = Math.abs(a) + Math.abs(b); if (a === 0 || b === 0 || s < eps) return d < eps; return d / s < eps; };
   const sign = v => v > 0 ? 1 : v < 0 ? -1 : 0;
   const trunc = v => (Number.isFinite(v) ? Math.trunc(v) : 0);
-  const adjustNoOvershoot = (cur, tgt, spd) => tgt < cur ? Math.max(tgt, cur - spd) : Math.min(tgt, cur + spd);
+  const adjustNoOvershoot = (cur, tgt, spd) => tgt < cur ? Math.max(tgt, f(cur - spd)) : Math.min(tgt, f(cur + spd));
   function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
   // vanilla item presets (reference/BAROTRAUMA_MECHANICS.md §7): fuel = AvailableFuel per rod (condition > 0), cond = max condition
@@ -205,15 +208,15 @@
       const R = this.reactor, sim = this;
       R.recv = (pin, sig) => {
         if (pin === 'shutdown') { if (R.tf > 0 || R.tt > 0) { R.powerOn = false; R.autoTemp = false; R.tf = 0; R.tt = 0; sim.metrics.ev('reactor shutdown signal'); } }
-        else if (pin === 'set_fissionrate') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigF = clamp(r.v, 0, 100); R.lastF = sim.time; } }
-        else if (pin === 'set_turbineoutput') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigT = clamp(r.v, 0, 100); R.lastT = sim.time; } }
+        else if (pin === 'set_fissionrate') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigF = cl(r.v, 0, 100); R.lastF = sim.time; } }
+        else if (pin === 'set_turbineoutput') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigT = cl(r.v, 0, 100); R.lastT = sim.time; } }
       };
       for (const b of this.batteries) b.recv = (pin, sig) => {
         if (pin === 'disable_output') b.disabled = sig.v !== '0';
-        else if (pin === 'set_rate') { const r = C.parseF(String(sig.v).replace(/,/g, '')); /* NumberStyles.Any */ if (r.ok && Number.isFinite(r.v)) this.setRecharge(b, clamp(r.v / 100, 0, 1) * b.maxRecharge); }
+        else if (pin === 'set_rate') { const r = C.parseF(String(sig.v).replace(/,/g, '')); /* NumberStyles.Any */ if (r.ok && Number.isFinite(r.v)) this.setRecharge(b, f(cl(f(r.v / 100), 0, 1) * b.maxRecharge)); }
       };
     }
-    setRecharge(b, v) { v = clamp(v, 0, b.maxRecharge); const div = Math.max(b.maxRecharge * 0.1, 1); b.rate = C.roundEven(v / div) * div; }
+    setRecharge(b, v) { v = cl(f(v), 0, b.maxRecharge); const div = Math.max(f(b.maxRecharge * 0.1), 1); b.rate = f(C.roundEven(f(v / div)) * div); } // RoundTowardsClosest: 10% steps, banker's rounding
     rodFuel() { let f = 0; for (const r of this.reactor.rods) if (r.cond > 0) f += r.fuel; return f; }
 
     // ---------- demand profile ----------
@@ -223,115 +226,108 @@
       return pts[this.pIdx].demand;
     }
 
-    // ---------- power grid (Powered.UpdatePower) ----------
+    // ---------- power grid (Powered.UpdatePower) ----------  (float32 like the game: f() after every operation)
     updatePower() {
       const R = this.reactor, g = { power: 0, load: 0 };
-      const demand = this.demand = this.demandAt(this.time);
-      const reactorUp = R.cond > 0;
-      // loads
-      for (const b of this.batteries) {
-        b.cpc = this.batteryConsumption(b); g.load += b.cpc;
-        b.out = 0; b.isSrc = b.charge > 0;
-      }
-      g.load += demand;
-      // sources by priority: Reactor(1) then Battery(5)
-      if (reactorUp) {
-        const mm = this.reactorMinMax(g.load);
-        g.power += this.reactorPowerOut(g.power, mm, g.load);
-      } else { R.cpc = 0; }
+      const demand = this.demand = f(this.demandAt(this.time));
+      // loads: battery power_in draws its recharge rate; power_out registers a source when it holds charge
+      for (const b of this.batteries) { b.cpc = this.batteryConsumption(b); g.load = f(g.load + b.cpc); b.out = 0; b.isSrc = b.charge > 0; }
+      g.load = f(g.load + demand);
+      // source groups by priority: Reactor (1) then Battery (5)
+      if (R.cond > 0) { const mm = this.reactorMinMax(); g.power = f(g.power + this.reactorPowerOut(g.power, mm, g.load)); } else R.cpc = 0;
       const bs = this.batteries.filter(b => b.isSrc);
       if (bs.length) {
-        let max = 0; for (const b of bs) max += this.battMinMax(b);
+        let max = 0; for (const b of bs) max = f(max + this.battMinMax(b));
         let added = 0;
-        for (const b of bs) { if (b.disabled || max <= 0) { b.out = 0; continue; } b.out = clamp((g.load - g.power) / max, 0, 1) * this.battMinMax(b); added += b.out; }
-        g.power += added;
+        for (const b of bs) { if (b.disabled || !(max > 0)) { b.out = 0; continue; } b.out = f(cl(f(f(g.load - g.power) / max), 0, 1) * this.battMinMax(b)); added = f(added + b.out); }
+        g.power = f(g.power + added);
       }
-      g.voltage = Math.min(g.power / Math.max(g.load, 1e-10), 1000);
-      if (g.voltage < 0) g.voltage = 0;
-      // GridResolved
+      let v = Math.min(f(g.power / Math.max(g.load, 1e-10)), 1000); if (v < 0) v = 0;
+      g.voltage = f(v);
+      // GridResolved: charge gets CurrPowerConsumption * Voltage (overvoltage charges faster), output drains it
       for (const b of this.batteries) {
-        b.charge = clamp(b.charge + (b.cpc * g.voltage) / 60 * STEP * b.eff, 0, b.capacity);
-        b.charge = clamp(b.charge - b.out / 60 * STEP, 0, b.capacity); b.prevCharge = b.charge;
+        b.charge = cl(f(b.charge + f(f(f(f(b.cpc * g.voltage) / 60) * f(STEP)) * b.eff)), 0, b.capacity);
+        b.charge = cl(f(b.charge - f(f(b.out / 60) * f(STEP))), 0, b.capacity); b.prevCharge = b.charge;
       }
       this.grid = g;
     }
     batteryConsumption(b) {
       if (b.charge >= b.capacity) { b.charge = b.capacity; return 0; }
-      const missing = b.capacity - b.charge;
-      let t = b.rate; if (b.exp) t = Math.pow(b.rate / b.maxRecharge, 2) * b.maxRecharge;
-      if (missing < 1) t *= missing;
-      return clamp(t, 0, b.maxRecharge);
+      const missing = f(b.capacity - b.charge);
+      let t = b.rate; if (b.exp) t = f(f(Math.pow(f(b.rate / b.maxRecharge), 2)) * b.maxRecharge);
+      if (missing < 1) t = f(t * missing);
+      return cl(t, 0, b.maxRecharge);
     }
     battMinMax(b) {
       if (b.disabled) return 0;
-      const ratio = b.prevCharge / b.capacity;
-      let m = ratio < 0.1 ? Math.max(ratio * 10, 0) * b.maxOut : b.maxOut;
-      return Math.min(m, b.prevCharge * 60 / STEP);
+      const ratio = f(b.prevCharge / b.capacity);
+      const m = ratio < 0.1 ? f(Math.max(f(ratio * 10), 0) * b.maxOut) : b.maxOut;
+      return Math.min(m, f(f(b.prevCharge * 60) / f(STEP)));
     }
     reactorMinMax() {
       const R = this.reactor;
       let tol = 1;
       if (R.turbine > R.optT[0] && R.turbine < R.optT[1] && R.temp > R.optTemp[0] && R.temp < R.optTemp[1]) tol = 3;
-      const tf = Math.min(R.temp / 50, 1), mx = R.maxPower;
-      R.minOut = mx * clamp(Math.min((R.turbine - tol) / 100, tf), 0, 1);
-      R.maxOut = mx * Math.min((R.turbine + tol) / 100, tf);
-      if (R.maxOut < R.minOut) R.maxOut = R.minOut;
+      const tf = Math.min(f(R.temp / 50), 1), mx = R.maxPower;
+      R.minOut = f(mx * cl(Math.min(f(f(R.turbine - tol) / 100), tf), 0, 1));
+      R.maxOut = f(mx * Math.min(f(f(R.turbine + tol) / 100), tf));
       return { min: R.minOut, max: R.maxOut, rmax: R.powerOn ? mx : R.maxOut };
     }
     reactorPowerOut(power, mm, load) {
       const R = this.reactor;
-      const loadLeft = Math.max(load - power, 0);
-      const expected = clamp(loadLeft, mm.min, mm.max);
-      let ratio = Math.max((loadLeft - mm.min) / (mm.max - mm.min), 0);
-      if (!Number.isFinite(ratio)) ratio = 0;
-      const out = clamp(ratio * (R.maxOut - R.minOut) + R.minOut, R.minOut, R.maxOut);
+      const loadLeft = Math.max(f(load - power), 0);
+      const expected = cl(loadLeft, mm.min, mm.max);
+      let ratio = Math.max(f(f(loadLeft - mm.min) / f(mm.max - mm.min)), 0);
+      if (!Number.isFinite(ratio)) ratio = 0; // game only catches Infinity; 0/0 NaN guarded here (cold reactor, zero load)
+      const out = cl(f(f(ratio * f(R.maxOut - R.minOut)) + R.minOut), R.minOut, R.maxOut);
       let newLoad = loadLeft; const mx = R.maxPower;
       if (mx !== mm.rmax && mm.rmax > 0) {
-        const ideal = mx / mm.rmax * loadLeft;
-        const adj = clamp((ratio - 0.5) * 25 + ideal - (R.turbine / 100 * mx), -mx / 100, mx / 100);
-        newLoad = clamp(loadLeft - (expected - out) + adj, 0, loadLeft);
+        const ideal = f(f(mx / mm.rmax) * loadLeft);
+        const adj = cl(f(f(f(f(ratio - 0.5) * 25) + ideal) - f(f(R.turbine / 100) * mx)), f(-mx / 100), f(mx / 100));
+        newLoad = cl(f(f(loadLeft - f(expected - out)) + adj), 0, loadLeft);
       }
-      R.load = Math.max(newLoad, 0);
-      R.cpc = -out;
+      R.load = newLoad < 0 ? 0 : newLoad;
+      R.cpc = f(-out);
       return out;
     }
 
     // ---------- reactor (Reactor.Update) ----------
     updateReactor(dt) {
       const R = this.reactor, T = this.time;
+      dt = f(dt);
       if (R.cond <= 0) { // UpdateBroken
-        this.send(R, 'temperature_out', String(trunc(R.temp * 100)));
-        R.cpc = 0; R.temp = clamp(R.temp - dt * 1000, 0, 100);
-        R.tf = Math.max(R.tf - dt * 10, 0); R.tt = Math.max(R.tt - dt * 10, 0);
+        this.send(R, 'temperature_out', String(trunc(f(R.temp * 100))));
+        R.cpc = 0; R.temp = cl(f(R.temp - f(dt * 1000)), 0, 100);
+        R.tf = Math.max(f(R.tf - f(dt * 10)), 0); R.tt = Math.max(f(R.tt - f(dt * 10)), 0);
         return;
       }
       const fCtl = R.sigF !== null && R.lastF > T - 1, tCtl = R.sigT !== null && R.lastT > T - 1;
       this.metrics.ctl(fCtl, tCtl);
       const mx = R.maxPower;
-      if (fCtl) R.tf = adjustNoOvershoot(R.tf, R.sigF, dt * 5); else R.sigF = null;
-      if (tCtl) R.tt = adjustNoOvershoot(R.tt, R.sigT, dt * 5); else R.sigT = null;
+      if (fCtl) R.tf = adjustNoOvershoot(R.tf, R.sigF, f(dt * 5)); else R.sigF = null;
+      if (tCtl) R.tt = adjustNoOvershoot(R.tt, R.sigT, f(dt * 5)); else R.sigT = null;
       R.prevAvailFuel = R.availFuel;
-      if (mx !== 0) R.cto += clamp((R.load / mx * 100) - R.cto, -20, 20) * dt;
+      if (!nearlyEq(mx, 0)) R.cto = f(R.cto + f(cl(f(f(f(R.load / mx) * 100) - R.cto), -20, 20) * dt));
       const d = R.dos;
-      let tol = lerp(2.5, 10, d); R.optT = [R.cto - tol, R.cto + tol];
-      tol = lerp(5, 20, d); R.allT = [R.cto - tol, R.cto + tol];
+      let tol = lerp(2.5, 10, d); R.optT = [f(R.cto - tol), f(R.cto + tol)];
+      tol = lerp(5, 20, d); R.allT = [f(R.cto - tol), f(R.cto + tol)];
       R.optTemp = [lerp(40, 30, d), lerp(60, 70, d)]; R.allTemp = [lerp(30, 10, d), lerp(70, 90, d)];
-      R.optF = [lerp(30, 20, d), lerp(R.availFuel - 20, R.availFuel - 10, d)]; R.optF[0] = Math.min(R.optF[0], R.optF[1] - 10);
-      R.allF = [lerp(20, 10, d), R.availFuel]; R.allF[0] = Math.min(R.allF[0], R.allF[1] - 10);
-      const heat = R.fission * (R.prevAvailFuel / 100) * 2 + R.boost;
-      const td = (heat - R.turbine) - R.temp;
-      R.temp = clamp(R.temp + clamp(sign(td) * 10 * dt, -Math.abs(td), Math.abs(td)), 0, 100);
+      R.optF = [lerp(30, 20, d), lerp(f(R.availFuel - 20), f(R.availFuel - 10), d)]; R.optF[0] = Math.min(R.optF[0], f(R.optF[1] - 10));
+      R.allF = [lerp(20, 10, d), R.availFuel]; R.allF[0] = Math.min(R.allF[0], f(R.allF[1] - 10));
+      const heat = f(f(f(R.fission * f(R.prevAvailFuel / 100)) * 2) + R.boost);
+      const td = f(f(heat - R.turbine) - R.temp);
+      R.temp = cl(f(R.temp + cl(f(sign(td) * 10 * dt), -Math.abs(td), Math.abs(td))), 0, 100);
       R.boost = adjustNoOvershoot(R.boost, 0, dt);
-      R.fission = clamp(lerp(R.fission, Math.min(R.tf, R.availFuel), dt), 0, 100);
-      R.turbine = clamp(lerp(R.turbine, R.tt, dt), 0, 100);
+      R.fission = cl(lerp(R.fission, Math.min(R.tf, R.availFuel), dt), 0, 100);
+      R.turbine = cl(lerp(R.turbine, R.tt, dt), 0, 100);
       if (!R.powerOn) { R.tf = 0; R.tt = 0; }
       else if (R.autoTemp) this.autoTemp(2, dt);
       let fuelLeft = 0;
       for (const rod of R.rods) {
-        if (R.fission > 0 && rod.cond > 0) { const used = Math.min(rod.cond, R.fission / 100 * R.fuelRate * dt); rod.cond -= used; this.metrics.fuel += used; }
-        fuelLeft += rod.cond / rod.max * 100;
+        if (R.fission > 0) { const before = rod.cond; rod.cond = Math.max(0, f(rod.cond - f(f(f(R.fission / 100) * R.fuelRate) * dt))); this.metrics.fuel += before - rod.cond; }
+        fuelLeft = f(fuelLeft + f(f(rod.cond / rod.max) * 100));
       }
-      this.send(R, 'temperature_out', String(trunc(R.temp * 100)));
+      this.send(R, 'temperature_out', String(trunc(f(R.temp * 100))));
       this.send(R, 'power_value_out', String(trunc(-R.cpc)));
       this.send(R, 'load_value_out', String(trunc(R.load)));
       this.send(R, 'fuel_out', String(trunc(R.availFuel)));
@@ -339,26 +335,26 @@
       // UpdateFailures
       if (R.temp > R.allTemp[1]) {
         this.send(R, 'meltdown_warning', '1');
-        R.melt += lerp(dt * 2, dt, R.cond / 100);
+        R.melt = f(R.melt + lerp(f(dt * 2), dt, R.cond / 100));
         if (R.melt > R.meltdownDelay) { this.meltdown(); return; }
-      } else { this.send(R, 'meltdown_warning', '0'); R.melt = Math.max(0, R.melt - dt); }
+      } else { this.send(R, 'meltdown_warning', '0'); R.melt = Math.max(0, f(R.melt - dt)); }
       if (R.temp > R.optTemp[1]) {
-        R.fire += lerp(dt * 2, dt, R.cond / 100);
+        R.fire = f(R.fire + lerp(f(dt * 2), dt, R.cond / 100));
         if (R.fire >= R.fireDelay) { this.metrics.fires++; this.metrics.ev('FIRE started at reactor (temp > ' + R.optTemp[1].toFixed(0) + ' for ' + R.fireDelay + 's)'); R.fire = 0; }
-      } else R.fire = Math.max(0, R.fire - dt);
-      // fuel rods update after the reactor: OnContained adds their fuel to AvailableFuel for next frame
+      } else R.fire = Math.max(0, f(R.fire - dt));
+      // fuel rods update after the reactor: OnContaining adds their fuel to AvailableFuel for next tick
       R.availFuel = this.rodFuel();
     }
     autoTemp(speed, dt) {
       const R = this.reactor;
-      const dT = (R.optT[0] + R.optT[1]) / 2;
-      R.tt = clamp(R.tt + clamp(dT - R.tt, -speed, speed) * dt, 0, 100);
-      const dF = (R.optF[0] + R.optF[1]) / 2;
-      R.tf += clamp(dF - R.tf, -speed, speed) * dt;
-      if (R.temp > (R.optTemp[0] + R.optTemp[1]) / 2) R.tf = Math.min(R.tf - speed * 2 * dt, R.allF[1]);
-      else if (-R.cpc < R.load) R.tf = Math.min(R.tf + speed * 2 * dt, 100);
-      R.tf = clamp(R.tf, 0, 100);
-      R.tf = clamp(R.tf, R.fission - 5, R.fission + 5);
+      const dT = f(f(R.optT[0] + R.optT[1]) / 2);
+      R.tt = cl(f(R.tt + f(cl(f(dT - R.tt), -speed, speed) * dt)), 0, 100);
+      const dF = f(f(R.optF[0] + R.optF[1]) / 2);
+      R.tf = f(R.tf + f(cl(f(dF - R.tf), -speed, speed) * dt));
+      if (R.temp > f(f(R.optTemp[0] + R.optTemp[1]) / 2)) R.tf = Math.min(f(R.tf - f(f(speed * 2) * dt)), R.allF[1]);
+      else if (-R.cpc < R.load) R.tf = Math.min(f(R.tf + f(f(speed * 2) * dt)), 100);
+      R.tf = cl(R.tf, 0, 100);
+      R.tf = cl(R.tf, f(R.fission - 5), f(R.fission + 5));
     }
     meltdown() {
       const R = this.reactor;
@@ -431,7 +427,7 @@
   class Metrics {
     constructor(sim) { this.sim = sim; this.reset(); }
     reset() {
-      Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
+      Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, eRSurplus: 0, eRShort: 0, eAbsorbed: 0, eCovered: 0, eChargeInShort: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
         overloadT: 0, junctionBreaks: 0, fires: 0, meltdownAt: null, tempMax: 0, tAboveOpt: 0, tCritical: 0, noCtlF: 0, noCtlT: 0, events: [], timeline: [], nextTl: 0, outAbs: 0, battMin: Infinity, battMax: -Infinity, lowRun: 0, worstLow: 0 });
       if (this.sim.reactor) this.fuelStart = this.sim.reactor.rods.reduce((a, r) => a + r.cond, 0);
     }
@@ -443,6 +439,12 @@
       this.eDemand += dem * dt; this.eReactor += -R.cpc * dt;
       const sh = Math.max(0, g.load - g.power), su = Math.max(0, g.power - g.load);
       this.eUnmet += Math.min(sh, dem) * dt; this.eSurplus += su * dt;
+      // battery buffering: surplus = reactor output above demand (would be overvoltage), shortfall = demand above reactor output
+      const rOut = -R.cpc, rs = Math.max(0, rOut - dem), rd = Math.max(0, dem - rOut);
+      this.eRSurplus += rs * dt; this.eRShort += rd * dt;
+      let bIn = 0, bOut = 0; for (const b of s.batteries) { bIn += b.cpc * v; bOut += b.out; }
+      this.eAbsorbed += Math.min(rs, bIn) * dt; this.eCovered += Math.min(rd, bOut) * dt;
+      if (rd > 0 && bIn > 0) this.eChargeInShort += Math.min(bIn, bOut) * dt;
       for (const b of s.batteries) { this.eBattOut += b.out * dt; this.eBattIn += b.cpc * dt; const pc = b.charge / b.capacity * 100; this.battMin = Math.min(this.battMin, pc); this.battMax = Math.max(this.battMax, pc); }
       const vv = g.load > 0 ? v : 1;
       this.vAbsDev += Math.abs(vv - 1) * dt; this.vSq += (vv - 1) * (vv - 1) * dt; this.vMin = Math.min(this.vMin, vv); this.vMax = Math.max(this.vMax, vv);
@@ -474,6 +476,10 @@
         no_fission_signal_s: +this.noCtlF.toFixed(1), no_turbine_signal_s: +this.noCtlT.toFixed(1),
         battery_charge_min_pct: s.batteries.length ? +this.battMin.toFixed(1) : null, battery_charge_max_pct: s.batteries.length ? +this.battMax.toFixed(1) : null,
         battery_out_kwh: +kwh(this.eBattOut).toFixed(2), battery_in_kwh: +kwh(this.eBattIn).toFixed(2),
+        reactor_surplus_kwh: +kwh(this.eRSurplus).toFixed(2), reactor_shortfall_kwh: +kwh(this.eRShort).toFixed(2),
+        surplus_into_batteries_pct: s.batteries.length && this.eRSurplus > 0 ? +(this.eAbsorbed / this.eRSurplus * 100).toFixed(1) : null,
+        shortfall_covered_by_batteries_pct: s.batteries.length && this.eRShort > 0 ? +(this.eCovered / this.eRShort * 100).toFixed(1) : null,
+        battery_self_drain_kwh: s.batteries.length ? +kwh(this.eChargeInShort).toFixed(2) : null, // charging while also discharging (wasted cycle)
       };
       // scores 0-100 (higher is better)
       r.score_reliability = +Math.max(0, 100 - r.unmet_pct * 10 - r.voltage_mean_abs_dev * 200 - r.fluctuation_events / (T / 60) * 2 - (r.meltdown_at_s !== null ? 100 : 0) - r.fires * 10 - r.junction_breaks * 10).toFixed(1);

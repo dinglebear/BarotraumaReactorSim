@@ -7,7 +7,7 @@
 :root {
   --bg: #e9eef0; --panel: #fbfcfc; --sunk: #dfe6e9; --ink: #13222b; --muted: #57707b; --line: #c6d2d7;
   --accent: #0a7069; --accent-ink: #ffffff; --amber: #b86e00; --bad: #b93225; --good: #2b7a3d;
-  --c-demand: #6b7f88; --c-supply: #0a7069; --c-volt: #b86e00; --c-temp: #c2412d; --c-fission: #6b4fb3; --c-turbine: #1f78b4; --c-batt: #2b7a3d;
+  --c-demand: #6b7f88; --c-supply: #0a7069; --c-volt: #b86e00; --c-temp: #c2412d; --c-fission: #6b4fb3; --c-turbine: #1f78b4; --c-batt: #2b7a3d; --c-battin: #9a7b00;
   --f-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
   --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
@@ -16,11 +16,11 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
   --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
-  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; color-scheme: dark } }
+  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; --c-battin: #d9c25a; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
   --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
-  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; color-scheme: dark }
+  --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; --c-battin: #d9c25a; color-scheme: dark }
 * { box-sizing: border-box }
 [hidden] { display: none !important }
 body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 40px }
@@ -126,6 +126,8 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
         <label class="row">Count<input type="number" id="battN" min="1" max="8" value="2"></label>
         <label class="row">Type<select id="battType"><option value="battery">Battery</option><option value="supercapacitor">Supercapacitor</option></select></label>
         <label class="row">Start charge %<input type="number" id="battStart" min="0" max="100" value="50"></label>
+        <label class="row">Start charge rate %<input type="number" id="battRate" min="0" max="100" step="10" value="0"></label>
+        <p class="hint">Batteries cover any shortfall on their own. To soak up surplus (overvoltage), the battery box has to raise <code>set_rate</code>.</p>
         <label class="row">Box link<select id="linkMode"><option value="wire">Wire</option><option value="wifi">Wifi components</option></select></label>
       </fieldset>
       <fieldset>
@@ -149,7 +151,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
 
       <section class="panel chartbox" aria-label="Charts">
         <div class="legend">
-          <span><i style="background:var(--c-demand)"></i>Demand kW</span><span><i style="background:var(--c-supply)"></i>Supply kW</span><span><i style="background:var(--c-batt)"></i>Battery out kW</span>
+          <span><i style="background:var(--c-demand)"></i>Demand kW</span><span><i style="background:var(--c-supply)"></i>Supply kW</span><span><i style="background:var(--c-batt)"></i>Battery out kW</span><span><i style="background:var(--c-battin)"></i>Battery charging kW</span>
           <span><i style="background:var(--c-volt)"></i>Voltage</span><span><i style="background:var(--c-temp)"></i>Temperature</span><span><i style="background:var(--c-fission)"></i>Fission %</span><span><i style="background:var(--c-turbine)"></i>Turbine %</span>
         </div>
         <canvas id="chart" role="img" aria-label="Power, voltage and reactor charts over time"></canvas>
@@ -167,7 +169,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
           <div class="bar"><button id="btnSaveLog" data-dl>Save log</button><button id="btnSaveTl" data-dl>Save timeline CSV</button><button id="btnCopyLog">Copy log</button></div>
         </div>
         <div class="tabpane" data-pane="circ" hidden>
-          <p class="hint">Edit the compact circuit text and press Apply. <code>$MAX</code> is replaced by the reactor max output. Syntax is in AIHowTo.md.</p>
+          <p class="hint">Edit the compact circuit text and press Apply. <code>$MAX</code> (reactor kW) and <code>$BATT_KW</code> / <code>$BATT_OUT</code> / <code>$BATT_N</code> (battery totals) are filled in from the settings. Syntax is in AIHowTo.md.</p>
           <textarea id="circText" spellcheck="false" aria-label="Circuit source"></textarea>
           <div class="bar"><button id="btnApply" class="primary">Apply &amp; reset</button><button id="btnSaveCirc" data-dl>Save .circ</button><span id="circMsg" class="hint"></span></div>
         </div>
@@ -785,11 +787,14 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
 })(typeof self !== 'undefined' ? self : this, function (C) {
   'use strict';
   const STEP = 1 / 60;
+  const f = Math.fround;
   const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const cl = (v, a, b) => { v = v > b ? b : v; return v < a ? a : v; }; // MathHelper.Clamp (min wins), keeps NaN
+  const lerp = (a, b, t) => f(a + f(f(b - a) * t));
+  const nearlyEq = (a, b, eps = 1e-4) => { if (a === b) return true; const d = Math.abs(a - b), s = Math.abs(a) + Math.abs(b); if (a === 0 || b === 0 || s < eps) return d < eps; return d / s < eps; };
   const sign = v => v > 0 ? 1 : v < 0 ? -1 : 0;
   const trunc = v => (Number.isFinite(v) ? Math.trunc(v) : 0);
-  const adjustNoOvershoot = (cur, tgt, spd) => tgt < cur ? Math.max(tgt, cur - spd) : Math.min(tgt, cur + spd);
+  const adjustNoOvershoot = (cur, tgt, spd) => tgt < cur ? Math.max(tgt, f(cur - spd)) : Math.min(tgt, f(cur + spd));
   function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
   // vanilla item presets (reference/BAROTRAUMA_MECHANICS.md §7): fuel = AvailableFuel per rod (condition > 0), cond = max condition
@@ -983,15 +988,15 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       const R = this.reactor, sim = this;
       R.recv = (pin, sig) => {
         if (pin === 'shutdown') { if (R.tf > 0 || R.tt > 0) { R.powerOn = false; R.autoTemp = false; R.tf = 0; R.tt = 0; sim.metrics.ev('reactor shutdown signal'); } }
-        else if (pin === 'set_fissionrate') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigF = clamp(r.v, 0, 100); R.lastF = sim.time; } }
-        else if (pin === 'set_turbineoutput') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigT = clamp(r.v, 0, 100); R.lastT = sim.time; } }
+        else if (pin === 'set_fissionrate') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigF = cl(r.v, 0, 100); R.lastF = sim.time; } }
+        else if (pin === 'set_turbineoutput') { if (!R.powerOn) return; const r = C.parseF(sig.v); if (r.ok) { R.sigT = cl(r.v, 0, 100); R.lastT = sim.time; } }
       };
       for (const b of this.batteries) b.recv = (pin, sig) => {
         if (pin === 'disable_output') b.disabled = sig.v !== '0';
-        else if (pin === 'set_rate') { const r = C.parseF(String(sig.v).replace(/,/g, '')); /* NumberStyles.Any */ if (r.ok && Number.isFinite(r.v)) this.setRecharge(b, clamp(r.v / 100, 0, 1) * b.maxRecharge); }
+        else if (pin === 'set_rate') { const r = C.parseF(String(sig.v).replace(/,/g, '')); /* NumberStyles.Any */ if (r.ok && Number.isFinite(r.v)) this.setRecharge(b, f(cl(f(r.v / 100), 0, 1) * b.maxRecharge)); }
       };
     }
-    setRecharge(b, v) { v = clamp(v, 0, b.maxRecharge); const div = Math.max(b.maxRecharge * 0.1, 1); b.rate = C.roundEven(v / div) * div; }
+    setRecharge(b, v) { v = cl(f(v), 0, b.maxRecharge); const div = Math.max(f(b.maxRecharge * 0.1), 1); b.rate = f(C.roundEven(f(v / div)) * div); } // RoundTowardsClosest: 10% steps, banker's rounding
     rodFuel() { let f = 0; for (const r of this.reactor.rods) if (r.cond > 0) f += r.fuel; return f; }
 
     // ---------- demand profile ----------
@@ -1001,115 +1006,108 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       return pts[this.pIdx].demand;
     }
 
-    // ---------- power grid (Powered.UpdatePower) ----------
+    // ---------- power grid (Powered.UpdatePower) ----------  (float32 like the game: f() after every operation)
     updatePower() {
       const R = this.reactor, g = { power: 0, load: 0 };
-      const demand = this.demand = this.demandAt(this.time);
-      const reactorUp = R.cond > 0;
-      // loads
-      for (const b of this.batteries) {
-        b.cpc = this.batteryConsumption(b); g.load += b.cpc;
-        b.out = 0; b.isSrc = b.charge > 0;
-      }
-      g.load += demand;
-      // sources by priority: Reactor(1) then Battery(5)
-      if (reactorUp) {
-        const mm = this.reactorMinMax(g.load);
-        g.power += this.reactorPowerOut(g.power, mm, g.load);
-      } else { R.cpc = 0; }
+      const demand = this.demand = f(this.demandAt(this.time));
+      // loads: battery power_in draws its recharge rate; power_out registers a source when it holds charge
+      for (const b of this.batteries) { b.cpc = this.batteryConsumption(b); g.load = f(g.load + b.cpc); b.out = 0; b.isSrc = b.charge > 0; }
+      g.load = f(g.load + demand);
+      // source groups by priority: Reactor (1) then Battery (5)
+      if (R.cond > 0) { const mm = this.reactorMinMax(); g.power = f(g.power + this.reactorPowerOut(g.power, mm, g.load)); } else R.cpc = 0;
       const bs = this.batteries.filter(b => b.isSrc);
       if (bs.length) {
-        let max = 0; for (const b of bs) max += this.battMinMax(b);
+        let max = 0; for (const b of bs) max = f(max + this.battMinMax(b));
         let added = 0;
-        for (const b of bs) { if (b.disabled || max <= 0) { b.out = 0; continue; } b.out = clamp((g.load - g.power) / max, 0, 1) * this.battMinMax(b); added += b.out; }
-        g.power += added;
+        for (const b of bs) { if (b.disabled || !(max > 0)) { b.out = 0; continue; } b.out = f(cl(f(f(g.load - g.power) / max), 0, 1) * this.battMinMax(b)); added = f(added + b.out); }
+        g.power = f(g.power + added);
       }
-      g.voltage = Math.min(g.power / Math.max(g.load, 1e-10), 1000);
-      if (g.voltage < 0) g.voltage = 0;
-      // GridResolved
+      let v = Math.min(f(g.power / Math.max(g.load, 1e-10)), 1000); if (v < 0) v = 0;
+      g.voltage = f(v);
+      // GridResolved: charge gets CurrPowerConsumption * Voltage (overvoltage charges faster), output drains it
       for (const b of this.batteries) {
-        b.charge = clamp(b.charge + (b.cpc * g.voltage) / 60 * STEP * b.eff, 0, b.capacity);
-        b.charge = clamp(b.charge - b.out / 60 * STEP, 0, b.capacity); b.prevCharge = b.charge;
+        b.charge = cl(f(b.charge + f(f(f(f(b.cpc * g.voltage) / 60) * f(STEP)) * b.eff)), 0, b.capacity);
+        b.charge = cl(f(b.charge - f(f(b.out / 60) * f(STEP))), 0, b.capacity); b.prevCharge = b.charge;
       }
       this.grid = g;
     }
     batteryConsumption(b) {
       if (b.charge >= b.capacity) { b.charge = b.capacity; return 0; }
-      const missing = b.capacity - b.charge;
-      let t = b.rate; if (b.exp) t = Math.pow(b.rate / b.maxRecharge, 2) * b.maxRecharge;
-      if (missing < 1) t *= missing;
-      return clamp(t, 0, b.maxRecharge);
+      const missing = f(b.capacity - b.charge);
+      let t = b.rate; if (b.exp) t = f(f(Math.pow(f(b.rate / b.maxRecharge), 2)) * b.maxRecharge);
+      if (missing < 1) t = f(t * missing);
+      return cl(t, 0, b.maxRecharge);
     }
     battMinMax(b) {
       if (b.disabled) return 0;
-      const ratio = b.prevCharge / b.capacity;
-      let m = ratio < 0.1 ? Math.max(ratio * 10, 0) * b.maxOut : b.maxOut;
-      return Math.min(m, b.prevCharge * 60 / STEP);
+      const ratio = f(b.prevCharge / b.capacity);
+      const m = ratio < 0.1 ? f(Math.max(f(ratio * 10), 0) * b.maxOut) : b.maxOut;
+      return Math.min(m, f(f(b.prevCharge * 60) / f(STEP)));
     }
     reactorMinMax() {
       const R = this.reactor;
       let tol = 1;
       if (R.turbine > R.optT[0] && R.turbine < R.optT[1] && R.temp > R.optTemp[0] && R.temp < R.optTemp[1]) tol = 3;
-      const tf = Math.min(R.temp / 50, 1), mx = R.maxPower;
-      R.minOut = mx * clamp(Math.min((R.turbine - tol) / 100, tf), 0, 1);
-      R.maxOut = mx * Math.min((R.turbine + tol) / 100, tf);
-      if (R.maxOut < R.minOut) R.maxOut = R.minOut;
+      const tf = Math.min(f(R.temp / 50), 1), mx = R.maxPower;
+      R.minOut = f(mx * cl(Math.min(f(f(R.turbine - tol) / 100), tf), 0, 1));
+      R.maxOut = f(mx * Math.min(f(f(R.turbine + tol) / 100), tf));
       return { min: R.minOut, max: R.maxOut, rmax: R.powerOn ? mx : R.maxOut };
     }
     reactorPowerOut(power, mm, load) {
       const R = this.reactor;
-      const loadLeft = Math.max(load - power, 0);
-      const expected = clamp(loadLeft, mm.min, mm.max);
-      let ratio = Math.max((loadLeft - mm.min) / (mm.max - mm.min), 0);
-      if (!Number.isFinite(ratio)) ratio = 0;
-      const out = clamp(ratio * (R.maxOut - R.minOut) + R.minOut, R.minOut, R.maxOut);
+      const loadLeft = Math.max(f(load - power), 0);
+      const expected = cl(loadLeft, mm.min, mm.max);
+      let ratio = Math.max(f(f(loadLeft - mm.min) / f(mm.max - mm.min)), 0);
+      if (!Number.isFinite(ratio)) ratio = 0; // game only catches Infinity; 0/0 NaN guarded here (cold reactor, zero load)
+      const out = cl(f(f(ratio * f(R.maxOut - R.minOut)) + R.minOut), R.minOut, R.maxOut);
       let newLoad = loadLeft; const mx = R.maxPower;
       if (mx !== mm.rmax && mm.rmax > 0) {
-        const ideal = mx / mm.rmax * loadLeft;
-        const adj = clamp((ratio - 0.5) * 25 + ideal - (R.turbine / 100 * mx), -mx / 100, mx / 100);
-        newLoad = clamp(loadLeft - (expected - out) + adj, 0, loadLeft);
+        const ideal = f(f(mx / mm.rmax) * loadLeft);
+        const adj = cl(f(f(f(f(ratio - 0.5) * 25) + ideal) - f(f(R.turbine / 100) * mx)), f(-mx / 100), f(mx / 100));
+        newLoad = cl(f(f(loadLeft - f(expected - out)) + adj), 0, loadLeft);
       }
-      R.load = Math.max(newLoad, 0);
-      R.cpc = -out;
+      R.load = newLoad < 0 ? 0 : newLoad;
+      R.cpc = f(-out);
       return out;
     }
 
     // ---------- reactor (Reactor.Update) ----------
     updateReactor(dt) {
       const R = this.reactor, T = this.time;
+      dt = f(dt);
       if (R.cond <= 0) { // UpdateBroken
-        this.send(R, 'temperature_out', String(trunc(R.temp * 100)));
-        R.cpc = 0; R.temp = clamp(R.temp - dt * 1000, 0, 100);
-        R.tf = Math.max(R.tf - dt * 10, 0); R.tt = Math.max(R.tt - dt * 10, 0);
+        this.send(R, 'temperature_out', String(trunc(f(R.temp * 100))));
+        R.cpc = 0; R.temp = cl(f(R.temp - f(dt * 1000)), 0, 100);
+        R.tf = Math.max(f(R.tf - f(dt * 10)), 0); R.tt = Math.max(f(R.tt - f(dt * 10)), 0);
         return;
       }
       const fCtl = R.sigF !== null && R.lastF > T - 1, tCtl = R.sigT !== null && R.lastT > T - 1;
       this.metrics.ctl(fCtl, tCtl);
       const mx = R.maxPower;
-      if (fCtl) R.tf = adjustNoOvershoot(R.tf, R.sigF, dt * 5); else R.sigF = null;
-      if (tCtl) R.tt = adjustNoOvershoot(R.tt, R.sigT, dt * 5); else R.sigT = null;
+      if (fCtl) R.tf = adjustNoOvershoot(R.tf, R.sigF, f(dt * 5)); else R.sigF = null;
+      if (tCtl) R.tt = adjustNoOvershoot(R.tt, R.sigT, f(dt * 5)); else R.sigT = null;
       R.prevAvailFuel = R.availFuel;
-      if (mx !== 0) R.cto += clamp((R.load / mx * 100) - R.cto, -20, 20) * dt;
+      if (!nearlyEq(mx, 0)) R.cto = f(R.cto + f(cl(f(f(f(R.load / mx) * 100) - R.cto), -20, 20) * dt));
       const d = R.dos;
-      let tol = lerp(2.5, 10, d); R.optT = [R.cto - tol, R.cto + tol];
-      tol = lerp(5, 20, d); R.allT = [R.cto - tol, R.cto + tol];
+      let tol = lerp(2.5, 10, d); R.optT = [f(R.cto - tol), f(R.cto + tol)];
+      tol = lerp(5, 20, d); R.allT = [f(R.cto - tol), f(R.cto + tol)];
       R.optTemp = [lerp(40, 30, d), lerp(60, 70, d)]; R.allTemp = [lerp(30, 10, d), lerp(70, 90, d)];
-      R.optF = [lerp(30, 20, d), lerp(R.availFuel - 20, R.availFuel - 10, d)]; R.optF[0] = Math.min(R.optF[0], R.optF[1] - 10);
-      R.allF = [lerp(20, 10, d), R.availFuel]; R.allF[0] = Math.min(R.allF[0], R.allF[1] - 10);
-      const heat = R.fission * (R.prevAvailFuel / 100) * 2 + R.boost;
-      const td = (heat - R.turbine) - R.temp;
-      R.temp = clamp(R.temp + clamp(sign(td) * 10 * dt, -Math.abs(td), Math.abs(td)), 0, 100);
+      R.optF = [lerp(30, 20, d), lerp(f(R.availFuel - 20), f(R.availFuel - 10), d)]; R.optF[0] = Math.min(R.optF[0], f(R.optF[1] - 10));
+      R.allF = [lerp(20, 10, d), R.availFuel]; R.allF[0] = Math.min(R.allF[0], f(R.allF[1] - 10));
+      const heat = f(f(f(R.fission * f(R.prevAvailFuel / 100)) * 2) + R.boost);
+      const td = f(f(heat - R.turbine) - R.temp);
+      R.temp = cl(f(R.temp + cl(f(sign(td) * 10 * dt), -Math.abs(td), Math.abs(td))), 0, 100);
       R.boost = adjustNoOvershoot(R.boost, 0, dt);
-      R.fission = clamp(lerp(R.fission, Math.min(R.tf, R.availFuel), dt), 0, 100);
-      R.turbine = clamp(lerp(R.turbine, R.tt, dt), 0, 100);
+      R.fission = cl(lerp(R.fission, Math.min(R.tf, R.availFuel), dt), 0, 100);
+      R.turbine = cl(lerp(R.turbine, R.tt, dt), 0, 100);
       if (!R.powerOn) { R.tf = 0; R.tt = 0; }
       else if (R.autoTemp) this.autoTemp(2, dt);
       let fuelLeft = 0;
       for (const rod of R.rods) {
-        if (R.fission > 0 && rod.cond > 0) { const used = Math.min(rod.cond, R.fission / 100 * R.fuelRate * dt); rod.cond -= used; this.metrics.fuel += used; }
-        fuelLeft += rod.cond / rod.max * 100;
+        if (R.fission > 0) { const before = rod.cond; rod.cond = Math.max(0, f(rod.cond - f(f(f(R.fission / 100) * R.fuelRate) * dt))); this.metrics.fuel += before - rod.cond; }
+        fuelLeft = f(fuelLeft + f(f(rod.cond / rod.max) * 100));
       }
-      this.send(R, 'temperature_out', String(trunc(R.temp * 100)));
+      this.send(R, 'temperature_out', String(trunc(f(R.temp * 100))));
       this.send(R, 'power_value_out', String(trunc(-R.cpc)));
       this.send(R, 'load_value_out', String(trunc(R.load)));
       this.send(R, 'fuel_out', String(trunc(R.availFuel)));
@@ -1117,26 +1115,26 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       // UpdateFailures
       if (R.temp > R.allTemp[1]) {
         this.send(R, 'meltdown_warning', '1');
-        R.melt += lerp(dt * 2, dt, R.cond / 100);
+        R.melt = f(R.melt + lerp(f(dt * 2), dt, R.cond / 100));
         if (R.melt > R.meltdownDelay) { this.meltdown(); return; }
-      } else { this.send(R, 'meltdown_warning', '0'); R.melt = Math.max(0, R.melt - dt); }
+      } else { this.send(R, 'meltdown_warning', '0'); R.melt = Math.max(0, f(R.melt - dt)); }
       if (R.temp > R.optTemp[1]) {
-        R.fire += lerp(dt * 2, dt, R.cond / 100);
+        R.fire = f(R.fire + lerp(f(dt * 2), dt, R.cond / 100));
         if (R.fire >= R.fireDelay) { this.metrics.fires++; this.metrics.ev('FIRE started at reactor (temp > ' + R.optTemp[1].toFixed(0) + ' for ' + R.fireDelay + 's)'); R.fire = 0; }
-      } else R.fire = Math.max(0, R.fire - dt);
-      // fuel rods update after the reactor: OnContained adds their fuel to AvailableFuel for next frame
+      } else R.fire = Math.max(0, f(R.fire - dt));
+      // fuel rods update after the reactor: OnContaining adds their fuel to AvailableFuel for next tick
       R.availFuel = this.rodFuel();
     }
     autoTemp(speed, dt) {
       const R = this.reactor;
-      const dT = (R.optT[0] + R.optT[1]) / 2;
-      R.tt = clamp(R.tt + clamp(dT - R.tt, -speed, speed) * dt, 0, 100);
-      const dF = (R.optF[0] + R.optF[1]) / 2;
-      R.tf += clamp(dF - R.tf, -speed, speed) * dt;
-      if (R.temp > (R.optTemp[0] + R.optTemp[1]) / 2) R.tf = Math.min(R.tf - speed * 2 * dt, R.allF[1]);
-      else if (-R.cpc < R.load) R.tf = Math.min(R.tf + speed * 2 * dt, 100);
-      R.tf = clamp(R.tf, 0, 100);
-      R.tf = clamp(R.tf, R.fission - 5, R.fission + 5);
+      const dT = f(f(R.optT[0] + R.optT[1]) / 2);
+      R.tt = cl(f(R.tt + f(cl(f(dT - R.tt), -speed, speed) * dt)), 0, 100);
+      const dF = f(f(R.optF[0] + R.optF[1]) / 2);
+      R.tf = f(R.tf + f(cl(f(dF - R.tf), -speed, speed) * dt));
+      if (R.temp > f(f(R.optTemp[0] + R.optTemp[1]) / 2)) R.tf = Math.min(f(R.tf - f(f(speed * 2) * dt)), R.allF[1]);
+      else if (-R.cpc < R.load) R.tf = Math.min(f(R.tf + f(f(speed * 2) * dt)), 100);
+      R.tf = cl(R.tf, 0, 100);
+      R.tf = cl(R.tf, f(R.fission - 5), f(R.fission + 5));
     }
     meltdown() {
       const R = this.reactor;
@@ -1209,7 +1207,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   class Metrics {
     constructor(sim) { this.sim = sim; this.reset(); }
     reset() {
-      Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
+      Object.assign(this, { t: 0, fuel: 0, eDemand: 0, eUnmet: 0, eSurplus: 0, eReactor: 0, eBattOut: 0, eBattIn: 0, eRSurplus: 0, eRShort: 0, eAbsorbed: 0, eCovered: 0, eChargeInShort: 0, vAbsDev: 0, vSq: 0, vMin: Infinity, vMax: 0, tLow90: 0, tLow50: 0, tHigh110: 0, tBand: 0, fluct: 0, inBand: true,
         overloadT: 0, junctionBreaks: 0, fires: 0, meltdownAt: null, tempMax: 0, tAboveOpt: 0, tCritical: 0, noCtlF: 0, noCtlT: 0, events: [], timeline: [], nextTl: 0, outAbs: 0, battMin: Infinity, battMax: -Infinity, lowRun: 0, worstLow: 0 });
       if (this.sim.reactor) this.fuelStart = this.sim.reactor.rods.reduce((a, r) => a + r.cond, 0);
     }
@@ -1221,6 +1219,12 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       this.eDemand += dem * dt; this.eReactor += -R.cpc * dt;
       const sh = Math.max(0, g.load - g.power), su = Math.max(0, g.power - g.load);
       this.eUnmet += Math.min(sh, dem) * dt; this.eSurplus += su * dt;
+      // battery buffering: surplus = reactor output above demand (would be overvoltage), shortfall = demand above reactor output
+      const rOut = -R.cpc, rs = Math.max(0, rOut - dem), rd = Math.max(0, dem - rOut);
+      this.eRSurplus += rs * dt; this.eRShort += rd * dt;
+      let bIn = 0, bOut = 0; for (const b of s.batteries) { bIn += b.cpc * v; bOut += b.out; }
+      this.eAbsorbed += Math.min(rs, bIn) * dt; this.eCovered += Math.min(rd, bOut) * dt;
+      if (rd > 0 && bIn > 0) this.eChargeInShort += Math.min(bIn, bOut) * dt;
       for (const b of s.batteries) { this.eBattOut += b.out * dt; this.eBattIn += b.cpc * dt; const pc = b.charge / b.capacity * 100; this.battMin = Math.min(this.battMin, pc); this.battMax = Math.max(this.battMax, pc); }
       const vv = g.load > 0 ? v : 1;
       this.vAbsDev += Math.abs(vv - 1) * dt; this.vSq += (vv - 1) * (vv - 1) * dt; this.vMin = Math.min(this.vMin, vv); this.vMax = Math.max(this.vMax, vv);
@@ -1252,6 +1256,10 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
         no_fission_signal_s: +this.noCtlF.toFixed(1), no_turbine_signal_s: +this.noCtlT.toFixed(1),
         battery_charge_min_pct: s.batteries.length ? +this.battMin.toFixed(1) : null, battery_charge_max_pct: s.batteries.length ? +this.battMax.toFixed(1) : null,
         battery_out_kwh: +kwh(this.eBattOut).toFixed(2), battery_in_kwh: +kwh(this.eBattIn).toFixed(2),
+        reactor_surplus_kwh: +kwh(this.eRSurplus).toFixed(2), reactor_shortfall_kwh: +kwh(this.eRShort).toFixed(2),
+        surplus_into_batteries_pct: s.batteries.length && this.eRSurplus > 0 ? +(this.eAbsorbed / this.eRSurplus * 100).toFixed(1) : null,
+        shortfall_covered_by_batteries_pct: s.batteries.length && this.eRShort > 0 ? +(this.eCovered / this.eRShort * 100).toFixed(1) : null,
+        battery_self_drain_kwh: s.batteries.length ? +kwh(this.eChargeInShort).toFixed(2) : null, // charging while also discharging (wasted cycle)
       };
       // scores 0-100 (higher is better)
       r.score_reliability = +Math.max(0, 100 - r.unmet_pct * 10 - r.voltage_mean_abs_dev * 200 - r.fluctuation_events / (T / 60) * 2 - (r.meltdown_at_s !== null ? 100 : 0) - r.fires * 10 - r.junction_breaks * 10).toFixed(1);
@@ -1320,18 +1328,28 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
     if (pinsText) applyPins(model, pinsText);
     return model;
   }
-  // "$MAX" in any component property = reactor max output (kW) of the test.
-  function substitute(model, maxKW) {
+  // Placeholders usable in any component property value (filled from the test settings):
+  //   $MAX      reactor max output kW          $BATT_N    number of batteries
+  //   $BATT_KW  total max recharge kW (all)    $BATT_OUT  total max output kW (all)    $BATT_CAP total capacity kW·min
+  function placeholders(cfg) {
+    const bc = (cfg && cfg.batteries) || {}, n = bc.enabled ? (bc.count || 1) : 0;
+    const t = Object.assign({}, E.BATT[bc.type || 'battery'] || E.BATT.battery, bc.custom || {});
+    return { MAX: (cfg && cfg.reactorMaxKW) || 5000, BATT_N: n, BATT_KW: n * t.maxRecharge, BATT_OUT: n * t.maxOut, BATT_CAP: n * t.capacity };
+  }
+  const PH = /\$(BATT_KW|BATT_OUT|BATT_CAP|BATT_N|MAX)/g;
+  function substitute(model, vals) {
+    if (typeof vals !== 'object') vals = { MAX: vals };
     const m = JSON.parse(JSON.stringify(model));
-    for (const b of m.boxes) for (const c of b.components) for (const k in c.props) if (typeof c.props[k] === 'string' && c.props[k].includes('$MAX')) c.props[k] = c.props[k].replace(/\$MAX/g, String(maxKW));
+    for (const b of m.boxes) for (const c of b.components) for (const k in c.props) if (typeof c.props[k] === 'string') c.props[k] = c.props[k].replace(PH, (x, n) => vals[n] == null ? x : String(vals[n]));
     return m;
   }
   // -> [{filename, text}]  one box: <name>.txt ; two boxes: <name>_reactor.txt + <name>_battery.txt
-  function exportBoxes(model, maxKW) {
-    const m = substitute(model, maxKW), out = [];
-    m.boxes.forEach((b, bi) => { // in-game note for every value that came from $MAX
-      const ids = model.boxes[bi].components.filter(c => Object.values(c.props).some(v => String(v).includes('$MAX'))).map(c => c.id);
-      if (ids.length) b.labels.push({ header: 'REACTOR MAX OUTPUT', body: `Exported for a ${maxKW} kW reactor. If your reactor's max output differs, edit: ${ids.join(', ')}`, color: '#FFB000' });
+  function exportBoxes(model, vals) {
+    if (typeof vals !== 'object') vals = { MAX: vals };
+    const m = substitute(model, vals), out = [];
+    m.boxes.forEach((b, bi) => { // in-game note for every value that came from a placeholder
+      const used = model.boxes[bi].components.map(c => [c.id, [...new Set(Object.values(c.props).join(' ').match(PH) || [])]]).filter(x => x[1].length);
+      if (used.length) b.labels.push({ header: 'SHIP-SPECIFIC VALUES', body: `Exported for: reactor ${vals.MAX} kW` + (vals.BATT_N ? `, ${vals.BATT_N} batteries (${vals.BATT_KW} kW recharge, ${vals.BATT_OUT} kW output)` : '') + `. On another ship edit: ` + used.map(([id, ph]) => `${id} (${ph.join(' ')})`).join(', '), color: '#FFB000' });
     });
     for (const b of m.boxes) if (!b.pins) { // label used pins with the default harness so the in-game wiring is obvious
       const used = new Set(); for (const w of b.wires) { if (w.from.c === null) used.add(F.shortPin(w.from.pin)); if (w.to.c === null) used.add(F.shortPin(w.to.pin)); }
@@ -1354,10 +1372,10 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
     const cols = ['t', 'demand', 'power', 'voltage', 'temp', 'fission', 'turbine', 'tf', 'tt', 'cto', 'fuel', 'batt', 'battOut', 'battIn'];
     return cols.join(',') + '\n' + tl.map(p => cols.map(c => p[c] == null ? '' : (Math.round(p[c] * 100) / 100)).join(',')).join('\n') + '\n';
   }
-  return { loadModel, applyPins, substitute, exportBoxes, fmtReport, timelineCsv };
+  return { loadModel, applyPins, placeholders, substitute, exportBoxes, fmtReport, timelineCsv };
 });
 </script>
-<script type="application/json" id="lib">{"circuits":{"example_battery":{"circ":"# Example with batteries: reactor box = feed-forward, battery box charges when below 80%.\nname example_battery\nbox reactor\nc tdiv div\nc tmax mem Value=$MAX\nc tpct mul\nc k100 mem Value=100\nc fadd add\nc k50 mem Value=50\nc fmul mul\nc fdiv div ClampMin=0 ClampMax=100\nw in1 tdiv.1\nw tmax.out tdiv.2\nw tdiv.out tpct.1\nw k100.out tpct.2\nw tpct.out out2 fadd.1\nw k50.out fadd.2 fmul.2\nw fadd.out fmul.1\nw fmul.out fdiv.1\nw in4 fdiv.2\nw fdiv.out out1\nbox battery\nc low greater Output=40 FalseOutput=0   # 80 > charge% -> charge at 40%\nc k80 mem Value=80\nw k80.out low.1\nw in1 low.2\nw low.out out1\n","group":"AI"},"example_feedforward":{"circ":"# Example: simple feed-forward auto reactor (starting point, not tuned).\n# turbine% = load / maxKW * 100 ;  fission% = (50 + turbine) * 50 / fuel  (aims for temperature 50)\nname example_feedforward\nbox reactor\nc tdiv div                    # load / max\nc tmax mem Value=$MAX         # $MAX = reactor max output kW (filled in automatically)\nc tpct mul                    # * 100\nc k100 mem Value=100\nc fadd add                    # turbine + 50\nc k50 mem Value=50\nc fmul mul                    # * 50\nc fdiv div ClampMin=0 ClampMax=100   # / fuel\nw in1 tdiv.1\nw tmax.out tdiv.2\nw tdiv.out tpct.1\nw k100.out tpct.2\nw tpct.out out2 fadd.1\nw k50.out fadd.2 fmul.2\nw fadd.out fmul.1\nw fmul.out fdiv.1\nw in4 fdiv.2\nw fdiv.out out1\n","group":"AI"}},"profiles":{"synthetic_combat":"# BaroPowerLog v1 (synthetic)\n# sub=synthetic\n# reactor_max_kw=5200\n# duration=900\n# fuel_rods=2\nt,demand\n0,1500\n6.5,2400\n10,1500\n25,2400\n28,4000\n29.5,3100\n39.5,4000\n45.5,3100\n73.5,4000\n81,3100\n85.5,1500\n88.5,2400\n91,1500\n118.5,2400\n131,4600\n139.5,3700\n154,3100\n160.5,1500\n165,2400\n172.5,1500\n176,2100\n179.5,3000\n186.5,2100\n190.5,3100\n208,1500\n210,2400\n216.5,1500\n228.5,3100\n242.5,3700\n247,4600\n254,3000\n258.5,2100\n284.5,3000\n287.5,2100\n296,3100\n319.5,3700\n323.5,4600\n325.5,2400\n330.5,1500\n345,2100\n364,1500\n382.5,2100\n384.5,3000\n387.5,2100\n396,3100\n417.5,4000\n419,3000\n424,2100\n433.5,3100\n440.5,1500\n448.5,2400\n455,1500\n461,2100\n474.5,3000\n481,2100\n499.5,3000\n513.5,2100\n517,1500\n519,2400\n523.5,1500\n530,2400\n536,4000\n537,3100\n545.5,4000\n551.5,3100\n552.5,1500\n563.5,2400\n570.5,1500\n587,3100\n602.5,4000\n610.5,3100\n622.5,4000\n627,3100\n635,4000\n641,3000\n641.5,2100\n665.5,3100\n677,3700\n695,4600\n699,4000\n702.5,3100\n717.5,2100\n724.5,3000\n737,2400\n746,4000\n747.5,3100\n754.5,4000\n758,3100\n775,3700\n781,3100\n784,4000\n788,3100\n796.5,1500\n813,3700\n831,2100\n847,1500\n864,3100\n876.5,2100\n891,3000\n897.5,2400\n","synthetic_cruise":"# BaroPowerLog v1 (synthetic)\n# sub=synthetic\n# reactor_max_kw=3000\n# duration=900\n# fuel_rods=2\nt,demand\n0,1500\n52.5,1900\n125,1100\n177.5,2300\n241,1100\n309.5,1500\n365,1900\n445.5,1500\n534.5,1700\n584.5,2300\n646.5,1500\n683,1100\n805,1900\n858,1500\n","synthetic_ramps":"# BaroPowerLog v1 (synthetic)\n# sub=synthetic\n# reactor_max_kw=4000\n# duration=900\n# fuel_rods=2\nt,demand\n0,1200\n1,1200.1\n1.5,1200.2\n2,1200.3\n2.5,1200.4\n3,1200.6\n3.5,1200.8\n4,1201.1\n4.5,1201.4\n5,1201.7\n5.5,1202.1\n6,1202.5\n6.5,1202.9\n7,1203.3\n7.5,1203.8\n8,1204.4\n8.5,1204.9\n9,1205.5\n9.5,1206.1\n10,1206.8\n10.5,1207.5\n11,1208.2\n11.5,1209\n12,1209.8\n12.5,1210.6\n13,1211.5\n13.5,1212.4\n14,1213.3\n14.5,1214.3\n15,1215.3\n15.5,1216.3\n16,1217.4\n16.5,1218.5\n17,1219.6\n17.5,1220.8\n18,1222\n18.5,1223.2\n19,1224.5\n19.5,1225.8\n20,1227.1\n20.5,1228.5\n21,1229.9\n21.5,1231.3\n22,1232.8\n22.5,1234.3\n23,1235.8\n23.5,1237.3\n24,1238.9\n24.5,1240.6\n25,1242.2\n25.5,1243.9\n26,1245.6\n26.5,1247.4\n27,1249.2\n27.5,1251\n28,1252.8\n28.5,1254.7\n29,1256.6\n29.5,1258.5\n30,1260.5\n30.5,1262.5\n31,1264.6\n31.5,1266.6\n32,1268.7\n32.5,1270.8\n33,1273\n33.5,1275.2\n34,1277.4\n34.5,1279.7\n35,1281.9\n35.5,1284.2\n36,1286.6\n36.5,1289\n37,1291.4\n37.5,1293.8\n38,1296.2\n38.5,1298.7\n39,1301.2\n39.5,1303.8\n40,1306.4\n40.5,1309\n41,1311.6\n41.5,1314.3\n42,1317\n42.5,1319.7\n43,1322.4\n43.5,1325.2\n44,1328\n44.5,1330.8\n45,1333.7\n45.5,1336.6\n46,1339.5\n46.5,1342.4\n47,1345.4\n47.5,1348.4\n48,1351.4\n48.5,1354.5\n49,1357.5\n49.5,1360.6\n50,1363.8\n50.5,1366.9\n51,1370.1\n51.5,1373.3\n52,1376.5\n52.5,1379.8\n53,1383.1\n53.5,1386.4\n54,1389.7\n54.5,1393.1\n55,1396.5\n55.5,1399.9\n56,1403.3\n56.5,1406.8\n57,1410.2\n57.5,1413.7\n58,1417.3\n58.5,1420.8\n59,1424.4\n59.5,1428\n60,1431.6\n60.5,1435.3\n61,1438.9\n61.5,1442.6\n62,1446.3\n62.5,1450\n63,1453.8\n63.5,1457.6\n64,1461.4\n64.5,1465.2\n65,1469\n65.5,1472.9\n66,1476.8\n66.5,1480.7\n67,1484.6\n67.5,1488.6\n68,1492.5\n68.5,1496.5\n69,1500.5\n69.5,1504.5\n70,1508.6\n70.5,1512.6\n71,1516.7\n71.5,1520.8\n72,1524.9\n72.5,1529.1\n73,1533.2\n73.5,1537.4\n74,1541.6\n74.5,1545.8\n75,1550\n75.5,1554.2\n76,1558.5\n76.5,1562.8\n77,1567.1\n77.5,1571.4\n78,1575.7\n78.5,1580\n79,1584.4\n79.5,1588.8\n80,1593.1\n80.5,1597.5\n81,1602\n81.5,1606.4\n82,1610.8\n82.5,1615.3\n83,1619.8\n83.5,1624.2\n84,1628.7\n84.5,1633.3\n85,1637.8\n85.5,1642.3\n86,1646.9\n86.5,1651.4\n87,1656\n87.5,1660.6\n88,1665.2\n88.5,1669.8\n89,1674.4\n89.5,1679\n90,1683.7\n90.5,1688.3\n91,1693\n91.5,1697.7\n92,1702.4\n92.5,1707.1\n93,1711.8\n93.5,1716.5\n94,1721.2\n94.5,1725.9\n95,1730.7\n95.5,1735.4\n96,1740.2\n96.5,1744.9\n97,1749.7\n97.5,1754.5\n98,1759.2\n98.5,1764\n99,1768.8\n99.5,1773.6\n100,1778.4\n100.5,2983.3\n101,2988.1\n101.5,2992.9\n102,2997.7\n102.5,3002.6\n103,3007.4\n103.5,3012.3\n104,3017.1\n104.5,3022\n105,3026.8\n105.5,3031.7\n106,3036.6\n106.5,3041.4\n107,3046.3\n107.5,3051.2\n108,3056\n108.5,3060.9\n109,3065.8\n109.5,3070.7\n110,3075.6\n110.5,3080.5\n111,3085.3\n111.5,3090.2\n112,3095.1\n112.5,3100\n113,3104.9\n113.5,3109.8\n114,3114.7\n114.5,3119.5\n115,3124.4\n115.5,3129.3\n116,3134.2\n116.5,3139.1\n117,3144\n117.5,3148.8\n118,3153.7\n118.5,3158.6\n119,3163.4\n119.5,3168.3\n120,1973.2\n120.5,1978\n121,1982.9\n121.5,1987.7\n122,1992.6\n122.5,1997.4\n123,2002.3\n123.5,2007.1\n124,2011.9\n124.5,2016.7\n125,2021.6\n125.5,2026.4\n126,2031.2\n126.5,2036\n127,2040.8\n127.5,2045.5\n128,2050.3\n128.5,2055.1\n129,2059.8\n129.5,2064.6\n130,2069.3\n130.5,2074.1\n131,2078.8\n131.5,2083.5\n132,2088.2\n132.5,2092.9\n133,2097.6\n133.5,2102.3\n134,2107\n134.5,2111.7\n135,2116.3\n135.5,2121\n136,2125.6\n136.5,2130.2\n137,2134.8\n137.5,2139.4\n138,2144\n138.5,2148.6\n139,2153.1\n139.5,2157.7\n140,2162.2\n140.5,2166.7\n141,2171.3\n141.5,2175.8\n142,2180.2\n142.5,2184.7\n143,2189.2\n143.5,2193.6\n144,2198\n144.5,2202.5\n145,2206.9\n145.5,2211.2\n146,2215.6\n146.5,2220\n147,2224.3\n147.5,2228.6\n148,2232.9\n148.5,2237.2\n149,2241.5\n149.5,2245.8\n150,2250\n150.5,2254.2\n151,2258.4\n151.5,2262.6\n152,2266.8\n152.5,2270.9\n153,2275.1\n153.5,2279.2\n154,2283.3\n154.5,2287.4\n155,2291.4\n155.5,2295.5\n156,2299.5\n156.5,2303.5\n157,2307.5\n157.5,2311.4\n158,2315.4\n158.5,2319.3\n159,2323.2\n159.5,2327.1\n160,2331\n160.5,2334.8\n161,2338.6\n161.5,2342.4\n162,2346.2\n162.5,2350\n163,2353.7\n163.5,2357.4\n164,2361.1\n164.5,2364.7\n165,2368.4\n165.5,2372\n166,2375.6\n166.5,2379.2\n167,2382.7\n167.5,2386.3\n168,2389.8\n168.5,2393.2\n169,2396.7\n169.5,2400.1\n170,2403.5\n170.5,2406.9\n171,2410.3\n171.5,2413.6\n172,2416.9\n172.5,2420.2\n173,2423.5\n173.5,2426.7\n174,2429.9\n174.5,2433.1\n175,2436.2\n175.5,2439.4\n176,2442.5\n176.5,2445.5\n177,2448.6\n177.5,2451.6\n178,2454.6\n178.5,2457.6\n179,2460.5\n179.5,2463.4\n180,2466.3\n180.5,2469.2\n181,2472\n181.5,2474.8\n182,2477.6\n182.5,2480.3\n183,2483\n183.5,2485.7\n184,2488.4\n184.5,2491\n185,2493.6\n185.5,2496.2\n186,2498.8\n186.5,2501.3\n187,2503.8\n187.5,2506.2\n188,2508.6\n188.5,2511\n189,2513.4\n189.5,2515.8\n190,2518.1\n190.5,2520.3\n191,2522.6\n191.5,2524.8\n192,2527\n192.5,2529.2\n193,2531.3\n193.5,2533.4\n194,2535.4\n194.5,2537.5\n195,2539.5\n195.5,2541.5\n196,2543.4\n196.5,2545.3\n197,2547.2\n197.5,2549\n198,2550.8\n198.5,2552.6\n199,2554.4\n199.5,2556.1\n200,2557.8\n200.5,2559.4\n201,2561.1\n201.5,2562.7\n202,2564.2\n202.5,2565.7\n203,2567.2\n203.5,2568.7\n204,2570.1\n204.5,2571.5\n205,2572.9\n205.5,2574.2\n206,2575.5\n206.5,2576.8\n207,2578\n207.5,2579.2\n208,2580.4\n208.5,2581.5\n209,2582.6\n209.5,2583.7\n210,2584.7\n210.5,2585.7\n211,2586.7\n211.5,2587.6\n212,2588.5\n212.5,2589.4\n213,2590.2\n213.5,2591\n214,2591.8\n214.5,2592.5\n215,2593.2\n215.5,2593.9\n216,2594.5\n216.5,2595.1\n217,2595.6\n217.5,2596.2\n218,2596.7\n218.5,2597.1\n219,2597.5\n219.5,2597.9\n220,2598.3\n220.5,3798.6\n221,3798.9\n221.5,3799.2\n222,3799.4\n222.5,3799.6\n223,3799.7\n223.5,3799.8\n224,3799.9\n224.5,3800\n226,3799.9\n226.5,3799.8\n227,3799.7\n227.5,3799.6\n228,3799.4\n228.5,3799.2\n229,3798.9\n229.5,3798.6\n230,3798.3\n230.5,3797.9\n231,3797.5\n231.5,3797.1\n232,3796.7\n232.5,3796.2\n233,3795.6\n233.5,3795.1\n234,3794.5\n234.5,3793.9\n235,3793.2\n235.5,3792.5\n236,3791.8\n236.5,3791\n237,3790.2\n237.5,3789.4\n238,3788.5\n238.5,3787.6\n239,3786.7\n239.5,3785.7\n240,2584.7\n240.5,2583.7\n241,2582.6\n241.5,2581.5\n242,2580.4\n242.5,2579.2\n243,2578\n243.5,2576.8\n244,2575.5\n244.5,2574.2\n245,2572.9\n245.5,2571.5\n246,2570.1\n246.5,2568.7\n247,2567.2\n247.5,2565.7\n248,2564.2\n248.5,2562.7\n249,2561.1\n249.5,2559.4\n250,2557.8\n250.5,2556.1\n251,2554.4\n251.5,2552.6\n252,2550.8\n252.5,2549\n253,2547.2\n253.5,2545.3\n254,2543.4\n254.5,2541.5\n255,2539.5\n255.5,2537.5\n256,2535.4\n256.5,2533.4\n257,2531.3\n257.5,2529.2\n258,2527\n258.5,2524.8\n259,2522.6\n259.5,2520.3\n260,2518.1\n260.5,2515.8\n261,2513.4\n261.5,2511\n262,2508.6\n262.5,2506.2\n263,2503.8\n263.5,2501.3\n264,2498.8\n264.5,2496.2\n265,2493.6\n265.5,2491\n266,2488.4\n266.5,2485.7\n267,2483\n267.5,2480.3\n268,2477.6\n268.5,2474.8\n269,2472\n269.5,2469.2\n270,2466.3\n270.5,2463.4\n271,2460.5\n271.5,2457.6\n272,2454.6\n272.5,2451.6\n273,2448.6\n273.5,2445.5\n274,2442.5\n274.5,2439.4\n275,2436.2\n275.5,2433.1\n276,2429.9\n276.5,2426.7\n277,2423.5\n277.5,2420.2\n278,2416.9\n278.5,2413.6\n279,2410.3\n279.5,2406.9\n280,2403.5\n280.5,2400.1\n281,2396.7\n281.5,2393.2\n282,2389.8\n282.5,2386.3\n283,2382.7\n283.5,2379.2\n284,2375.6\n284.5,2372\n285,2368.4\n285.5,2364.7\n286,2361.1\n286.5,2357.4\n287,2353.7\n287.5,2350\n288,2346.2\n288.5,2342.4\n289,2338.6\n289.5,2334.8\n290,2331\n290.5,2327.1\n291,2323.2\n291.5,2319.3\n292,2315.4\n292.5,2311.4\n293,2307.5\n293.5,2303.5\n294,2299.5\n294.5,2295.5\n295,2291.4\n295.5,2287.4\n296,2283.3\n296.5,2279.2\n297,2275.1\n297.5,2270.9\n298,2266.8\n298.5,2262.6\n299,2258.4\n299.5,2254.2\n300,2250\n300.5,2245.8\n301,2241.5\n301.5,2237.2\n302,2232.9\n302.5,2228.6\n303,2224.3\n303.5,2220\n304,2215.6\n304.5,2211.2\n305,2206.9\n305.5,2202.5\n306,2198\n306.5,2193.6\n307,2189.2\n307.5,2184.7\n308,2180.2\n308.5,2175.8\n309,2171.3\n309.5,2166.7\n310,2162.2\n310.5,2157.7\n311,2153.1\n311.5,2148.6\n312,2144\n312.5,2139.4\n313,2134.8\n313.5,2130.2\n314,2125.6\n314.5,2121\n315,2116.3\n315.5,2111.7\n316,2107\n316.5,2102.3\n317,2097.6\n317.5,2092.9\n318,2088.2\n318.5,2083.5\n319,2078.8\n319.5,2074.1\n320,2069.3\n320.5,2064.6\n321,2059.8\n321.5,2055.1\n322,2050.3\n322.5,2045.5\n323,2040.8\n323.5,2036\n324,2031.2\n324.5,2026.4\n325,2021.6\n325.5,2016.7\n326,2011.9\n326.5,2007.1\n327,2002.3\n327.5,1997.4\n328,1992.6\n328.5,1987.7\n329,1982.9\n329.5,1978\n330,1973.2\n330.5,1968.3\n331,1963.4\n331.5,1958.6\n332,1953.7\n332.5,1948.8\n333,1944\n333.5,1939.1\n334,1934.2\n334.5,1929.3\n335,1924.4\n335.5,1919.5\n336,1914.7\n336.5,1909.8\n337,1904.9\n337.5,1900\n338,1895.1\n338.5,1890.2\n339,1885.3\n339.5,1880.5\n340,1875.6\n340.5,3070.7\n341,3065.8\n341.5,3060.9\n342,3056\n342.5,3051.2\n343,3046.3\n343.5,3041.4\n344,3036.6\n344.5,3031.7\n345,3026.8\n345.5,3022\n346,3017.1\n346.5,3012.3\n347,3007.4\n347.5,3002.6\n348,2997.7\n348.5,2992.9\n349,2988.1\n349.5,2983.3\n350,2978.4\n350.5,2973.6\n351,2968.8\n351.5,2964\n352,2959.2\n352.5,2954.5\n353,2949.7\n353.5,2944.9\n354,2940.2\n354.5,2935.4\n355,2930.7\n355.5,2925.9\n356,2921.2\n356.5,2916.5\n357,2911.8\n357.5,2907.1\n358,2902.4\n358.5,2897.7\n359,2893\n359.5,2888.3\n360,1683.7\n360.5,1679\n361,1674.4\n361.5,1669.8\n362,1665.2\n362.5,1660.6\n363,1656\n363.5,1651.4\n364,1646.9\n364.5,1642.3\n365,1637.8\n365.5,1633.3\n366,1628.7\n366.5,1624.2\n367,1619.8\n367.5,1615.3\n368,1610.8\n368.5,1606.4\n369,1602\n369.5,1597.5\n370,1593.1\n370.5,1588.8\n371,1584.4\n371.5,1580\n372,1575.7\n372.5,1571.4\n373,1567.1\n373.5,1562.8\n374,1558.5\n374.5,1554.2\n375,1550\n375.5,1545.8\n376,1541.6\n376.5,1537.4\n377,1533.2\n377.5,1529.1\n378,1524.9\n378.5,1520.8\n379,1516.7\n379.5,1512.6\n380,1508.6\n380.5,1504.5\n381,1500.5\n381.5,1496.5\n382,1492.5\n382.5,1488.6\n383,1484.6\n383.5,1480.7\n384,1476.8\n384.5,1472.9\n385,1469\n385.5,1465.2\n386,1461.4\n386.5,1457.6\n387,1453.8\n387.5,1450\n388,1446.3\n388.5,1442.6\n389,1438.9\n389.5,1435.3\n390,1431.6\n390.5,1428\n391,1424.4\n391.5,1420.8\n392,1417.3\n392.5,1413.7\n393,1410.2\n393.5,1406.8\n394,1403.3\n394.5,1399.9\n395,1396.5\n395.5,1393.1\n396,1389.7\n396.5,1386.4\n397,1383.1\n397.5,1379.8\n398,1376.5\n398.5,1373.3\n399,1370.1\n399.5,1366.9\n400,1363.8\n400.5,1360.6\n401,1357.5\n401.5,1354.5\n402,1351.4\n402.5,1348.4\n403,1345.4\n403.5,1342.4\n404,1339.5\n404.5,1336.6\n405,1333.7\n405.5,1330.8\n406,1328\n406.5,1325.2\n407,1322.4\n407.5,1319.7\n408,1317\n408.5,1314.3\n409,1311.6\n409.5,1309\n410,1306.4\n410.5,1303.8\n411,1301.2\n411.5,1298.7\n412,1296.2\n412.5,1293.8\n413,1291.4\n413.5,1289\n414,1286.6\n414.5,1284.2\n415,1281.9\n415.5,1279.7\n416,1277.4\n416.5,1275.2\n417,1273\n417.5,1270.8\n418,1268.7\n418.5,1266.6\n419,1264.6\n419.5,1262.5\n420,1260.5\n420.5,1258.5\n421,1256.6\n421.5,1254.7\n422,1252.8\n422.5,1251\n423,1249.2\n423.5,1247.4\n424,1245.6\n424.5,1243.9\n425,1242.2\n425.5,1240.6\n426,1238.9\n426.5,1237.3\n427,1235.8\n427.5,1234.3\n428,1232.8\n428.5,1231.3\n429,1229.9\n429.5,1228.5\n430,1227.1\n430.5,1225.8\n431,1224.5\n431.5,1223.2\n432,1222\n432.5,1220.8\n433,1219.6\n433.5,1218.5\n434,1217.4\n434.5,1216.3\n435,1215.3\n435.5,1214.3\n436,1213.3\n436.5,1212.4\n437,1211.5\n437.5,1210.6\n438,1209.8\n438.5,1209\n439,1208.2\n439.5,1207.5\n440,1206.8\n440.5,1206.1\n441,1205.5\n441.5,1204.9\n442,1204.4\n442.5,1203.8\n443,1203.3\n443.5,1202.9\n444,1202.5\n444.5,1202.1\n445,1201.7\n445.5,1201.4\n446,1201.1\n446.5,1200.8\n447,1200.6\n447.5,1200.4\n448,1200.3\n448.5,1200.2\n449,1200.1\n449.5,1200\n451,1200.1\n451.5,1200.2\n452,1200.3\n452.5,1200.4\n453,1200.6\n453.5,1200.8\n454,1201.1\n454.5,1201.4\n455,1201.7\n455.5,1202.1\n456,1202.5\n456.5,1202.9\n457,1203.3\n457.5,1203.8\n458,1204.4\n458.5,1204.9\n459,1205.5\n459.5,1206.1\n460,1206.8\n460.5,2407.5\n461,2408.2\n461.5,2409\n462,2409.8\n462.5,2410.6\n463,2411.5\n463.5,2412.4\n464,2413.3\n464.5,2414.3\n465,2415.3\n465.5,2416.3\n466,2417.4\n466.5,2418.5\n467,2419.6\n467.5,2420.8\n468,2422\n468.5,2423.2\n469,2424.5\n469.5,2425.8\n470,2427.1\n470.5,2428.5\n471,2429.9\n471.5,2431.3\n472,2432.8\n472.5,2434.3\n473,2435.8\n473.5,2437.3\n474,2438.9\n474.5,2440.6\n475,2442.2\n475.5,2443.9\n476,2445.6\n476.5,2447.4\n477,2449.2\n477.5,2451\n478,2452.8\n478.5,2454.7\n479,2456.6\n479.5,2458.5\n480,1260.5\n480.5,1262.5\n481,1264.6\n481.5,1266.6\n482,1268.7\n482.5,1270.8\n483,1273\n483.5,1275.2\n484,1277.4\n484.5,1279.7\n485,1281.9\n485.5,1284.2\n486,1286.6\n486.5,1289\n487,1291.4\n487.5,1293.8\n488,1296.2\n488.5,1298.7\n489,1301.2\n489.5,1303.8\n490,1306.4\n490.5,1309\n491,1311.6\n491.5,1314.3\n492,1317\n492.5,1319.7\n493,1322.4\n493.5,1325.2\n494,1328\n494.5,1330.8\n495,1333.7\n495.5,1336.6\n496,1339.5\n496.5,1342.4\n497,1345.4\n497.5,1348.4\n498,1351.4\n498.5,1354.5\n499,1357.5\n499.5,1360.6\n500,1363.8\n500.5,1366.9\n501,1370.1\n501.5,1373.3\n502,1376.5\n502.5,1379.8\n503,1383.1\n503.5,1386.4\n504,1389.7\n504.5,1393.1\n505,1396.5\n505.5,1399.9\n506,1403.3\n506.5,1406.8\n507,1410.2\n507.5,1413.7\n508,1417.3\n508.5,1420.8\n509,1424.4\n509.5,1428\n510,1431.6\n510.5,1435.3\n511,1438.9\n511.5,1442.6\n512,1446.3\n512.5,1450\n513,1453.8\n513.5,1457.6\n514,1461.4\n514.5,1465.2\n515,1469\n515.5,1472.9\n516,1476.8\n516.5,1480.7\n517,1484.6\n517.5,1488.6\n518,1492.5\n518.5,1496.5\n519,1500.5\n519.5,1504.5\n520,1508.6\n520.5,1512.6\n521,1516.7\n521.5,1520.8\n522,1524.9\n522.5,1529.1\n523,1533.2\n523.5,1537.4\n524,1541.6\n524.5,1545.8\n525,1550\n525.5,1554.2\n526,1558.5\n526.5,1562.8\n527,1567.1\n527.5,1571.4\n528,1575.7\n528.5,1580\n529,1584.4\n529.5,1588.8\n530,1593.1\n530.5,1597.5\n531,1602\n531.5,1606.4\n532,1610.8\n532.5,1615.3\n533,1619.8\n533.5,1624.2\n534,1628.7\n534.5,1633.3\n535,1637.8\n535.5,1642.3\n536,1646.9\n536.5,1651.4\n537,1656\n537.5,1660.6\n538,1665.2\n538.5,1669.8\n539,1674.4\n539.5,1679\n540,1683.7\n540.5,1688.3\n541,1693\n541.5,1697.7\n542,1702.4\n542.5,1707.1\n543,1711.8\n543.5,1716.5\n544,1721.2\n544.5,1725.9\n545,1730.7\n545.5,1735.4\n546,1740.2\n546.5,1744.9\n547,1749.7\n547.5,1754.5\n548,1759.2\n548.5,1764\n549,1768.8\n549.5,1773.6\n550,1778.4\n550.5,1783.3\n551,1788.1\n551.5,1792.9\n552,1797.7\n552.5,1802.6\n553,1807.4\n553.5,1812.3\n554,1817.1\n554.5,1822\n555,1826.8\n555.5,1831.7\n556,1836.6\n556.5,1841.4\n557,1846.3\n557.5,1851.2\n558,1856\n558.5,1860.9\n559,1865.8\n559.5,1870.7\n560,1875.6\n560.5,1880.5\n561,1885.3\n561.5,1890.2\n562,1895.1\n562.5,1900\n563,1904.9\n563.5,1909.8\n564,1914.7\n564.5,1919.5\n565,1924.4\n565.5,1929.3\n566,1934.2\n566.5,1939.1\n567,1944\n567.5,1948.8\n568,1953.7\n568.5,1958.6\n569,1963.4\n569.5,1968.3\n570,1973.2\n570.5,1978\n571,1982.9\n571.5,1987.7\n572,1992.6\n572.5,1997.4\n573,2002.3\n573.5,2007.1\n574,2011.9\n574.5,2016.7\n575,2021.6\n575.5,2026.4\n576,2031.2\n576.5,2036\n577,2040.8\n577.5,2045.5\n578,2050.3\n578.5,2055.1\n579,2059.8\n579.5,2064.6\n580,2069.3\n580.5,3274.1\n581,3278.8\n581.5,3283.5\n582,3288.2\n582.5,3292.9\n583,3297.6\n583.5,3302.3\n584,3307\n584.5,3311.7\n585,3316.3\n585.5,3321\n586,3325.6\n586.5,3330.2\n587,3334.8\n587.5,3339.4\n588,3344\n588.5,3348.6\n589,3353.1\n589.5,3357.7\n590,3362.2\n590.5,3366.7\n591,3371.3\n591.5,3375.8\n592,3380.2\n592.5,3384.7\n593,3389.2\n593.5,3393.6\n594,3398\n594.5,3402.5\n595,3406.9\n595.5,3411.2\n596,3415.6\n596.5,3420\n597,3424.3\n597.5,3428.6\n598,3432.9\n598.5,3437.2\n599,3441.5\n599.5,3445.8\n600,2250\n600.5,2254.2\n601,2258.4\n601.5,2262.6\n602,2266.8\n602.5,2270.9\n603,2275.1\n603.5,2279.2\n604,2283.3\n604.5,2287.4\n605,2291.4\n605.5,2295.5\n606,2299.5\n606.5,2303.5\n607,2307.5\n607.5,2311.4\n608,2315.4\n608.5,2319.3\n609,2323.2\n609.5,2327.1\n610,2331\n610.5,2334.8\n611,2338.6\n611.5,2342.4\n612,2346.2\n612.5,2350\n613,2353.7\n613.5,2357.4\n614,2361.1\n614.5,2364.7\n615,2368.4\n615.5,2372\n616,2375.6\n616.5,2379.2\n617,2382.7\n617.5,2386.3\n618,2389.8\n618.5,2393.2\n619,2396.7\n619.5,2400.1\n620,2403.5\n620.5,2406.9\n621,2410.3\n621.5,2413.6\n622,2416.9\n622.5,2420.2\n623,2423.5\n623.5,2426.7\n624,2429.9\n624.5,2433.1\n625,2436.2\n625.5,2439.4\n626,2442.5\n626.5,2445.5\n627,2448.6\n627.5,2451.6\n628,2454.6\n628.5,2457.6\n629,2460.5\n629.5,2463.4\n630,2466.3\n630.5,2469.2\n631,2472\n631.5,2474.8\n632,2477.6\n632.5,2480.3\n633,2483\n633.5,2485.7\n634,2488.4\n634.5,2491\n635,2493.6\n635.5,2496.2\n636,2498.8\n636.5,2501.3\n637,2503.8\n637.5,2506.2\n638,2508.6\n638.5,2511\n639,2513.4\n639.5,2515.8\n640,2518.1\n640.5,2520.3\n641,2522.6\n641.5,2524.8\n642,2527\n642.5,2529.2\n643,2531.3\n643.5,2533.4\n644,2535.4\n644.5,2537.5\n645,2539.5\n645.5,2541.5\n646,2543.4\n646.5,2545.3\n647,2547.2\n647.5,2549\n648,2550.8\n648.5,2552.6\n649,2554.4\n649.5,2556.1\n650,2557.8\n650.5,2559.4\n651,2561.1\n651.5,2562.7\n652,2564.2\n652.5,2565.7\n653,2567.2\n653.5,2568.7\n654,2570.1\n654.5,2571.5\n655,2572.9\n655.5,2574.2\n656,2575.5\n656.5,2576.8\n657,2578\n657.5,2579.2\n658,2580.4\n658.5,2581.5\n659,2582.6\n659.5,2583.7\n660,2584.7\n660.5,2585.7\n661,2586.7\n661.5,2587.6\n662,2588.5\n662.5,2589.4\n663,2590.2\n663.5,2591\n664,2591.8\n664.5,2592.5\n665,2593.2\n665.5,2593.9\n666,2594.5\n666.5,2595.1\n667,2595.6\n667.5,2596.2\n668,2596.7\n668.5,2597.1\n669,2597.5\n669.5,2597.9\n670,2598.3\n670.5,2598.6\n671,2598.9\n671.5,2599.2\n672,2599.4\n672.5,2599.6\n673,2599.7\n673.5,2599.8\n674,2599.9\n674.5,2600\n676,2599.9\n676.5,2599.8\n677,2599.7\n677.5,2599.6\n678,2599.4\n678.5,2599.2\n679,2598.9\n679.5,2598.6\n680,2598.3\n680.5,2597.9\n681,2597.5\n681.5,2597.1\n682,2596.7\n682.5,2596.2\n683,2595.6\n683.5,2595.1\n684,2594.5\n684.5,2593.9\n685,2593.2\n685.5,2592.5\n686,2591.8\n686.5,2591\n687,2590.2\n687.5,2589.4\n688,2588.5\n688.5,2587.6\n689,2586.7\n689.5,2585.7\n690,2584.7\n690.5,2583.7\n691,2582.6\n691.5,2581.5\n692,2580.4\n692.5,2579.2\n693,2578\n693.5,2576.8\n694,2575.5\n694.5,2574.2\n695,2572.9\n695.5,2571.5\n696,2570.1\n696.5,2568.7\n697,2567.2\n697.5,2565.7\n698,2564.2\n698.5,2562.7\n699,2561.1\n699.5,2559.4\n700,2557.8\n700.5,3756.1\n701,3754.4\n701.5,3752.6\n702,3750.8\n702.5,3749\n703,3747.2\n703.5,3745.3\n704,3743.4\n704.5,3741.5\n705,3739.5\n705.5,3737.5\n706,3735.4\n706.5,3733.4\n707,3731.3\n707.5,3729.2\n708,3727\n708.5,3724.8\n709,3722.6\n709.5,3720.3\n710,3718.1\n710.5,3715.8\n711,3713.4\n711.5,3711\n712,3708.6\n712.5,3706.2\n713,3703.8\n713.5,3701.3\n714,3698.8\n714.5,3696.2\n715,3693.6\n715.5,3691\n716,3688.4\n716.5,3685.7\n717,3683\n717.5,3680.3\n718,3677.6\n718.5,3674.8\n719,3672\n719.5,3669.2\n720,2466.3\n720.5,2463.4\n721,2460.5\n721.5,2457.6\n722,2454.6\n722.5,2451.6\n723,2448.6\n723.5,2445.5\n724,2442.5\n724.5,2439.4\n725,2436.2\n725.5,2433.1\n726,2429.9\n726.5,2426.7\n727,2423.5\n727.5,2420.2\n728,2416.9\n728.5,2413.6\n729,2410.3\n729.5,2406.9\n730,2403.5\n730.5,2400.1\n731,2396.7\n731.5,2393.2\n732,2389.8\n732.5,2386.3\n733,2382.7\n733.5,2379.2\n734,2375.6\n734.5,2372\n735,2368.4\n735.5,2364.7\n736,2361.1\n736.5,2357.4\n737,2353.7\n737.5,2350\n738,2346.2\n738.5,2342.4\n739,2338.6\n739.5,2334.8\n740,2331\n740.5,2327.1\n741,2323.2\n741.5,2319.3\n742,2315.4\n742.5,2311.4\n743,2307.5\n743.5,2303.5\n744,2299.5\n744.5,2295.5\n745,2291.4\n745.5,2287.4\n746,2283.3\n746.5,2279.2\n747,2275.1\n747.5,2270.9\n748,2266.8\n748.5,2262.6\n749,2258.4\n749.5,2254.2\n750,2250\n750.5,2245.8\n751,2241.5\n751.5,2237.2\n752,2232.9\n752.5,2228.6\n753,2224.3\n753.5,2220\n754,2215.6\n754.5,2211.2\n755,2206.9\n755.5,2202.5\n756,2198\n756.5,2193.6\n757,2189.2\n757.5,2184.7\n758,2180.2\n758.5,2175.8\n759,2171.3\n759.5,2166.7\n760,2162.2\n760.5,2157.7\n761,2153.1\n761.5,2148.6\n762,2144\n762.5,2139.4\n763,2134.8\n763.5,2130.2\n764,2125.6\n764.5,2121\n765,2116.3\n765.5,2111.7\n766,2107\n766.5,2102.3\n767,2097.6\n767.5,2092.9\n768,2088.2\n768.5,2083.5\n769,2078.8\n769.5,2074.1\n770,2069.3\n770.5,2064.6\n771,2059.8\n771.5,2055.1\n772,2050.3\n772.5,2045.5\n773,2040.8\n773.5,2036\n774,2031.2\n774.5,2026.4\n775,2021.6\n775.5,2016.7\n776,2011.9\n776.5,2007.1\n777,2002.3\n777.5,1997.4\n778,1992.6\n778.5,1987.7\n779,1982.9\n779.5,1978\n780,1973.2\n780.5,1968.3\n781,1963.4\n781.5,1958.6\n782,1953.7\n782.5,1948.8\n783,1944\n783.5,1939.1\n784,1934.2\n784.5,1929.3\n785,1924.4\n785.5,1919.5\n786,1914.7\n786.5,1909.8\n787,1904.9\n787.5,1900\n788,1895.1\n788.5,1890.2\n789,1885.3\n789.5,1880.5\n790,1875.6\n790.5,1870.7\n791,1865.8\n791.5,1860.9\n792,1856\n792.5,1851.2\n793,1846.3\n793.5,1841.4\n794,1836.6\n794.5,1831.7\n795,1826.8\n795.5,1822\n796,1817.1\n796.5,1812.3\n797,1807.4\n797.5,1802.6\n798,1797.7\n798.5,1792.9\n799,1788.1\n799.5,1783.3\n800,1778.4\n800.5,1773.6\n801,1768.8\n801.5,1764\n802,1759.2\n802.5,1754.5\n803,1749.7\n803.5,1744.9\n804,1740.2\n804.5,1735.4\n805,1730.7\n805.5,1725.9\n806,1721.2\n806.5,1716.5\n807,1711.8\n807.5,1707.1\n808,1702.4\n808.5,1697.7\n809,1693\n809.5,1688.3\n810,1683.7\n810.5,1679\n811,1674.4\n811.5,1669.8\n812,1665.2\n812.5,1660.6\n813,1656\n813.5,1651.4\n814,1646.9\n814.5,1642.3\n815,1637.8\n815.5,1633.3\n816,1628.7\n816.5,1624.2\n817,1619.8\n817.5,1615.3\n818,1610.8\n818.5,1606.4\n819,1602\n819.5,1597.5\n820,1593.1\n820.5,2788.8\n821,2784.4\n821.5,2780\n822,2775.7\n822.5,2771.4\n823,2767.1\n823.5,2762.8\n824,2758.5\n824.5,2754.2\n825,2750\n825.5,2745.8\n826,2741.6\n826.5,2737.4\n827,2733.2\n827.5,2729.1\n828,2724.9\n828.5,2720.8\n829,2716.7\n829.5,2712.6\n830,2708.6\n830.5,2704.5\n831,2700.5\n831.5,2696.5\n832,2692.5\n832.5,2688.6\n833,2684.6\n833.5,2680.7\n834,2676.8\n834.5,2672.9\n835,2669\n835.5,2665.2\n836,2661.4\n836.5,2657.6\n837,2653.8\n837.5,2650\n838,2646.3\n838.5,2642.6\n839,2638.9\n839.5,2635.3\n840,1431.6\n840.5,1428\n841,1424.4\n841.5,1420.8\n842,1417.3\n842.5,1413.7\n843,1410.2\n843.5,1406.8\n844,1403.3\n844.5,1399.9\n845,1396.5\n845.5,1393.1\n846,1389.7\n846.5,1386.4\n847,1383.1\n847.5,1379.8\n848,1376.5\n848.5,1373.3\n849,1370.1\n849.5,1366.9\n850,1363.8\n850.5,1360.6\n851,1357.5\n851.5,1354.5\n852,1351.4\n852.5,1348.4\n853,1345.4\n853.5,1342.4\n854,1339.5\n854.5,1336.6\n855,1333.7\n855.5,1330.8\n856,1328\n856.5,1325.2\n857,1322.4\n857.5,1319.7\n858,1317\n858.5,1314.3\n859,1311.6\n859.5,1309\n860,1306.4\n860.5,1303.8\n861,1301.2\n861.5,1298.7\n862,1296.2\n862.5,1293.8\n863,1291.4\n863.5,1289\n864,1286.6\n864.5,1284.2\n865,1281.9\n865.5,1279.7\n866,1277.4\n866.5,1275.2\n867,1273\n867.5,1270.8\n868,1268.7\n868.5,1266.6\n869,1264.6\n869.5,1262.5\n870,1260.5\n870.5,1258.5\n871,1256.6\n871.5,1254.7\n872,1252.8\n872.5,1251\n873,1249.2\n873.5,1247.4\n874,1245.6\n874.5,1243.9\n875,1242.2\n875.5,1240.6\n876,1238.9\n876.5,1237.3\n877,1235.8\n877.5,1234.3\n878,1232.8\n878.5,1231.3\n879,1229.9\n879.5,1228.5\n880,1227.1\n880.5,1225.8\n881,1224.5\n881.5,1223.2\n882,1222\n882.5,1220.8\n883,1219.6\n883.5,1218.5\n884,1217.4\n884.5,1216.3\n885,1215.3\n885.5,1214.3\n886,1213.3\n886.5,1212.4\n887,1211.5\n887.5,1210.6\n888,1209.8\n888.5,1209\n889,1208.2\n889.5,1207.5\n890,1206.8\n890.5,1206.1\n891,1205.5\n891.5,1204.9\n892,1204.4\n892.5,1203.8\n893,1203.3\n893.5,1202.9\n894,1202.5\n894.5,1202.1\n895,1201.7\n895.5,1201.4\n896,1201.1\n896.5,1200.8\n897,1200.6\n897.5,1200.4\n898,1200.3\n898.5,1200.2\n899,1200.1\n899.5,1200\n"}}</script>
+<script type="application/json" id="lib">{"circuits":{"example_battery":{"circ":"# Example: battery buffer. Batteries soak up reactor surplus (would be overvoltage) and\n# cover shortfalls (they discharge on their own whenever supply \u003c load).\n# Battery box: demand = grid load - our own charging; surplus = reactor output - demand;\n#              set_rate = surplus / total recharge kW * 100  (0 when short -> no charge/discharge cycling)\n# Reactor box: follows the real demand (sent over the link), not the load inflated by charging.\nname example_battery\nbox battery\nc kb mem Value=$BATT_KW       # total max recharge of all batteries (kW)\nc k100 mem Value=100\nc chg mul                     # charge_rate% * BATT_KW\nc chgk div                    # / 100 -> kW the batteries draw now\nc dem sub                     # grid load - charging = ship demand\nc sur sub                     # reactor output - demand = surplus\nc rate div                    # surplus / BATT_KW\nc pct mul ClampMin=0 ClampMax=100   # * 100 -> set_rate\nw in2 chg.1\nw kb.out chg.2 rate.2\nw chg.out chgk.1\nw k100.out chgk.2 pct.2\nw in3 dem.1\nw chgk.out dem.2\nw in6 sur.1\nw dem.out sur.2 out2\nw sur.out rate.1\nw rate.out pct.1\nw pct.out out1\nbox reactor\nc tdiv div                    # demand / max\nc tmax mem Value=$MAX\nc tpct mul                    # * 100 -> turbine\nc k100 mem Value=100\nc fadd add                    # turbine + 50\nc k50 mem Value=50\nc fmul mul                    # * 50\nc fdiv div ClampMin=0 ClampMax=100   # / fuel -> fission (aims for temperature 50)\nw in8 tdiv.1\nw tmax.out tdiv.2\nw tdiv.out tpct.1\nw k100.out tpct.2\nw tpct.out out2 fadd.1\nw k50.out fadd.2 fmul.2\nw fadd.out fmul.1\nw fmul.out fdiv.1\nw in4 fdiv.2\nw fdiv.out out1\nlink battery.out2 reactor.in8\n","group":"AI"},"example_feedforward":{"circ":"# Example: simple feed-forward auto reactor (starting point, not tuned).\n# turbine% = load / maxKW * 100 ;  fission% = (50 + turbine) * 50 / fuel  (aims for temperature 50)\nname example_feedforward\nbox reactor\nc tdiv div                    # load / max\nc tmax mem Value=$MAX         # $MAX = reactor max output kW (filled in automatically)\nc tpct mul                    # * 100\nc k100 mem Value=100\nc fadd add                    # turbine + 50\nc k50 mem Value=50\nc fmul mul                    # * 50\nc fdiv div ClampMin=0 ClampMax=100   # / fuel\nw in1 tdiv.1\nw tmax.out tdiv.2\nw tdiv.out tpct.1\nw k100.out tpct.2\nw tpct.out out2 fadd.1\nw k50.out fadd.2 fmul.2\nw fadd.out fmul.1\nw fmul.out fdiv.1\nw in4 fdiv.2\nw fdiv.out out1\n","group":"AI"}},"profiles":{"synthetic_combat":"# BaroPowerLog v1 (synthetic)\n# sub=synthetic\n# reactor_max_kw=5200\n# duration=900\n# fuel_rods=2\nt,demand\n0,1500\n6.5,2400\n10,1500\n25,2400\n28,4000\n29.5,3100\n39.5,4000\n45.5,3100\n73.5,4000\n81,3100\n85.5,1500\n88.5,2400\n91,1500\n118.5,2400\n131,4600\n139.5,3700\n154,3100\n160.5,1500\n165,2400\n172.5,1500\n176,2100\n179.5,3000\n186.5,2100\n190.5,3100\n208,1500\n210,2400\n216.5,1500\n228.5,3100\n242.5,3700\n247,4600\n254,3000\n258.5,2100\n284.5,3000\n287.5,2100\n296,3100\n319.5,3700\n323.5,4600\n325.5,2400\n330.5,1500\n345,2100\n364,1500\n382.5,2100\n384.5,3000\n387.5,2100\n396,3100\n417.5,4000\n419,3000\n424,2100\n433.5,3100\n440.5,1500\n448.5,2400\n455,1500\n461,2100\n474.5,3000\n481,2100\n499.5,3000\n513.5,2100\n517,1500\n519,2400\n523.5,1500\n530,2400\n536,4000\n537,3100\n545.5,4000\n551.5,3100\n552.5,1500\n563.5,2400\n570.5,1500\n587,3100\n602.5,4000\n610.5,3100\n622.5,4000\n627,3100\n635,4000\n641,3000\n641.5,2100\n665.5,3100\n677,3700\n695,4600\n699,4000\n702.5,3100\n717.5,2100\n724.5,3000\n737,2400\n746,4000\n747.5,3100\n754.5,4000\n758,3100\n775,3700\n781,3100\n784,4000\n788,3100\n796.5,1500\n813,3700\n831,2100\n847,1500\n864,3100\n876.5,2100\n891,3000\n897.5,2400\n","synthetic_cruise":"# BaroPowerLog v1 (synthetic)\n# sub=synthetic\n# reactor_max_kw=3000\n# duration=900\n# fuel_rods=2\nt,demand\n0,1500\n52.5,1900\n125,1100\n177.5,2300\n241,1100\n309.5,1500\n365,1900\n445.5,1500\n534.5,1700\n584.5,2300\n646.5,1500\n683,1100\n805,1900\n858,1500\n","synthetic_ramps":"# BaroPowerLog v1 (synthetic)\n# sub=synthetic\n# reactor_max_kw=4000\n# duration=900\n# fuel_rods=2\nt,demand\n0,1200\n1,1200.1\n1.5,1200.2\n2,1200.3\n2.5,1200.4\n3,1200.6\n3.5,1200.8\n4,1201.1\n4.5,1201.4\n5,1201.7\n5.5,1202.1\n6,1202.5\n6.5,1202.9\n7,1203.3\n7.5,1203.8\n8,1204.4\n8.5,1204.9\n9,1205.5\n9.5,1206.1\n10,1206.8\n10.5,1207.5\n11,1208.2\n11.5,1209\n12,1209.8\n12.5,1210.6\n13,1211.5\n13.5,1212.4\n14,1213.3\n14.5,1214.3\n15,1215.3\n15.5,1216.3\n16,1217.4\n16.5,1218.5\n17,1219.6\n17.5,1220.8\n18,1222\n18.5,1223.2\n19,1224.5\n19.5,1225.8\n20,1227.1\n20.5,1228.5\n21,1229.9\n21.5,1231.3\n22,1232.8\n22.5,1234.3\n23,1235.8\n23.5,1237.3\n24,1238.9\n24.5,1240.6\n25,1242.2\n25.5,1243.9\n26,1245.6\n26.5,1247.4\n27,1249.2\n27.5,1251\n28,1252.8\n28.5,1254.7\n29,1256.6\n29.5,1258.5\n30,1260.5\n30.5,1262.5\n31,1264.6\n31.5,1266.6\n32,1268.7\n32.5,1270.8\n33,1273\n33.5,1275.2\n34,1277.4\n34.5,1279.7\n35,1281.9\n35.5,1284.2\n36,1286.6\n36.5,1289\n37,1291.4\n37.5,1293.8\n38,1296.2\n38.5,1298.7\n39,1301.2\n39.5,1303.8\n40,1306.4\n40.5,1309\n41,1311.6\n41.5,1314.3\n42,1317\n42.5,1319.7\n43,1322.4\n43.5,1325.2\n44,1328\n44.5,1330.8\n45,1333.7\n45.5,1336.6\n46,1339.5\n46.5,1342.4\n47,1345.4\n47.5,1348.4\n48,1351.4\n48.5,1354.5\n49,1357.5\n49.5,1360.6\n50,1363.8\n50.5,1366.9\n51,1370.1\n51.5,1373.3\n52,1376.5\n52.5,1379.8\n53,1383.1\n53.5,1386.4\n54,1389.7\n54.5,1393.1\n55,1396.5\n55.5,1399.9\n56,1403.3\n56.5,1406.8\n57,1410.2\n57.5,1413.7\n58,1417.3\n58.5,1420.8\n59,1424.4\n59.5,1428\n60,1431.6\n60.5,1435.3\n61,1438.9\n61.5,1442.6\n62,1446.3\n62.5,1450\n63,1453.8\n63.5,1457.6\n64,1461.4\n64.5,1465.2\n65,1469\n65.5,1472.9\n66,1476.8\n66.5,1480.7\n67,1484.6\n67.5,1488.6\n68,1492.5\n68.5,1496.5\n69,1500.5\n69.5,1504.5\n70,1508.6\n70.5,1512.6\n71,1516.7\n71.5,1520.8\n72,1524.9\n72.5,1529.1\n73,1533.2\n73.5,1537.4\n74,1541.6\n74.5,1545.8\n75,1550\n75.5,1554.2\n76,1558.5\n76.5,1562.8\n77,1567.1\n77.5,1571.4\n78,1575.7\n78.5,1580\n79,1584.4\n79.5,1588.8\n80,1593.1\n80.5,1597.5\n81,1602\n81.5,1606.4\n82,1610.8\n82.5,1615.3\n83,1619.8\n83.5,1624.2\n84,1628.7\n84.5,1633.3\n85,1637.8\n85.5,1642.3\n86,1646.9\n86.5,1651.4\n87,1656\n87.5,1660.6\n88,1665.2\n88.5,1669.8\n89,1674.4\n89.5,1679\n90,1683.7\n90.5,1688.3\n91,1693\n91.5,1697.7\n92,1702.4\n92.5,1707.1\n93,1711.8\n93.5,1716.5\n94,1721.2\n94.5,1725.9\n95,1730.7\n95.5,1735.4\n96,1740.2\n96.5,1744.9\n97,1749.7\n97.5,1754.5\n98,1759.2\n98.5,1764\n99,1768.8\n99.5,1773.6\n100,1778.4\n100.5,2983.3\n101,2988.1\n101.5,2992.9\n102,2997.7\n102.5,3002.6\n103,3007.4\n103.5,3012.3\n104,3017.1\n104.5,3022\n105,3026.8\n105.5,3031.7\n106,3036.6\n106.5,3041.4\n107,3046.3\n107.5,3051.2\n108,3056\n108.5,3060.9\n109,3065.8\n109.5,3070.7\n110,3075.6\n110.5,3080.5\n111,3085.3\n111.5,3090.2\n112,3095.1\n112.5,3100\n113,3104.9\n113.5,3109.8\n114,3114.7\n114.5,3119.5\n115,3124.4\n115.5,3129.3\n116,3134.2\n116.5,3139.1\n117,3144\n117.5,3148.8\n118,3153.7\n118.5,3158.6\n119,3163.4\n119.5,3168.3\n120,1973.2\n120.5,1978\n121,1982.9\n121.5,1987.7\n122,1992.6\n122.5,1997.4\n123,2002.3\n123.5,2007.1\n124,2011.9\n124.5,2016.7\n125,2021.6\n125.5,2026.4\n126,2031.2\n126.5,2036\n127,2040.8\n127.5,2045.5\n128,2050.3\n128.5,2055.1\n129,2059.8\n129.5,2064.6\n130,2069.3\n130.5,2074.1\n131,2078.8\n131.5,2083.5\n132,2088.2\n132.5,2092.9\n133,2097.6\n133.5,2102.3\n134,2107\n134.5,2111.7\n135,2116.3\n135.5,2121\n136,2125.6\n136.5,2130.2\n137,2134.8\n137.5,2139.4\n138,2144\n138.5,2148.6\n139,2153.1\n139.5,2157.7\n140,2162.2\n140.5,2166.7\n141,2171.3\n141.5,2175.8\n142,2180.2\n142.5,2184.7\n143,2189.2\n143.5,2193.6\n144,2198\n144.5,2202.5\n145,2206.9\n145.5,2211.2\n146,2215.6\n146.5,2220\n147,2224.3\n147.5,2228.6\n148,2232.9\n148.5,2237.2\n149,2241.5\n149.5,2245.8\n150,2250\n150.5,2254.2\n151,2258.4\n151.5,2262.6\n152,2266.8\n152.5,2270.9\n153,2275.1\n153.5,2279.2\n154,2283.3\n154.5,2287.4\n155,2291.4\n155.5,2295.5\n156,2299.5\n156.5,2303.5\n157,2307.5\n157.5,2311.4\n158,2315.4\n158.5,2319.3\n159,2323.2\n159.5,2327.1\n160,2331\n160.5,2334.8\n161,2338.6\n161.5,2342.4\n162,2346.2\n162.5,2350\n163,2353.7\n163.5,2357.4\n164,2361.1\n164.5,2364.7\n165,2368.4\n165.5,2372\n166,2375.6\n166.5,2379.2\n167,2382.7\n167.5,2386.3\n168,2389.8\n168.5,2393.2\n169,2396.7\n169.5,2400.1\n170,2403.5\n170.5,2406.9\n171,2410.3\n171.5,2413.6\n172,2416.9\n172.5,2420.2\n173,2423.5\n173.5,2426.7\n174,2429.9\n174.5,2433.1\n175,2436.2\n175.5,2439.4\n176,2442.5\n176.5,2445.5\n177,2448.6\n177.5,2451.6\n178,2454.6\n178.5,2457.6\n179,2460.5\n179.5,2463.4\n180,2466.3\n180.5,2469.2\n181,2472\n181.5,2474.8\n182,2477.6\n182.5,2480.3\n183,2483\n183.5,2485.7\n184,2488.4\n184.5,2491\n185,2493.6\n185.5,2496.2\n186,2498.8\n186.5,2501.3\n187,2503.8\n187.5,2506.2\n188,2508.6\n188.5,2511\n189,2513.4\n189.5,2515.8\n190,2518.1\n190.5,2520.3\n191,2522.6\n191.5,2524.8\n192,2527\n192.5,2529.2\n193,2531.3\n193.5,2533.4\n194,2535.4\n194.5,2537.5\n195,2539.5\n195.5,2541.5\n196,2543.4\n196.5,2545.3\n197,2547.2\n197.5,2549\n198,2550.8\n198.5,2552.6\n199,2554.4\n199.5,2556.1\n200,2557.8\n200.5,2559.4\n201,2561.1\n201.5,2562.7\n202,2564.2\n202.5,2565.7\n203,2567.2\n203.5,2568.7\n204,2570.1\n204.5,2571.5\n205,2572.9\n205.5,2574.2\n206,2575.5\n206.5,2576.8\n207,2578\n207.5,2579.2\n208,2580.4\n208.5,2581.5\n209,2582.6\n209.5,2583.7\n210,2584.7\n210.5,2585.7\n211,2586.7\n211.5,2587.6\n212,2588.5\n212.5,2589.4\n213,2590.2\n213.5,2591\n214,2591.8\n214.5,2592.5\n215,2593.2\n215.5,2593.9\n216,2594.5\n216.5,2595.1\n217,2595.6\n217.5,2596.2\n218,2596.7\n218.5,2597.1\n219,2597.5\n219.5,2597.9\n220,2598.3\n220.5,3798.6\n221,3798.9\n221.5,3799.2\n222,3799.4\n222.5,3799.6\n223,3799.7\n223.5,3799.8\n224,3799.9\n224.5,3800\n226,3799.9\n226.5,3799.8\n227,3799.7\n227.5,3799.6\n228,3799.4\n228.5,3799.2\n229,3798.9\n229.5,3798.6\n230,3798.3\n230.5,3797.9\n231,3797.5\n231.5,3797.1\n232,3796.7\n232.5,3796.2\n233,3795.6\n233.5,3795.1\n234,3794.5\n234.5,3793.9\n235,3793.2\n235.5,3792.5\n236,3791.8\n236.5,3791\n237,3790.2\n237.5,3789.4\n238,3788.5\n238.5,3787.6\n239,3786.7\n239.5,3785.7\n240,2584.7\n240.5,2583.7\n241,2582.6\n241.5,2581.5\n242,2580.4\n242.5,2579.2\n243,2578\n243.5,2576.8\n244,2575.5\n244.5,2574.2\n245,2572.9\n245.5,2571.5\n246,2570.1\n246.5,2568.7\n247,2567.2\n247.5,2565.7\n248,2564.2\n248.5,2562.7\n249,2561.1\n249.5,2559.4\n250,2557.8\n250.5,2556.1\n251,2554.4\n251.5,2552.6\n252,2550.8\n252.5,2549\n253,2547.2\n253.5,2545.3\n254,2543.4\n254.5,2541.5\n255,2539.5\n255.5,2537.5\n256,2535.4\n256.5,2533.4\n257,2531.3\n257.5,2529.2\n258,2527\n258.5,2524.8\n259,2522.6\n259.5,2520.3\n260,2518.1\n260.5,2515.8\n261,2513.4\n261.5,2511\n262,2508.6\n262.5,2506.2\n263,2503.8\n263.5,2501.3\n264,2498.8\n264.5,2496.2\n265,2493.6\n265.5,2491\n266,2488.4\n266.5,2485.7\n267,2483\n267.5,2480.3\n268,2477.6\n268.5,2474.8\n269,2472\n269.5,2469.2\n270,2466.3\n270.5,2463.4\n271,2460.5\n271.5,2457.6\n272,2454.6\n272.5,2451.6\n273,2448.6\n273.5,2445.5\n274,2442.5\n274.5,2439.4\n275,2436.2\n275.5,2433.1\n276,2429.9\n276.5,2426.7\n277,2423.5\n277.5,2420.2\n278,2416.9\n278.5,2413.6\n279,2410.3\n279.5,2406.9\n280,2403.5\n280.5,2400.1\n281,2396.7\n281.5,2393.2\n282,2389.8\n282.5,2386.3\n283,2382.7\n283.5,2379.2\n284,2375.6\n284.5,2372\n285,2368.4\n285.5,2364.7\n286,2361.1\n286.5,2357.4\n287,2353.7\n287.5,2350\n288,2346.2\n288.5,2342.4\n289,2338.6\n289.5,2334.8\n290,2331\n290.5,2327.1\n291,2323.2\n291.5,2319.3\n292,2315.4\n292.5,2311.4\n293,2307.5\n293.5,2303.5\n294,2299.5\n294.5,2295.5\n295,2291.4\n295.5,2287.4\n296,2283.3\n296.5,2279.2\n297,2275.1\n297.5,2270.9\n298,2266.8\n298.5,2262.6\n299,2258.4\n299.5,2254.2\n300,2250\n300.5,2245.8\n301,2241.5\n301.5,2237.2\n302,2232.9\n302.5,2228.6\n303,2224.3\n303.5,2220\n304,2215.6\n304.5,2211.2\n305,2206.9\n305.5,2202.5\n306,2198\n306.5,2193.6\n307,2189.2\n307.5,2184.7\n308,2180.2\n308.5,2175.8\n309,2171.3\n309.5,2166.7\n310,2162.2\n310.5,2157.7\n311,2153.1\n311.5,2148.6\n312,2144\n312.5,2139.4\n313,2134.8\n313.5,2130.2\n314,2125.6\n314.5,2121\n315,2116.3\n315.5,2111.7\n316,2107\n316.5,2102.3\n317,2097.6\n317.5,2092.9\n318,2088.2\n318.5,2083.5\n319,2078.8\n319.5,2074.1\n320,2069.3\n320.5,2064.6\n321,2059.8\n321.5,2055.1\n322,2050.3\n322.5,2045.5\n323,2040.8\n323.5,2036\n324,2031.2\n324.5,2026.4\n325,2021.6\n325.5,2016.7\n326,2011.9\n326.5,2007.1\n327,2002.3\n327.5,1997.4\n328,1992.6\n328.5,1987.7\n329,1982.9\n329.5,1978\n330,1973.2\n330.5,1968.3\n331,1963.4\n331.5,1958.6\n332,1953.7\n332.5,1948.8\n333,1944\n333.5,1939.1\n334,1934.2\n334.5,1929.3\n335,1924.4\n335.5,1919.5\n336,1914.7\n336.5,1909.8\n337,1904.9\n337.5,1900\n338,1895.1\n338.5,1890.2\n339,1885.3\n339.5,1880.5\n340,1875.6\n340.5,3070.7\n341,3065.8\n341.5,3060.9\n342,3056\n342.5,3051.2\n343,3046.3\n343.5,3041.4\n344,3036.6\n344.5,3031.7\n345,3026.8\n345.5,3022\n346,3017.1\n346.5,3012.3\n347,3007.4\n347.5,3002.6\n348,2997.7\n348.5,2992.9\n349,2988.1\n349.5,2983.3\n350,2978.4\n350.5,2973.6\n351,2968.8\n351.5,2964\n352,2959.2\n352.5,2954.5\n353,2949.7\n353.5,2944.9\n354,2940.2\n354.5,2935.4\n355,2930.7\n355.5,2925.9\n356,2921.2\n356.5,2916.5\n357,2911.8\n357.5,2907.1\n358,2902.4\n358.5,2897.7\n359,2893\n359.5,2888.3\n360,1683.7\n360.5,1679\n361,1674.4\n361.5,1669.8\n362,1665.2\n362.5,1660.6\n363,1656\n363.5,1651.4\n364,1646.9\n364.5,1642.3\n365,1637.8\n365.5,1633.3\n366,1628.7\n366.5,1624.2\n367,1619.8\n367.5,1615.3\n368,1610.8\n368.5,1606.4\n369,1602\n369.5,1597.5\n370,1593.1\n370.5,1588.8\n371,1584.4\n371.5,1580\n372,1575.7\n372.5,1571.4\n373,1567.1\n373.5,1562.8\n374,1558.5\n374.5,1554.2\n375,1550\n375.5,1545.8\n376,1541.6\n376.5,1537.4\n377,1533.2\n377.5,1529.1\n378,1524.9\n378.5,1520.8\n379,1516.7\n379.5,1512.6\n380,1508.6\n380.5,1504.5\n381,1500.5\n381.5,1496.5\n382,1492.5\n382.5,1488.6\n383,1484.6\n383.5,1480.7\n384,1476.8\n384.5,1472.9\n385,1469\n385.5,1465.2\n386,1461.4\n386.5,1457.6\n387,1453.8\n387.5,1450\n388,1446.3\n388.5,1442.6\n389,1438.9\n389.5,1435.3\n390,1431.6\n390.5,1428\n391,1424.4\n391.5,1420.8\n392,1417.3\n392.5,1413.7\n393,1410.2\n393.5,1406.8\n394,1403.3\n394.5,1399.9\n395,1396.5\n395.5,1393.1\n396,1389.7\n396.5,1386.4\n397,1383.1\n397.5,1379.8\n398,1376.5\n398.5,1373.3\n399,1370.1\n399.5,1366.9\n400,1363.8\n400.5,1360.6\n401,1357.5\n401.5,1354.5\n402,1351.4\n402.5,1348.4\n403,1345.4\n403.5,1342.4\n404,1339.5\n404.5,1336.6\n405,1333.7\n405.5,1330.8\n406,1328\n406.5,1325.2\n407,1322.4\n407.5,1319.7\n408,1317\n408.5,1314.3\n409,1311.6\n409.5,1309\n410,1306.4\n410.5,1303.8\n411,1301.2\n411.5,1298.7\n412,1296.2\n412.5,1293.8\n413,1291.4\n413.5,1289\n414,1286.6\n414.5,1284.2\n415,1281.9\n415.5,1279.7\n416,1277.4\n416.5,1275.2\n417,1273\n417.5,1270.8\n418,1268.7\n418.5,1266.6\n419,1264.6\n419.5,1262.5\n420,1260.5\n420.5,1258.5\n421,1256.6\n421.5,1254.7\n422,1252.8\n422.5,1251\n423,1249.2\n423.5,1247.4\n424,1245.6\n424.5,1243.9\n425,1242.2\n425.5,1240.6\n426,1238.9\n426.5,1237.3\n427,1235.8\n427.5,1234.3\n428,1232.8\n428.5,1231.3\n429,1229.9\n429.5,1228.5\n430,1227.1\n430.5,1225.8\n431,1224.5\n431.5,1223.2\n432,1222\n432.5,1220.8\n433,1219.6\n433.5,1218.5\n434,1217.4\n434.5,1216.3\n435,1215.3\n435.5,1214.3\n436,1213.3\n436.5,1212.4\n437,1211.5\n437.5,1210.6\n438,1209.8\n438.5,1209\n439,1208.2\n439.5,1207.5\n440,1206.8\n440.5,1206.1\n441,1205.5\n441.5,1204.9\n442,1204.4\n442.5,1203.8\n443,1203.3\n443.5,1202.9\n444,1202.5\n444.5,1202.1\n445,1201.7\n445.5,1201.4\n446,1201.1\n446.5,1200.8\n447,1200.6\n447.5,1200.4\n448,1200.3\n448.5,1200.2\n449,1200.1\n449.5,1200\n451,1200.1\n451.5,1200.2\n452,1200.3\n452.5,1200.4\n453,1200.6\n453.5,1200.8\n454,1201.1\n454.5,1201.4\n455,1201.7\n455.5,1202.1\n456,1202.5\n456.5,1202.9\n457,1203.3\n457.5,1203.8\n458,1204.4\n458.5,1204.9\n459,1205.5\n459.5,1206.1\n460,1206.8\n460.5,2407.5\n461,2408.2\n461.5,2409\n462,2409.8\n462.5,2410.6\n463,2411.5\n463.5,2412.4\n464,2413.3\n464.5,2414.3\n465,2415.3\n465.5,2416.3\n466,2417.4\n466.5,2418.5\n467,2419.6\n467.5,2420.8\n468,2422\n468.5,2423.2\n469,2424.5\n469.5,2425.8\n470,2427.1\n470.5,2428.5\n471,2429.9\n471.5,2431.3\n472,2432.8\n472.5,2434.3\n473,2435.8\n473.5,2437.3\n474,2438.9\n474.5,2440.6\n475,2442.2\n475.5,2443.9\n476,2445.6\n476.5,2447.4\n477,2449.2\n477.5,2451\n478,2452.8\n478.5,2454.7\n479,2456.6\n479.5,2458.5\n480,1260.5\n480.5,1262.5\n481,1264.6\n481.5,1266.6\n482,1268.7\n482.5,1270.8\n483,1273\n483.5,1275.2\n484,1277.4\n484.5,1279.7\n485,1281.9\n485.5,1284.2\n486,1286.6\n486.5,1289\n487,1291.4\n487.5,1293.8\n488,1296.2\n488.5,1298.7\n489,1301.2\n489.5,1303.8\n490,1306.4\n490.5,1309\n491,1311.6\n491.5,1314.3\n492,1317\n492.5,1319.7\n493,1322.4\n493.5,1325.2\n494,1328\n494.5,1330.8\n495,1333.7\n495.5,1336.6\n496,1339.5\n496.5,1342.4\n497,1345.4\n497.5,1348.4\n498,1351.4\n498.5,1354.5\n499,1357.5\n499.5,1360.6\n500,1363.8\n500.5,1366.9\n501,1370.1\n501.5,1373.3\n502,1376.5\n502.5,1379.8\n503,1383.1\n503.5,1386.4\n504,1389.7\n504.5,1393.1\n505,1396.5\n505.5,1399.9\n506,1403.3\n506.5,1406.8\n507,1410.2\n507.5,1413.7\n508,1417.3\n508.5,1420.8\n509,1424.4\n509.5,1428\n510,1431.6\n510.5,1435.3\n511,1438.9\n511.5,1442.6\n512,1446.3\n512.5,1450\n513,1453.8\n513.5,1457.6\n514,1461.4\n514.5,1465.2\n515,1469\n515.5,1472.9\n516,1476.8\n516.5,1480.7\n517,1484.6\n517.5,1488.6\n518,1492.5\n518.5,1496.5\n519,1500.5\n519.5,1504.5\n520,1508.6\n520.5,1512.6\n521,1516.7\n521.5,1520.8\n522,1524.9\n522.5,1529.1\n523,1533.2\n523.5,1537.4\n524,1541.6\n524.5,1545.8\n525,1550\n525.5,1554.2\n526,1558.5\n526.5,1562.8\n527,1567.1\n527.5,1571.4\n528,1575.7\n528.5,1580\n529,1584.4\n529.5,1588.8\n530,1593.1\n530.5,1597.5\n531,1602\n531.5,1606.4\n532,1610.8\n532.5,1615.3\n533,1619.8\n533.5,1624.2\n534,1628.7\n534.5,1633.3\n535,1637.8\n535.5,1642.3\n536,1646.9\n536.5,1651.4\n537,1656\n537.5,1660.6\n538,1665.2\n538.5,1669.8\n539,1674.4\n539.5,1679\n540,1683.7\n540.5,1688.3\n541,1693\n541.5,1697.7\n542,1702.4\n542.5,1707.1\n543,1711.8\n543.5,1716.5\n544,1721.2\n544.5,1725.9\n545,1730.7\n545.5,1735.4\n546,1740.2\n546.5,1744.9\n547,1749.7\n547.5,1754.5\n548,1759.2\n548.5,1764\n549,1768.8\n549.5,1773.6\n550,1778.4\n550.5,1783.3\n551,1788.1\n551.5,1792.9\n552,1797.7\n552.5,1802.6\n553,1807.4\n553.5,1812.3\n554,1817.1\n554.5,1822\n555,1826.8\n555.5,1831.7\n556,1836.6\n556.5,1841.4\n557,1846.3\n557.5,1851.2\n558,1856\n558.5,1860.9\n559,1865.8\n559.5,1870.7\n560,1875.6\n560.5,1880.5\n561,1885.3\n561.5,1890.2\n562,1895.1\n562.5,1900\n563,1904.9\n563.5,1909.8\n564,1914.7\n564.5,1919.5\n565,1924.4\n565.5,1929.3\n566,1934.2\n566.5,1939.1\n567,1944\n567.5,1948.8\n568,1953.7\n568.5,1958.6\n569,1963.4\n569.5,1968.3\n570,1973.2\n570.5,1978\n571,1982.9\n571.5,1987.7\n572,1992.6\n572.5,1997.4\n573,2002.3\n573.5,2007.1\n574,2011.9\n574.5,2016.7\n575,2021.6\n575.5,2026.4\n576,2031.2\n576.5,2036\n577,2040.8\n577.5,2045.5\n578,2050.3\n578.5,2055.1\n579,2059.8\n579.5,2064.6\n580,2069.3\n580.5,3274.1\n581,3278.8\n581.5,3283.5\n582,3288.2\n582.5,3292.9\n583,3297.6\n583.5,3302.3\n584,3307\n584.5,3311.7\n585,3316.3\n585.5,3321\n586,3325.6\n586.5,3330.2\n587,3334.8\n587.5,3339.4\n588,3344\n588.5,3348.6\n589,3353.1\n589.5,3357.7\n590,3362.2\n590.5,3366.7\n591,3371.3\n591.5,3375.8\n592,3380.2\n592.5,3384.7\n593,3389.2\n593.5,3393.6\n594,3398\n594.5,3402.5\n595,3406.9\n595.5,3411.2\n596,3415.6\n596.5,3420\n597,3424.3\n597.5,3428.6\n598,3432.9\n598.5,3437.2\n599,3441.5\n599.5,3445.8\n600,2250\n600.5,2254.2\n601,2258.4\n601.5,2262.6\n602,2266.8\n602.5,2270.9\n603,2275.1\n603.5,2279.2\n604,2283.3\n604.5,2287.4\n605,2291.4\n605.5,2295.5\n606,2299.5\n606.5,2303.5\n607,2307.5\n607.5,2311.4\n608,2315.4\n608.5,2319.3\n609,2323.2\n609.5,2327.1\n610,2331\n610.5,2334.8\n611,2338.6\n611.5,2342.4\n612,2346.2\n612.5,2350\n613,2353.7\n613.5,2357.4\n614,2361.1\n614.5,2364.7\n615,2368.4\n615.5,2372\n616,2375.6\n616.5,2379.2\n617,2382.7\n617.5,2386.3\n618,2389.8\n618.5,2393.2\n619,2396.7\n619.5,2400.1\n620,2403.5\n620.5,2406.9\n621,2410.3\n621.5,2413.6\n622,2416.9\n622.5,2420.2\n623,2423.5\n623.5,2426.7\n624,2429.9\n624.5,2433.1\n625,2436.2\n625.5,2439.4\n626,2442.5\n626.5,2445.5\n627,2448.6\n627.5,2451.6\n628,2454.6\n628.5,2457.6\n629,2460.5\n629.5,2463.4\n630,2466.3\n630.5,2469.2\n631,2472\n631.5,2474.8\n632,2477.6\n632.5,2480.3\n633,2483\n633.5,2485.7\n634,2488.4\n634.5,2491\n635,2493.6\n635.5,2496.2\n636,2498.8\n636.5,2501.3\n637,2503.8\n637.5,2506.2\n638,2508.6\n638.5,2511\n639,2513.4\n639.5,2515.8\n640,2518.1\n640.5,2520.3\n641,2522.6\n641.5,2524.8\n642,2527\n642.5,2529.2\n643,2531.3\n643.5,2533.4\n644,2535.4\n644.5,2537.5\n645,2539.5\n645.5,2541.5\n646,2543.4\n646.5,2545.3\n647,2547.2\n647.5,2549\n648,2550.8\n648.5,2552.6\n649,2554.4\n649.5,2556.1\n650,2557.8\n650.5,2559.4\n651,2561.1\n651.5,2562.7\n652,2564.2\n652.5,2565.7\n653,2567.2\n653.5,2568.7\n654,2570.1\n654.5,2571.5\n655,2572.9\n655.5,2574.2\n656,2575.5\n656.5,2576.8\n657,2578\n657.5,2579.2\n658,2580.4\n658.5,2581.5\n659,2582.6\n659.5,2583.7\n660,2584.7\n660.5,2585.7\n661,2586.7\n661.5,2587.6\n662,2588.5\n662.5,2589.4\n663,2590.2\n663.5,2591\n664,2591.8\n664.5,2592.5\n665,2593.2\n665.5,2593.9\n666,2594.5\n666.5,2595.1\n667,2595.6\n667.5,2596.2\n668,2596.7\n668.5,2597.1\n669,2597.5\n669.5,2597.9\n670,2598.3\n670.5,2598.6\n671,2598.9\n671.5,2599.2\n672,2599.4\n672.5,2599.6\n673,2599.7\n673.5,2599.8\n674,2599.9\n674.5,2600\n676,2599.9\n676.5,2599.8\n677,2599.7\n677.5,2599.6\n678,2599.4\n678.5,2599.2\n679,2598.9\n679.5,2598.6\n680,2598.3\n680.5,2597.9\n681,2597.5\n681.5,2597.1\n682,2596.7\n682.5,2596.2\n683,2595.6\n683.5,2595.1\n684,2594.5\n684.5,2593.9\n685,2593.2\n685.5,2592.5\n686,2591.8\n686.5,2591\n687,2590.2\n687.5,2589.4\n688,2588.5\n688.5,2587.6\n689,2586.7\n689.5,2585.7\n690,2584.7\n690.5,2583.7\n691,2582.6\n691.5,2581.5\n692,2580.4\n692.5,2579.2\n693,2578\n693.5,2576.8\n694,2575.5\n694.5,2574.2\n695,2572.9\n695.5,2571.5\n696,2570.1\n696.5,2568.7\n697,2567.2\n697.5,2565.7\n698,2564.2\n698.5,2562.7\n699,2561.1\n699.5,2559.4\n700,2557.8\n700.5,3756.1\n701,3754.4\n701.5,3752.6\n702,3750.8\n702.5,3749\n703,3747.2\n703.5,3745.3\n704,3743.4\n704.5,3741.5\n705,3739.5\n705.5,3737.5\n706,3735.4\n706.5,3733.4\n707,3731.3\n707.5,3729.2\n708,3727\n708.5,3724.8\n709,3722.6\n709.5,3720.3\n710,3718.1\n710.5,3715.8\n711,3713.4\n711.5,3711\n712,3708.6\n712.5,3706.2\n713,3703.8\n713.5,3701.3\n714,3698.8\n714.5,3696.2\n715,3693.6\n715.5,3691\n716,3688.4\n716.5,3685.7\n717,3683\n717.5,3680.3\n718,3677.6\n718.5,3674.8\n719,3672\n719.5,3669.2\n720,2466.3\n720.5,2463.4\n721,2460.5\n721.5,2457.6\n722,2454.6\n722.5,2451.6\n723,2448.6\n723.5,2445.5\n724,2442.5\n724.5,2439.4\n725,2436.2\n725.5,2433.1\n726,2429.9\n726.5,2426.7\n727,2423.5\n727.5,2420.2\n728,2416.9\n728.5,2413.6\n729,2410.3\n729.5,2406.9\n730,2403.5\n730.5,2400.1\n731,2396.7\n731.5,2393.2\n732,2389.8\n732.5,2386.3\n733,2382.7\n733.5,2379.2\n734,2375.6\n734.5,2372\n735,2368.4\n735.5,2364.7\n736,2361.1\n736.5,2357.4\n737,2353.7\n737.5,2350\n738,2346.2\n738.5,2342.4\n739,2338.6\n739.5,2334.8\n740,2331\n740.5,2327.1\n741,2323.2\n741.5,2319.3\n742,2315.4\n742.5,2311.4\n743,2307.5\n743.5,2303.5\n744,2299.5\n744.5,2295.5\n745,2291.4\n745.5,2287.4\n746,2283.3\n746.5,2279.2\n747,2275.1\n747.5,2270.9\n748,2266.8\n748.5,2262.6\n749,2258.4\n749.5,2254.2\n750,2250\n750.5,2245.8\n751,2241.5\n751.5,2237.2\n752,2232.9\n752.5,2228.6\n753,2224.3\n753.5,2220\n754,2215.6\n754.5,2211.2\n755,2206.9\n755.5,2202.5\n756,2198\n756.5,2193.6\n757,2189.2\n757.5,2184.7\n758,2180.2\n758.5,2175.8\n759,2171.3\n759.5,2166.7\n760,2162.2\n760.5,2157.7\n761,2153.1\n761.5,2148.6\n762,2144\n762.5,2139.4\n763,2134.8\n763.5,2130.2\n764,2125.6\n764.5,2121\n765,2116.3\n765.5,2111.7\n766,2107\n766.5,2102.3\n767,2097.6\n767.5,2092.9\n768,2088.2\n768.5,2083.5\n769,2078.8\n769.5,2074.1\n770,2069.3\n770.5,2064.6\n771,2059.8\n771.5,2055.1\n772,2050.3\n772.5,2045.5\n773,2040.8\n773.5,2036\n774,2031.2\n774.5,2026.4\n775,2021.6\n775.5,2016.7\n776,2011.9\n776.5,2007.1\n777,2002.3\n777.5,1997.4\n778,1992.6\n778.5,1987.7\n779,1982.9\n779.5,1978\n780,1973.2\n780.5,1968.3\n781,1963.4\n781.5,1958.6\n782,1953.7\n782.5,1948.8\n783,1944\n783.5,1939.1\n784,1934.2\n784.5,1929.3\n785,1924.4\n785.5,1919.5\n786,1914.7\n786.5,1909.8\n787,1904.9\n787.5,1900\n788,1895.1\n788.5,1890.2\n789,1885.3\n789.5,1880.5\n790,1875.6\n790.5,1870.7\n791,1865.8\n791.5,1860.9\n792,1856\n792.5,1851.2\n793,1846.3\n793.5,1841.4\n794,1836.6\n794.5,1831.7\n795,1826.8\n795.5,1822\n796,1817.1\n796.5,1812.3\n797,1807.4\n797.5,1802.6\n798,1797.7\n798.5,1792.9\n799,1788.1\n799.5,1783.3\n800,1778.4\n800.5,1773.6\n801,1768.8\n801.5,1764\n802,1759.2\n802.5,1754.5\n803,1749.7\n803.5,1744.9\n804,1740.2\n804.5,1735.4\n805,1730.7\n805.5,1725.9\n806,1721.2\n806.5,1716.5\n807,1711.8\n807.5,1707.1\n808,1702.4\n808.5,1697.7\n809,1693\n809.5,1688.3\n810,1683.7\n810.5,1679\n811,1674.4\n811.5,1669.8\n812,1665.2\n812.5,1660.6\n813,1656\n813.5,1651.4\n814,1646.9\n814.5,1642.3\n815,1637.8\n815.5,1633.3\n816,1628.7\n816.5,1624.2\n817,1619.8\n817.5,1615.3\n818,1610.8\n818.5,1606.4\n819,1602\n819.5,1597.5\n820,1593.1\n820.5,2788.8\n821,2784.4\n821.5,2780\n822,2775.7\n822.5,2771.4\n823,2767.1\n823.5,2762.8\n824,2758.5\n824.5,2754.2\n825,2750\n825.5,2745.8\n826,2741.6\n826.5,2737.4\n827,2733.2\n827.5,2729.1\n828,2724.9\n828.5,2720.8\n829,2716.7\n829.5,2712.6\n830,2708.6\n830.5,2704.5\n831,2700.5\n831.5,2696.5\n832,2692.5\n832.5,2688.6\n833,2684.6\n833.5,2680.7\n834,2676.8\n834.5,2672.9\n835,2669\n835.5,2665.2\n836,2661.4\n836.5,2657.6\n837,2653.8\n837.5,2650\n838,2646.3\n838.5,2642.6\n839,2638.9\n839.5,2635.3\n840,1431.6\n840.5,1428\n841,1424.4\n841.5,1420.8\n842,1417.3\n842.5,1413.7\n843,1410.2\n843.5,1406.8\n844,1403.3\n844.5,1399.9\n845,1396.5\n845.5,1393.1\n846,1389.7\n846.5,1386.4\n847,1383.1\n847.5,1379.8\n848,1376.5\n848.5,1373.3\n849,1370.1\n849.5,1366.9\n850,1363.8\n850.5,1360.6\n851,1357.5\n851.5,1354.5\n852,1351.4\n852.5,1348.4\n853,1345.4\n853.5,1342.4\n854,1339.5\n854.5,1336.6\n855,1333.7\n855.5,1330.8\n856,1328\n856.5,1325.2\n857,1322.4\n857.5,1319.7\n858,1317\n858.5,1314.3\n859,1311.6\n859.5,1309\n860,1306.4\n860.5,1303.8\n861,1301.2\n861.5,1298.7\n862,1296.2\n862.5,1293.8\n863,1291.4\n863.5,1289\n864,1286.6\n864.5,1284.2\n865,1281.9\n865.5,1279.7\n866,1277.4\n866.5,1275.2\n867,1273\n867.5,1270.8\n868,1268.7\n868.5,1266.6\n869,1264.6\n869.5,1262.5\n870,1260.5\n870.5,1258.5\n871,1256.6\n871.5,1254.7\n872,1252.8\n872.5,1251\n873,1249.2\n873.5,1247.4\n874,1245.6\n874.5,1243.9\n875,1242.2\n875.5,1240.6\n876,1238.9\n876.5,1237.3\n877,1235.8\n877.5,1234.3\n878,1232.8\n878.5,1231.3\n879,1229.9\n879.5,1228.5\n880,1227.1\n880.5,1225.8\n881,1224.5\n881.5,1223.2\n882,1222\n882.5,1220.8\n883,1219.6\n883.5,1218.5\n884,1217.4\n884.5,1216.3\n885,1215.3\n885.5,1214.3\n886,1213.3\n886.5,1212.4\n887,1211.5\n887.5,1210.6\n888,1209.8\n888.5,1209\n889,1208.2\n889.5,1207.5\n890,1206.8\n890.5,1206.1\n891,1205.5\n891.5,1204.9\n892,1204.4\n892.5,1203.8\n893,1203.3\n893.5,1202.9\n894,1202.5\n894.5,1202.1\n895,1201.7\n895.5,1201.4\n896,1201.1\n896.5,1200.8\n897,1200.6\n897.5,1200.4\n898,1200.3\n898.5,1200.2\n899,1200.1\n899.5,1200\n"}}</script>
 <script>
 (() => {
 'use strict';
@@ -1381,14 +1399,14 @@ function config() {
   return {
     reactorMaxKW: Number($('maxKW').value) || 5000, rods: Number($('rods').value), fuelType: $('fuelType').value, start: $('start').value,
     linkMode: $('linkMode').value, seed: 12345,
-    batteries: { enabled: $('battOn').checked, count: Math.max(1, Number($('battN').value) || 1), type: $('battType').value, startCharge: (Number($('battStart').value) || 0) / 100 },
+    batteries: { enabled: $('battOn').checked, count: Math.max(1, Number($('battN').value) || 1), type: $('battType').value, startCharge: (Number($('battStart').value) || 0) / 100, startRate: Number($('battRate').value) || 0 },
   };
 }
 function saveSettings() { const c = config(); store.set('settings', { ...c, maxAuto: $('maxAuto').checked }); store.set('profile', $('profileSel').value); store.set('circuit', $('circSel').value); }
 function loadSettings() {
   const s = store.get('settings', null); if (!s) return;
   $('maxKW').value = s.reactorMaxKW; $('maxAuto').checked = s.maxAuto !== false; $('rods').value = s.rods; $('fuelType').value = s.fuelType; $('start').value = s.start; $('linkMode').value = s.linkMode;
-  $('battOn').checked = !!s.batteries.enabled; $('battN').value = s.batteries.count; $('battType').value = s.batteries.type; $('battStart').value = Math.round(s.batteries.startCharge * 100);
+  $('battOn').checked = !!s.batteries.enabled; $('battN').value = s.batteries.count; $('battType').value = s.batteries.type; $('battStart').value = Math.round(s.batteries.startCharge * 100); $('battRate').value = s.batteries.startRate || 0;
 }
 function selectProfile() {
   const key = $('profileSel').value; if (!key) return;
@@ -1417,7 +1435,7 @@ function build() {
     model = cfg.vanilla ? { name: 'vanilla_autotemp', boxes: [], links: [] } : F.parseCirc($('circText').value);
     if (!cfg.vanilla && !model.boxes.length) throw new Error('the circuit has no components');
     cfg.circuitName = model.name;
-    sim = new E.Sim(P.substitute(model, cfg.reactorMaxKW), cfg);
+    sim = new E.Sim(P.substitute(model, P.placeholders(cfg)), cfg);
     $('circMsg').textContent = model.boxes.length ? `${model.boxes.map(b => `${b.name}: ${b.components.length} components, ${b.wires.length} wires`).join(' · ')}` : '';
     const w = sim.warnings.length ? ' Warnings: ' + sim.warnings.join('; ') : '';
     status(`Ready: ${model.name} on ${profile.name} with a ${cfg.reactorMaxKW} kW reactor.${w}`, !!w);
@@ -1481,7 +1499,7 @@ function draw() {
   const x = t => L + (W - L - Rr) * t / dur;
   const maxKW = sim ? Math.max(sim.reactor.maxPower, ...tl.map(p => Math.max(p.demand, p.power))) : 5000;
   const panels = [
-    { y0: top, name: 'kW', min: 0, max: Math.ceil(maxKW / 1000) * 1000, ticks: 4, series: [['demand', '--c-demand'], ['power', '--c-supply'], ['battOut', '--c-batt']] },
+    { y0: top, name: 'kW', min: 0, max: Math.ceil(maxKW / 1000) * 1000, ticks: 4, series: [['demand', '--c-demand'], ['power', '--c-supply'], ['battOut', '--c-batt'], ['battIn', '--c-battin']] },
     { y0: top + ph + gap, name: 'V', min: 0, max: 2, ticks: 4, band: [0.9, 1.1], series: [['voltage', '--c-volt']] },
     { y0: top + 2 * (ph + gap), name: '%', min: 0, max: 100, ticks: 4, band: sim ? [sim.reactor.optTemp[0], sim.reactor.optTemp[1]] : [40, 60], series: [['temp', '--c-temp'], ['fission', '--c-fission'], ['turbine', '--c-turbine']] },
   ];
@@ -1493,7 +1511,7 @@ function draw() {
     for (let i = 0; i <= p.ticks; i++) { const v = p.min + (p.max - p.min) * i / p.ticks, yy = Math.round(y(v)) + .5; ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(W - Rr, yy); ctx.stroke(); ctx.fillText(p.name === 'kW' ? (v >= 1000 ? (v / 1000) + 'k' : v) : (p.name === 'V' ? v.toFixed(1) : v), L - 6, yy); }
     ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
     for (const [key, col] of p.series) {
-      if (!tl.length || tl[0][key] == null) continue;
+      if (!tl.length || tl[0][key] == null || ((key === 'battOut' || key === 'battIn') && !sim.batteries.length)) continue;
       ctx.strokeStyle = css(col); ctx.beginPath();
       tl.forEach((pt, i) => { const xx = x(pt.t), yy = y(pt[key]); if (i) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); });
       ctx.stroke();
@@ -1514,7 +1532,7 @@ async function copy(text, what) { try { await navigator.clipboard.writeText(text
 function renderFiles() {
   const box = $('fileCards'); box.innerHTML = '';
   if (!model || !model.boxes.length) { box.innerHTML = '<p class="hint">The vanilla baseline has no circuit files.</p>'; return; }
-  let files; try { files = P.exportBoxes(model, config().reactorMaxKW); } catch (e) { box.textContent = e.message; return; }
+  let files; try { files = P.exportBoxes(model, P.placeholders(config())); } catch (e) { box.textContent = e.message; return; }
   for (const f of files) {
     const card = document.createElement('div'); card.className = 'filecard';
     const h = document.createElement('h3'); h.textContent = f.filename;
@@ -1537,7 +1555,7 @@ $('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return
 document.querySelector('.tabs').onclick = e => { const b = e.target.closest('[role=tab]'); if (b) showTab(b.dataset.tab); };
 $('profileSel').onchange = () => { selectProfile(); build(); };
 $('circSel').onchange = () => { selectCircuit(); build(); };
-for (const id of ['maxKW', 'rods', 'fuelType', 'start', 'battOn', 'battN', 'battType', 'battStart', 'linkMode']) $(id).onchange = () => { if (id === 'maxKW') $('maxAuto').checked = false; build(); };
+for (const id of ['maxKW', 'rods', 'fuelType', 'start', 'battOn', 'battN', 'battType', 'battStart', 'battRate', 'linkMode']) $(id).onchange = () => { if (id === 'maxKW') $('maxAuto').checked = false; build(); };
 $('maxAuto').onchange = () => { selectProfile(); build(); };
 $('profileFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;

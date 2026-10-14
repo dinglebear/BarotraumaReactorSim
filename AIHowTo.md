@@ -64,6 +64,7 @@ Any box pin can be rewired with `pin` lines. Any device pin can go to either box
 | `battery.set_rate/disable_output` | battery inputs |
 | `nav.velocity_x_out` / `nav.velocity_y_out` | **nav terminal** outputs (-100..100) that drive the engines / ballast pumps. Engine kW = (\|velocity_x_out\|/100)^1.5 × engine max, starting 1 tick later. Pump kW = \|flow\|/100 × pump max. **They predict engine and pump load.** |
 | `nav.current_velocity_x/y`, `nav.current_position_y` | nav terminal: speed (km/h) and depth |
+| `const.<value>` | a lever, switch or any fixed signal, sent every tick (e.g. `pin in9 const.1`). Wire levers this way: a signal-check fed by an unwired lever never fires. |
 | `engines.load_value_out`, `pumps.load_value_out`, `guns.load_value_out`, `sonar.load_value_out` | power drawn by that group. In game: a relay or junction box that feeds only that group, wired from its `load_value_out` |
 
 Recorded devices (`nav`, `engines`, `pumps`, `guns`, `sonar`, and any other `device.pin` column in the test file) replay what the PowerLogger mod recorded each tick, formatted like the game sends it. They are open-loop: your circuit can read them but not change them. If a test file lacks a column, the log shows a WARNING and that pin stays silent. The `synthetic_*` files have them all.
@@ -151,7 +152,7 @@ reactor_setpoint_kW = demand_kW + bias_kW          -> send to the reactor box (l
 Key lines (`k=v`):
 - `score_reliability` (0-100, higher is better)
 - `kwh_per_rod` (fuel efficiency, higher is better)
-- `unmet_pct` (% of demand energy not supplied)
+- `unmet_pct` (% of demand energy not supplied), split into `unmet_avoidable_pct` (the controller's fault; the score uses this) and `unmet_unavoidable_pct` (demand above what the reactor's fuel/max plus the batteries could give)
 - `voltage_mean_abs_dev` (average |V-1|)
 - `fluctuation_events` (times V left 0.95-1.05)
 - `brownout_s_v_lt_0_9`, `blackout_s_v_lt_0_5`, `overvolt_s_v_gt_1_1`, `junction_overload_s_v_gt_2`, `junction_breaks`
@@ -198,7 +199,14 @@ Put the in-game `.txt` (or a `_reactor.txt` + `_battery.txt` pair) in `context/r
 2. a `name.pins` file with lines like `reactor in1 reactor.load_value_out`;
 3. a guess from the circuit's own labels, reported in WARNINGS (check it).
 
+A `.pins` file can also retune a circuit per ship: `prop reactor <componentId> <Property> <value>`. The value may use `$MAX`, e.g. `prop reactor 3 Value $MAX/100`.
+
 `node sim/cli.js decompile <name>` shows it as .circ text.
+
+**Benchmark and analysis of the community circuits: `context/reactor_circuits/STUDY.md`.** Read it before designing. It covers which designs are fuel-efficient, which meet demand, and why each one fails. The current bar to beat:
+- reliability: `overclock_reactor` (avoidable unmet 0.4–1.5 %, but heavy overvolt and fuel);
+- fuel: `basic_reactor` / `lammert_arc_hts` (~25 % better than vanilla).
+Compare with: `node sim/cli.js compare vanilla,basic_reactor,lammert_arc_hts,overclock_reactor,rimuru_autoreactor,<yours> --profile Dugong_round001,Humpback_round001,Typhon2_round001`.
 
 ## 10. Web bench (for the human)
 `web/index.html` is the master page. Rebuild it with `node sim/build_web.js` after adding circuits or profiles. It has:

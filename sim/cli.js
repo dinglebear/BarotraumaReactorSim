@@ -20,7 +20,10 @@ function loadConfig(a) {
   if (a.start) c.start = a.start;
   if (a.link) c.linkMode = a.link;
   if (a.seed) c.seed = Number(a.seed);
-  if (a.batteries !== undefined) { const n = Number(a.batteries); c.batteries.enabled = n > 0; if (n > 0) c.batteries.count = n; }
+  if (a.batteries === 'ship') { c.batteries.enabled = true; c.batteries.ship = true; } // the recorded ship's own batteries
+  else if (a.batteries !== undefined) { const n = Number(a.batteries); c.batteries.enabled = n > 0; c.batteries.ship = false; if (n > 0) c.batteries.count = n; }
+  if (a['recorded-rods']) c.recordedRods = true; // replay the round's rods instead of the --rods setting
+  if (a['fuel-drain']) c.fuelDrain = true;       // rods run down and can run out
   if (a.btype) c.batteries.type = a.btype;
   return c;
 }

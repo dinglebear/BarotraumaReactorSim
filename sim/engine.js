@@ -48,6 +48,19 @@
     return Object.keys(out).length ? out : null;
   }
 
+  // Batteries for a test: the settings, or (batteries.ship) the recorded ship's own: header
+  // "ship_batteries=N (capacity C kW*min[, max recharge R kW][, max output O kW])" split evenly over N batteries.
+  function batterySpec(cfg, profile) {
+    const bc = (cfg && cfg.batteries) || {}, type = Object.assign({}, BATT[bc.type || 'battery'] || BATT.battery, bc.custom || {});
+    const m = bc.ship && /^(\d+)\s*\(capacity\s*([\d.]+)[^,)]*(?:,\s*max recharge\s*([\d.]+)[^,)]*)?(?:,\s*max output\s*([\d.]+)[^,)]*)?/.exec(((profile && profile.meta) || {}).ship_batteries || '');
+    if (m && Number(m[1]) > 0) {
+      const n = Number(m[1]);
+      Object.assign(type, { capacity: Number(m[2]) / n }, m[3] ? { maxRecharge: Number(m[3]) / n } : {}, m[4] ? { maxOut: Number(m[4]) / n } : {});
+      return { count: n, type, ship: true };
+    }
+    return { count: bc.count || 1, type, ship: false };
+  }
+
   const RECORDED = ['nav', 'engines', 'pumps', 'guns', 'sonar'];
   const FUEL_IDS = { fuelrod: 'uranium', thoriumfuelrod: 'thorium', fulguriumfuelrod: 'fulgurium', fulguriumfuelrodvolatile: 'volatile' };
   function fmtChannel(pin, v) {
@@ -67,10 +80,13 @@
       this.items = []; this.pending = []; this.wifis = []; this.recorded = {};
       this.warnings = [];
       // ---- reactor ----
-      const fuelType = cfg.fuelType || (this.profile.meta || {}).fuel_type || 'uranium'; this.fuelType = fuelType; // test file's rod type unless overridden
+      // Test files are about the ship's demand: rods and rod type come from the settings (default 2 uranium).
+      // cfg.recordedRods replays the round's own rods instead (rod count, type, swaps).
+      const meta = this.profile.meta || {};
+      const fuelType = cfg.fuelType || (cfg.recordedRods && meta.fuel_type) || 'uranium'; this.fuelType = fuelType;
       const rodType = FUEL[fuelType] || FUEL.uranium;
       const p0 = (this.profile.points || [])[0] || {};
-      const rodCount = cfg.rods != null ? cfg.rods : p0.rods !== undefined ? p0.rods : (Number((this.profile.meta || {}).fuel_rods) || 1); // starting rods: setting, else the test file
+      const rodCount = cfg.rods != null ? cfg.rods : !cfg.recordedRods ? 2 : p0.rods !== undefined ? p0.rods : (Number(meta.fuel_rods) || 1);
       this.reactor = this.mkItem('reactor', {
         maxPower: cfg.reactorMaxKW || this.profile.reactorMaxKW || 5000, fuelRate: cfg.fuelConsumptionRate || 0.2,
         meltdownDelay: 120, fireDelay: 20, dos: clamp(cfg.skill || 0, 0, 1),
@@ -79,7 +95,7 @@
         cond: 100, wearDelay: 120 + this.rand() * 600, minOut: 0, maxOut: 0, optT: [0, 0], allT: [0, 0], optTemp: [40, 60], allTemp: [30, 70], optF: [0, 0], allF: [0, 0],
         rods: Array.from({ length: rodCount }, () => ({ fuel: (cfg.rodFuel || rodType.fuel), cond: rodType.cond, max: rodType.cond })),
       });
-      if (p0.rodFuel) for (const r of this.reactor.rods) r.fuel = p0.rodFuel; // rod type recorded/inferred for the start of the round
+      if (cfg.recordedRods && p0.rodFuel) for (const r of this.reactor.rods) r.fuel = p0.rodFuel; // rod type recorded/inferred for the start of the round
       this.reactor.availFuel = this.rodFuel();
       // ---- junction box ----
       this.junction = this.mkItem('junction', { cond: 100, wearDelay: 120 + this.rand() * 600, overloadV: 2, prevP: 0, pSig: null, prevL: 0, lSig: null, cooldown: 0, breaks: 0 });
@@ -87,8 +103,9 @@
       this.batteries = [];
       const bc = cfg.batteries || {};
       if (bc.enabled) {
-        const bt = Object.assign({}, BATT[bc.type || 'battery'] || BATT.battery, bc.custom || {});
-        for (let i = 0; i < (bc.count || 1); i++) {
+        const spec = batterySpec(cfg, this.profile), bt = spec.type;
+        if (bc.ship && !spec.ship) this.warnings.push("test file has no ship battery info (ship_batteries header): using the battery settings");
+        for (let i = 0; i < spec.count; i++) {
           const b = this.mkItem('battery' + (i + 1), {
             capacity: bt.capacity, maxRecharge: bt.maxRecharge, maxOut: bt.maxOut, eff: bt.efficiency == null ? 0.95 : bt.efficiency, exp: !!bt.exponential,
             charge: bt.capacity * clamp(bc.startCharge == null ? 0.5 : bc.startCharge, 0, 1), prevCharge: 0, rate: 0, cpc: 0, out: 0, disabled: false,
@@ -347,7 +364,8 @@
       else if (R.autoTemp) this.autoTemp(2, dt);
       let fuelLeft = 0;
       for (const rod of R.rods) {
-        if (R.fission > 0) { const before = rod.cond; rod.cond = Math.max(0, f(rod.cond - f(f(f(R.fission / 100) * R.fuelRate) * dt))); this.metrics.fuel += before - rod.cond; }
+        // fuel used is always counted (kWh per rod); rods only run down with cfg.fuelDrain (tests are about demand, not refuelling)
+        if (R.fission > 0) { const burn = Math.min(rod.cond, f(f(f(R.fission / 100) * R.fuelRate) * dt)); this.metrics.fuel += burn; if (this.cfg.fuelDrain) rod.cond = Math.max(0, f(rod.cond - burn)); }
         fuelLeft = f(fuelLeft + f(f(rod.cond / rod.max) * 100));
       }
       this.send(R, 'temperature_out', String(trunc(f(R.temp * 100))));
@@ -407,7 +425,7 @@
 
     // rods added/removed during the recorded round (test-file "rods" column): new rods are fresh, removed ones are the most used
     updateRods() {
-      const pt = this.profile.points[this.pIdx]; if (!pt || pt.rods === undefined || this.cfg.lockRods) return;
+      const pt = this.profile.points[this.pIdx]; if (!pt || pt.rods === undefined || this.cfg.lockRods || !this.cfg.recordedRods) return;
       const R = this.reactor, want = Math.max(0, Math.min(4, Math.round(pt.rods)));
       // same count but the recorded fuel % jumped up: the player swapped a used rod for a fresh one
       const fp = pt.g && pt.g.fuelPct, swapped = want === R.rods.length && want > 0 && Number.isFinite(fp) && Number.isFinite(this.lastFuelPct) && fp - this.lastFuelPct > 20;
@@ -655,5 +673,5 @@
     return prof;
   }
 
-  return { Sim, parseProfile, guessPins, FUEL_IDS, DEFAULT_PINS, DEVICE_OUTS, DEVICE_INS, FUEL, BATT, STEP };
+  return { Sim, parseProfile, guessPins, batterySpec, FUEL_IDS, DEFAULT_PINS, DEVICE_OUTS, DEVICE_INS, FUEL, BATT, STEP };
 });

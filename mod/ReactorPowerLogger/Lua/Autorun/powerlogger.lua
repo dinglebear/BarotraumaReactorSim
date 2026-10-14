@@ -328,8 +328,8 @@ local function startRound()
             if t then fuelType = t end
         end
     end)
-    local battCap, battN, battMax, capsN, capsCap = 0, 0, 0, 0, 0
-    for _, pc in ipairs(dev.batteries) do pcall(function() battCap = battCap + pc.Capacity; battMax = battMax + pc.MaxRechargeSpeed; battN = battN + 1 end) end
+    local battCap, battN, battMax, battOut, capsN, capsCap = 0, 0, 0, 0, 0, 0
+    for _, pc in ipairs(dev.batteries) do pcall(function() battCap = battCap + pc.Capacity; battMax = battMax + pc.MaxRechargeSpeed; battOut = battOut + pc.MaxOutPut; battN = battN + 1 end) end
     for _, pc in ipairs(dev.supercaps) do pcall(function() capsCap = capsCap + pc.Capacity; capsN = capsN + 1 end) end
     local engMax, pumpMax = 0, 0
     for _, e in ipairs(dev.engines) do pcall(function() engMax = engMax + e.PowerConsumption end) end
@@ -344,7 +344,7 @@ local function startRound()
         .. "# fuel_rods=" .. rods .. "\n"
         .. "# fuel_type=" .. fuelType .. "\n"
         .. "# fuel_consumption_rate=" .. string.format("%.3f", rate) .. "\n"
-        .. "# ship_batteries=" .. battN .. " (capacity " .. string.format("%.0f", battCap) .. " kW*min, max recharge " .. string.format("%.0f", battMax) .. " kW)\n"
+        .. "# ship_batteries=" .. battN .. " (capacity " .. string.format("%.0f", battCap) .. " kW*min, max recharge " .. string.format("%.0f", battMax) .. " kW, max output " .. string.format("%.0f", battOut) .. " kW)\n"
         .. "# supercapacitors=" .. capsN .. " (capacity " .. string.format("%.0f", capsCap) .. " kW*min)\n"
         .. "# engines=" .. #dev.engines .. " (max " .. string.format("%.0f", engMax) .. " kW) pumps=" .. #dev.pumps .. " (max " .. string.format("%.0f", pumpMax) .. " kW) turrets=" .. #dev.turrets .. " sonars=" .. #dev.sonars .. " junction_boxes=" .. #dev.junctions .. "\n"
         .. "# reactor_signal_wires=fission:" .. wired(ri, "set_fissionrate") .. " turbine:" .. wired(ri, "set_turbineoutput") .. " (0 = run by hand/AutoTemp)\n"

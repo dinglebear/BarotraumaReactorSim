@@ -8,7 +8,7 @@
 //   guns: supercapacitors recharging at ~160 kW each while a gunner fires, fading ~22 %/s after;
 //     fights come in episodes of bursts; big ships add a railgun charge
 //   sonar: 10 kW passive all round, 100 kW while active (minutes at a time)
-//   rods: real rounds start on 1 rod and the crew adds more later
+//   rods and fuel are not part of a test file: the test settings choose them (tests are about demand)
 // node sim/make_profiles.js [outDir]
 'use strict';
 const fs = require('fs'), path = require('path');
@@ -16,17 +16,17 @@ const out = process.argv[2] || path.join(__dirname, '..', 'load_profiles');
 function rng(seed) { let a = seed; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; }
 const STEER = Math.pow(1 / (1 - 0.2), 2) * 10; // Steering default adjust speed 0.2 -> 15.6 units/s
 const SHIPS = { // from the real logs: base = demand minus devices (median), device maxima, supercapacitor count
-  dugong: { sub: 'Dugong (synthetic)', maxKW: 3000, base: 1375, engineKW: 600, ballastKW: 800, bilgeKW: 350, caps: 2, railKW: 0 },
-  humpback: { sub: 'Humpback (synthetic)', maxKW: 3100, base: 1430, engineKW: 1500, ballastKW: 700, bilgeKW: 400, caps: 2, railKW: 0 },
-  typhon: { sub: 'Typhon2 (synthetic)', maxKW: 5200, base: 1740, engineKW: 2600, ballastKW: 1000, bilgeKW: 700, caps: 7, railKW: 1900 },
+  dugong: { sub: 'Dugong (synthetic)', maxKW: 3000, batteries: '2 (capacity 1000 kW*min)', base: 1375, engineKW: 600, ballastKW: 800, bilgeKW: 350, caps: 2, railKW: 0 },
+  humpback: { sub: 'Humpback (synthetic)', maxKW: 3100, batteries: '5 (capacity 2060 kW*min)', base: 1430, engineKW: 1500, ballastKW: 700, bilgeKW: 400, caps: 2, railKW: 0 },
+  typhon: { sub: 'Typhon2 (synthetic)', maxKW: 5200, batteries: '2 (capacity 3000 kW*min)', base: 1740, engineKW: 2600, ballastKW: 1000, bilgeKW: 700, caps: 7, railKW: 1900 },
 };
 const CAP_KW = 160, CAP_FADE = 0.78; // per supercapacitor; recharge fades to 78 % per second after firing stops
 
 function ship(name, S, o) {
   const r = rng(o.seed), dt = 1 / 60, pick = (a, b) => a + r() * (b - a);
-  const cols = ['demand', 'rods', 'nav.velocity_x_out', 'nav.velocity_y_out', 'engines.load_value_out', 'pumps.load_value_out', 'guns.load_value_out', 'sonar.load_value_out'];
+  const cols = ['demand', 'nav.velocity_x_out', 'nav.velocity_y_out', 'engines.load_value_out', 'pumps.load_value_out', 'guns.load_value_out', 'sonar.load_value_out'];
   const L = ['# BaroPowerLog v2 (synthetic ship model, sim/make_profiles.js)', `# sub=${S.sub}`, `# reactor_max_kw=${S.maxKW}`, `# duration=${o.dur}`,
-    `# fuel_rods=${o.rodsAt(0)}`, `# fuel_type=${o.fuel || 'uranium'}`, `# scenario=${o.note}`, 't,' + cols.join(',')];
+    `# ship_batteries=${S.batteries}`, `# scenario=${o.note}`, 't,' + cols.join(',')];
   // pilot
   let inX = 0, inY = 0, vx = 0, vy = 0, prevVx = 0, prevVy = 0, nextX = 0, nextY = 0;
   // fights: episodes in which each supercapacitor's gunner fires bursts
@@ -71,24 +71,20 @@ function ship(name, S, o) {
     if (t >= nextExtra) { extra = pick(100, 250) * (r() < 0.8 ? 1 : -0.5); extraEnd = t + pick(30, 200); nextExtra = extraEnd + pick(120, 600); }
     if (t >= extraEnd) extra = 0;
     const demand = S.base + extra + engines + pumps + guns + sonar;
-    const rods = o.rodsAt(t);
-    const row = [demand, rods, vx, vy, engines, pumps, guns, sonar];
-    const changed = !last || row.some((v, k) => Math.abs(v - last[k]) >= (k === 1 ? 1 : k === 2 || k === 3 ? 0.5 : 2));
-    if (changed || t - lastT >= 5) { L.push(t.toFixed(3) + ',' + row.map((v, k) => k === 1 ? String(v) : (k === 2 || k === 3) ? v.toFixed(4) : v.toFixed(1)).join(',')); last = row; lastT = t; }
+    const row = [demand, vx, vy, engines, pumps, guns, sonar];
+    const changed = !last || row.some((v, k) => Math.abs(v - last[k]) >= (k === 1 || k === 2 ? 0.5 : 2));
+    if (changed || t - lastT >= 5) { L.push(t.toFixed(3) + ',' + row.map((v, k) => (k === 1 || k === 2) ? v.toFixed(4) : v.toFixed(1)).join(',')); last = row; lastT = t; }
   }
   fs.writeFileSync(path.join(out, name + '.csv'), L.join('\n') + '\n');
 }
 fs.mkdirSync(out, { recursive: true });
-const steps = (...a) => t => { let v = a[0]; for (let i = 1; i < a.length; i += 2) if (t >= a[i]) v = a[i + 1]; return v; };
-// cruise: Dugong travelling between outposts, no fights; 1 rod, a second one goes in at 8:00
-ship('synthetic_cruise', SHIPS.dugong, { seed: 11, dur: 1200, stop: 0.4, partial: 0.6, fightEvery: 1e9, fightLen: [0, 0], rodsAt: steps(1, 480, 2), note: 'Dugong travelling, no combat' });
+// cruise: Dugong travelling between outposts, no fights
+ship('synthetic_cruise', SHIPS.dugong, { seed: 11, dur: 1200, stop: 0.4, partial: 0.6, fightEvery: 1e9, fightLen: [0, 0], note: 'Dugong travelling, no combat' });
 // combat: Typhon2 in a busy mission: fights every few minutes with seven capacitors and a railgun; demand goes above the reactor's max
-ship('synthetic_combat', SHIPS.typhon, { seed: 12, dur: 1200, stop: 0.5, partial: 0.6, fightEvery: 240, fightLen: [40, 150], firstFight: 60, rodsAt: steps(2), note: 'Typhon2, frequent fights' });
+ship('synthetic_combat', SHIPS.typhon, { seed: 12, dur: 1200, stop: 0.5, partial: 0.6, fightEvery: 240, fightLen: [40, 150], firstFight: 60, note: 'Typhon2, frequent fights' });
 // ramps: Humpback mixing sprints and stops, with a couple of fights
-ship('synthetic_ramps', SHIPS.humpback, { seed: 13, dur: 1200, stop: 0.45, partial: 0.5, fightEvery: 400, fightLen: [60, 240], rodsAt: steps(1, 300, 2), note: 'Humpback sprints, stops and fights' });
+ship('synthetic_ramps', SHIPS.humpback, { seed: 13, dur: 1200, stop: 0.45, partial: 0.5, fightEvery: 400, fightLen: [60, 240], note: 'Humpback sprints, stops and fights' });
 // long haul: long quiet drifts (batteries fill up if nothing stops them) and fights above the reactor's max output
 //            (only stored battery energy can cover those) -> tests battery state-of-charge management
-ship('synthetic_longhaul', SHIPS.dugong, { seed: 14, dur: 2400, stop: 0.65, partial: 0.5, fightEvery: 500, fightLen: [60, 200], rodsAt: steps(2), fuel: 'thorium', note: 'Dugong long trip with quiet drifts and fights (battery test)' });
-// rod swap: Typhon2 on 1 rod, 3 more rods put in at 2:00, back to 2 at 7:00 (vanilla automatic control overheats and catches fire)
-ship('synthetic_rodswap', SHIPS.typhon, { seed: 15, dur: 600, stop: 0.45, partial: 0.55, fightEvery: 200, fightLen: [40, 120], rodsAt: steps(1, 120, 4, 420, 2), note: 'Typhon2, rods 1 -> 4 -> 2' });
+ship('synthetic_longhaul', SHIPS.dugong, { seed: 14, dur: 2400, stop: 0.65, partial: 0.5, fightEvery: 500, fightLen: [60, 200], note: 'Dugong long trip with quiet drifts and fights (battery test)' });
 console.log('wrote synthetic profiles to ' + out);

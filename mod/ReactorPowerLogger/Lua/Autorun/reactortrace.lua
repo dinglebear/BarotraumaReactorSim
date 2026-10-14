@@ -21,7 +21,7 @@ end)
 local COLS = { "t", "temp", "fission", "turbine", "target_fission", "target_turbine", "correct_turbine", "load", "output", "max_kw",
     "avail_fuel", "rods", "rod_cond", "autotemp", "power_on", "condition", "meltdown_timer", "fire_timer", "dos",
     "opt_temp_lo", "opt_temp_hi", "allowed_temp_hi", "opt_turb_lo", "opt_turb_hi", "opt_fission_lo", "opt_fission_hi",
-    "sig_fission", "sig_turbine", "last_user_player", "voltage", "event" }
+    "sig_fission", "sig_turbine", "temp_boost", "last_user_player", "voltage", "event" }
 
 local active, rows, tick, roundTime, lastReal, nextFlush, filePath, reactor, prev
 local firstError = nil
@@ -98,7 +98,7 @@ local function snapshot(r)
         opt_turb_lo = vx(get(r, "optimalTurbineOutput")), opt_turb_hi = vy(get(r, "optimalTurbineOutput")),
         opt_fission_lo = vx(get(r, "optimalFissionRate")), opt_fission_hi = vy(get(r, "optimalFissionRate")),
         sig_fission = opt(get(r, "signalControlledTargetFissionRate")), sig_turbine = opt(get(r, "signalControlledTargetTurbineOutput")),
-        last_user_player = isPlayer, voltage = voltage(r),
+        temp_boost = get(r, "temperatureBoost"), last_user_player = isPlayer, voltage = voltage(r),
     }
     return s
 end

@@ -79,6 +79,7 @@
         cond: 100, wearDelay: 120 + this.rand() * 600, minOut: 0, maxOut: 0, optT: [0, 0], allT: [0, 0], optTemp: [40, 60], allTemp: [30, 70], optF: [0, 0], allF: [0, 0],
         rods: Array.from({ length: rodCount }, () => ({ fuel: (cfg.rodFuel || rodType.fuel), cond: rodType.cond, max: rodType.cond })),
       });
+      if (p0.rodFuel) for (const r of this.reactor.rods) r.fuel = p0.rodFuel; // rod type recorded/inferred for the start of the round
       this.reactor.availFuel = this.rodFuel();
       // ---- junction box ----
       this.junction = this.mkItem('junction', { cond: 100, wearDelay: 120 + this.rand() * 600, overloadV: 2, prevP: 0, pSig: null, prevL: 0, lSig: null, cooldown: 0, breaks: 0 });
@@ -406,9 +407,21 @@
     updateRods() {
       const pt = this.profile.points[this.pIdx]; if (!pt || pt.rods === undefined || this.cfg.lockRods) return;
       const R = this.reactor, want = Math.max(0, Math.min(4, Math.round(pt.rods)));
+      // same count but the recorded fuel % jumped up: the player swapped a used rod for a fresh one
+      const fp = pt.g && pt.g.fuelPct, swapped = want === R.rods.length && want > 0 && Number.isFinite(fp) && Number.isFinite(this.lastFuelPct) && fp - this.lastFuelPct > 20;
+      if (Number.isFinite(fp)) this.lastFuelPct = fp;
+      if (swapped) {
+        let k = 0; R.rods.forEach((r, i) => { if (r.cond < R.rods[k].cond) k = i; });
+        const fuel = pt.rodFuel || R.rods[k].fuel, tt = Object.values(FUEL).find(x => x.fuel === fuel) || FUEL.uranium;
+        R.rods[k] = { fuel, cond: tt.cond, max: tt.cond };
+        this.metrics.ev('fresh rod swapped in (as in the recorded round)');
+        return;
+      }
       if (want === R.rods.length) return;
-      const from = R.rods.length, t = FUEL[this.fuelType] || FUEL.uranium;
-      while (R.rods.length < want) R.rods.push({ fuel: t.fuel, cond: t.cond, max: t.cond });
+      const from = R.rods.length, t = FUEL[this.fuelType] || FUEL.uranium, fuel = pt.rodFuel || t.fuel;
+      const tt = Object.values(FUEL).find(x => x.fuel === fuel) || t;
+      if (pt.rodFuel) for (const r of R.rods) r.fuel = fuel; // a swap to another rod type (e.g. uranium -> fulgurium)
+      while (R.rods.length < want) R.rods.push({ fuel, cond: tt.cond, max: tt.cond });
       while (R.rods.length > want) { let k = 0; R.rods.forEach((r, i) => { if (r.cond < R.rods[k].cond) k = i; }); R.rods.splice(k, 1); }
       this.metrics.ev(`rods ${from} -> ${want} (as in the recorded round)`);
     }
@@ -567,6 +580,42 @@
   }
   function fmtT(t) { const m = Math.floor(t / 60), s = t - m * 60; return `[${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}]`; }
 
+  // Rod type per stretch of the round: newer logs record avail_fuel; for older ones it is worked out from the reactor's
+  // own steady state: AvailableFuel = (temp + turbine) / (fission * 2 / 100), snapped to 80/100/150 per rod.
+  function inferRodFuel(prof) {
+    const pts = prof.points, per = [80, 100, 150, 150];
+    let seg = [], lastPerRod;
+    const flush = () => {
+      if (!seg.length) return;
+      const n = seg[0].rods || 0;
+      let perRod;
+      const known = seg.find(p => p.availFuel !== undefined);
+      if (known && n > 0) perRod = known.availFuel / n;
+      else if (n > 0) {
+        const est = [], t0 = seg[0].t;
+        for (let i = 1; i < seg.length; i++) {
+          const p = seg[i], q = seg[i - 1], g = p.g, dt = p.t - q.t;
+          // only settled running: a few seconds after the rods changed, temperature moving < 0.5/s
+          if (p.t - t0 < 3 || !(g.fission > 5) || !(g.temp > 5 && g.temp < 95) || !(dt > 0) || Math.abs(g.temp - q.g.temp) / dt > 0.5 || !Number.isFinite(p.turbine)) continue;
+          est.push((g.temp + p.turbine) / (g.fission * 0.02) / n);
+        }
+        if (est.length >= 5) { est.sort((a, b) => a - b); const m = est[est.length >> 1]; const snap = per.reduce((a, b) => Math.abs(b - m) < Math.abs(a - m) ? b : a); if (Math.abs(snap - m) / snap < 0.25) perRod = snap; }
+      }
+      if (perRod === undefined && n > 0) perRod = lastPerRod; // not enough settled data: same rod type as before
+      if (perRod !== undefined) lastPerRod = perRod;
+      for (const p of seg) p.rodFuel = perRod;
+      seg = [];
+    };
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[i - 1];
+      if (q && (p.rods !== q.rods || (p.g.fuelPct - q.g.fuelPct) > 20)) flush(); // rods added/removed/swapped
+      seg.push(p);
+    }
+    flush();
+    const types = [...new Set(pts.map(p => p.rodFuel).filter(Boolean))];
+    if (types.length) prof.meta.rod_fuel_inferred = types.join('/');
+  }
+
   // ---------- load profiles (CSV written by the PowerLogger mod) ----------
   function parseProfile(text, name) {
     const prof = { name: name || 'profile', points: [], meta: {} };
@@ -580,9 +629,11 @@
       const demand = Number.isFinite(row.demand) ? row.demand : row.load;
       if (!Number.isFinite(row.t) || !Number.isFinite(demand)) continue;
       const ch = {}; for (const c of cols) if (c.includes('.') && Number.isFinite(row[c])) ch[c] = row[c];
-      prof.points.push({ t: row.t, demand: Math.max(0, demand), turbine: row.turbine, out: row.reactor_out, rods: Number.isFinite(row.rods) ? row.rods : undefined, ch });
+      prof.points.push({ t: row.t, demand: Math.max(0, demand), turbine: row.turbine, out: row.reactor_out, rods: Number.isFinite(row.rods) ? row.rods : undefined,
+        availFuel: Number.isFinite(row.avail_fuel) ? row.avail_fuel : undefined, g: { temp: row.temp, fission: row.fission, fuelPct: row.fuel }, ch });
     }
     prof.channels = cols ? cols.filter(c => c.includes('.')) : [];
+    inferRodFuel(prof);
     if (!prof.points.length) prof.points.push({ t: 0, demand: 0, ch: {} });
     const t0 = prof.points[0].t; for (const p of prof.points) p.t -= t0;
     prof.duration = Number(prof.meta.duration) || (prof.points[prof.points.length - 1].t + 1);

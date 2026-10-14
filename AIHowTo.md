@@ -93,7 +93,12 @@ Timing: **U** = outputs every tick in its Update (needs fresh inputs; adds 0-1 t
 Number output format: shortest float32 text (`0.1`, `0.33333334`, `1E-05`). Unparsable numeric input counts as 0. Signals propagate instantly (depth-first). A chain of more than 10 hops is delayed 1 tick.
 
 ## 6. Reactor physics (dt = 1/60 s, all % are 0-100)
-Checked against a real game round (`load_profiles/Dugong_round001.csv`: 3000 kW, AutoTemp, 1 → 4 uranium rods at 37 s). Replaying it, the simulator stays within 0.9 RMS on temperature, and 0.5 % RMS on fission and turbine. It reproduces the spike to 100, the fire, and the settle at 50. `node sim/test.js` re-checks this.
+Checked against real rounds in `load_profiles/`:
+- **Dugong** (3000 kW, AutoTemp, 1 → 4 rods): temp RMS 0.04.
+- **Humpback** (3100 kW, manual/circuit, rod swaps): temp RMS 0.9.
+- **Typhon2** (5200 kW, 64 min, demand up to 8.9 MW in an endworm fight, uranium then fulgurium, `fixitems` refills): temp RMS 0.5.
+
+How to check: `node sim/cli.js verify <round>` drives fission and turbine from the recording and compares the temperature and output. The remaining spikes are game-side events the log doesn't capture: multiplayer server corrections and the player's temperature-boost button. `node sim/test.js` re-checks all three.
 - `heat = fission * fuel/100 * 2`. Temperature moves toward `heat - turbine` at ≤ 10 %/s. One uranium rod (fuel 80) gives heat = 1.6 × fission.
 - Fission and turbine follow their targets with a ~1 s lag (`x += (target - x)*dt`). Fission is capped at AvailableFuel (80 per uranium rod).
 - **Output kW = MaxOutput × clamp(turbine ± tol, ≤ temp/50) / 100**. Below temp 50, output is capped at `temp/50` of max. tol = 1 % of max, or 3 % when turbine is within CTO±2.5 AND temp is 40-60. The reactor does NOT follow load by itself: the turbine must equal `load/max*100`.
@@ -101,6 +106,7 @@ Checked against a real game round (`load_profiles/Dugong_round001.csv`: 3000 kW,
 - Fuel burn per rod: `fission/100 * 0.2` condition/s, for EVERY rod present. Fewer rods = less burn; more fuel = more heat per % fission. **Fuel efficiency = keep fission as low as the needed heat allows.**
 - Danger: temp > 60 for 20 s starts a fire (repeats). Temp > 70 runs the meltdown timer (120 s → meltdown). Temp < 40 is outside the optimal range (no ±3 % bonus).
 - **Wear** (as in game): the reactor loses 0.125 condition/s while running, after a random 120-720 s delay, down to 10 %. The fire and meltdown timers run `lerp(2x, 1x, condition)` faster, so a worn reactor catches fire after ~10.5 s above 60 and melts down after ~63 s above 70. `reactor_condition_min_pct` is in the log. The junction box wears too (0.1/s).
+- **Real rounds are the real test.** `Dugong_round001`, `Humpback_round001` and `Typhon2_round001` are recorded rounds. Rod type is worked out from the log, so fulgurium counts as 150 fuel. Rod refills (swaps, `fixitems`) replay too. Typhon2's demand goes far above the reactor's 5200 kW, so only stored battery energy can cover that.
 - **Rods can change mid-round.** A test file's `rods` column adds or removes rods when the player did. Heat = fission × fuel/100 × 2 jumps at once (1 → 4 uranium rods = 4× heat), while fission can only fall ~5 %/s. Watch `fuel_out` (in4) and cut fission the moment it jumps. `synthetic_rodswap`: 5200 kW, 1 rod, 4 rods at 2:00 (the game's own automatic control overheats and starts a fire), 2 rods at 7:00.
 - Warm start = sub saved mid-round in a steady state (temp 50, turbine = load). With AutoTemp on, the game's round-start fast sync also runs for the first 5 s.
 - Grid: voltage = supply/load. < 0.5 devices shut off, < 0.9 brownout, > 2 junction boxes take random damage.

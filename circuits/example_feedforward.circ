@@ -1,0 +1,36 @@
+# Example: simple feed-forward auto reactor (starting point, not tuned).
+# turbine% = load / maxKW * 100 ;  fission% = (actual turbine + 100 - temp) * 50 / fuel  (aims for temperature 50, feedback pulls it back)
+# actual turbine = power_value_out / maxKW * 100, so heat follows the turbine's real (slew-limited) position
+name example_feedforward
+box reactor
+c tdiv div                    # load / max
+c tmax mem Value=$MAX         # $MAX = reactor max output kW (filled in automatically)
+c tpct mul                    # * 100
+c k100 mem Value=100
+c pdiv div                    # actual output / max
+c ppct mul                    # * 100 = actual turbine % (the real one, not the target)
+c tdeg div                    # temperature_out / 100 = temperature
+c terr sub                    # 100 - temperature  (= 50 + (50 - temp): heat target plus temperature feedback)
+c fadd add                    # actual turbine + 100 - temp
+c k50 mem Value=50
+c fmul mul                    # * 50
+c fdiv div ClampMin=0 ClampMax=100   # / fuel
+w in1 tdiv.1
+w tmax.out tdiv.2
+w tdiv.out tpct.1
+w k100.out tpct.2
+w tpct.out out2
+w in2 pdiv.1
+w tmax.out pdiv.2
+w pdiv.out ppct.1
+w k100.out ppct.2
+w ppct.out fadd.1
+w in3 tdeg.1
+w k100.out tdeg.2 terr.1
+w tdeg.out terr.2
+w terr.out fadd.2
+w k50.out fmul.2
+w fadd.out fmul.1
+w fmul.out fdiv.1
+w in4 fdiv.2
+w fdiv.out out1

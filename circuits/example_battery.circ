@@ -1,0 +1,75 @@
+# Example: battery buffer WITH charge-level management (keeps batteries near 60%).
+# Battery box does all the battery math and tells the reactor what to make:
+#   charging  = charge_rate% * BATT_KW / 100          (kW the batteries draw right now)
+#   demand    = grid load - charging                   (what the ship really needs)
+#   error     = 60 - charge%                           (+ = too empty, - = too full)
+#   bias      = error * BATT_KW / 50, clamped to +/- BATT_KW/2
+#   reactor setpoint = demand + bias  -> sent to the reactor box (link out2 -> reactor in8)
+#     too full  -> reactor makes LESS than demand -> batteries discharge on their own
+#     too empty -> reactor makes MORE than demand -> surplus goes into the batteries
+#   surplus   = reactor output - demand ; set_rate = surplus / BATT_KW * 100 (0 when short)
+name example_battery
+box battery
+c kb mem Value=$BATT_KW
+c k100 mem Value=100
+c chg mul                     # charge_rate% * BATT_KW
+c chgk div                    # / 100 -> charging kW
+c dem sub                     # grid load - charging = demand
+c ktgt mem Value=60           # target charge %
+c err sub                     # 60 - charge%
+c kg mem Value=$BATT_KW/50    # gain: kW of bias per 1% of charge error
+c bias mul ClampMin=-$BATT_KW/2 ClampMax=$BATT_KW/2
+c setp add                    # demand + bias -> reactor setpoint
+c sur sub                     # reactor output - demand = surplus
+c rate div                    # surplus / BATT_KW
+c pct mul ClampMin=0 ClampMax=100   # -> set_rate %
+w in2 chg.1
+w kb.out chg.2 rate.2
+w chg.out chgk.1
+w k100.out chgk.2 pct.2
+w in3 dem.1
+w chgk.out dem.2
+w dem.out setp.1 sur.2
+w ktgt.out err.1
+w in1 err.2
+w err.out bias.1
+w kg.out bias.2
+w bias.out setp.2
+w setp.out out2
+w in6 sur.1
+w sur.out rate.1
+w rate.out pct.1
+w pct.out out1
+box reactor
+c tdiv div                    # setpoint / max
+c tmax mem Value=$MAX
+c tpct mul ClampMin=0 ClampMax=100  # * 100 -> turbine
+c k100 mem Value=100
+c pdiv div                    # actual output / max
+c ppct mul                    # * 100 = actual turbine % (the real one, not the target)
+c tdeg div                    # temperature_out / 100 = temperature
+c terr sub                    # 100 - temperature  (= 50 + (50 - temp): heat target plus temperature feedback)
+c fadd add                    # actual turbine + 100 - temp
+c k50 mem Value=50
+c fmul mul                    # * 50
+c fdiv div ClampMin=0 ClampMax=100  # / fuel -> fission (aims for temperature 50)
+w in8 tdiv.1
+w tmax.out tdiv.2
+w tdiv.out tpct.1
+w k100.out tpct.2
+w tpct.out out2
+w in2 pdiv.1
+w tmax.out pdiv.2
+w pdiv.out ppct.1
+w k100.out ppct.2
+w ppct.out fadd.1
+w in3 tdeg.1
+w k100.out tdeg.2 terr.1
+w tdeg.out terr.2
+w terr.out fadd.2
+w k50.out fmul.2
+w fadd.out fmul.1
+w fmul.out fdiv.1
+w in4 fdiv.2
+w fdiv.out out1
+link battery.out2 reactor.in8

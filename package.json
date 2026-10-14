@@ -1,0 +1,11 @@
+{
+  "name": "barotrauma-mock-reactor-sim",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Barotrauma reactor, power grid and circuit box simulator for testing auto-reactor circuits.",
+  "scripts": {
+    "sim": "node sim/cli.js",
+    "web": "node sim/build_web.js",
+    "test": "node sim/test.js"
+  }
+}

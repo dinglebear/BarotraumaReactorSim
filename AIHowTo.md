@@ -19,7 +19,7 @@ Defaults come from `sim.config.json` (the web page's "Save settings" writes this
 | Path | What |
 |---|---|
 | `circuits/<name>.circ` | YOUR circuits (edit these). A run exports `<name>.txt` (1 box) or `<name>_reactor.txt` + `<name>_battery.txt` (2 boxes) in the in-game Blueprints format. |
-| `load_profiles/*.csv` | Test files: the ship's power demand over a round (from the mod in `mod/`, or `synthetic_*`). |
+| `load_profiles/*.csv` | Test files: the ship's power demand over a round. Real ones come from the mod in `mod/`. `synthetic_*` are made by `sim/make_profiles.js` from a ship model calibrated on the real rounds, and they rank circuits like the real rounds do (avoidable unmet: rank correlation 0.98). Use them for fast iteration and confirm on the real ones. |
 | `logs/<circuit>__<profile>.log` | Result of each run (read this). |
 | `context/reactor_circuits/` | Community reactor circuits (`.txt`, optional `name.pins`) to beat. `compare` can run them by name. |
 | `context/community_circuits/` | Non-reactor example circuits (format reference only). |

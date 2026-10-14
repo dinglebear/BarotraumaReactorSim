@@ -15,6 +15,15 @@ All runs are on the real rounds recorded with the PowerLogger mod (no batteries)
 | rimuru_autoreactor (lever 0) | 0 / 274 | 0 / 294 | 3.31 / 1178 | see below |
 | rimuru_fixed (patched) | 37.6 / – | 7.6 / – | 6.25 / – | `circuits/rimuru_fixed.circ` |
 
+Note: the synthetic rounds were rebuilt after this study, calibrated on the real rounds; tick-by-tick examples below that cite `synthetic_combat` refer to the old version. On the new synthetic set, the circuits rank as they do on the real rounds. Rank correlation over 9 circuits, old set → new set:
+
+| metric | old set | new set |
+|---|---|---|
+| avoidable unmet | 0.17 | 0.98 |
+| kWh/rod | 0.93 | 0.98 |
+| overvolt time | 0.93 | 0.98 |
+| brownout time | 0.93 | 0.70 |
+
 Takeaways:
 - The "temperature-throttled" designs (basic, Lammert, Rimuru lever 1) are the most fuel efficient, about 25 % better than vanilla. They hold temperature ≈ turbine/2 ≤ 50, so they never make more heat than needed.
 - Overclocking (overclock_reactor) meets the most demand because it always overproduces 15 %. That costs about 15 % of fuel, plus constant overvoltage (`overvolt_s` in the hundreds or thousands of seconds).

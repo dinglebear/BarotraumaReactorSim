@@ -583,7 +583,7 @@ function boxPinLabel(b, pin) { // what a box pin is wired to
 }
 function edRender() {
   const svg = $('edSvg'); if (!svg) return;
-  const b = edBox(); edMsg(); edInspector();
+  const b = edBox(); edMsg(b && b.components.length > 64 ? `This box has ${b.components.length} components: an in-game circuit box holds at most 64, so the rest would be lost. Split it into two boxes.` : ''); edInspector();
   if (!b) { svg.innerHTML = `<text x="20" y="40" class="cb-m" font-size="14">${ED.box === 'battery' ? 'No battery box. Pick a battery circuit, or press "New empty box" to build one.' : 'No reactor box (vanilla). Press "New empty box" to build one.'}</text>`; svg.removeAttribute('viewBox'); return; }
   if (!ED.view) edFit();
   const v = ED.view, o = [], wiredPins = new Set();

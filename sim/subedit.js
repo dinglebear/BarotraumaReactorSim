@@ -14,6 +14,7 @@
   else root.BaroSubEdit = factory(root.BaroSubXml, root.BaroComponents, root.BaroFormat);
 })(typeof self !== 'undefined' ? self : this, function (X, C, F) {
   'use strict';
+  const CIRCUITBOX_MAX_COMPONENTS = 64; // in game: "Circuit box error: failed to find an item in the container" for slot 64 and up
   const WIRE_COLORS = { red: 'redwire', blue: 'bluewire', green: 'greenwire', orange: 'orangewire', yellow: 'yellowwire', black: 'blackwire', brown: 'brownwire', white: 'wire', wire: 'wire' };
   const rectOf = n => (X.get(n, 'rect') || '0,0,0,0').split(',').map(Number);
   const centerOf = n => { const r = rectOf(n); return [r[0] + r[2] / 2, r[1] - r[3] / 2]; };
@@ -101,6 +102,7 @@
         n = X.el('Item', { name: '', identifier, ID: '0', rect: '0,0,16,16' }, [X.el(def.cls, {}), X.el('Holdable', { Attached: 'True' })]); // logic part on a wall, no wires possible (prefab connection order unknown)
         this.log.push(`note: ${identifier} built from scratch (no template): it can't be wired from outside until a template is available`);
       }
+      const hold = n.children.find(c => c.tag === 'Holdable'); if (hold) X.set(hold, 'Attached', 'True'); // placed items hang on the wall (a template saved loose would fall to the floor)
       const id = this.newId(); X.set(n, 'ID', id);
       const r = rectOf(n); X.set(n, 'rect', `${Math.round(x - r[2] / 2)},${Math.round(y + r[3] / 2)},${r[2]},${r[3]}`);
       this.sub.children.push(n); this.items.set(id, n); if (handle) this.handles[handle] = id;
@@ -138,6 +140,7 @@
       const conts = n.children.filter(c => c.tag === 'ItemContainer');
       const cb = this.comp(n, 'CircuitBox');
       cb.children = [];
+      if (bm.components.length > CIRCUITBOX_MAX_COMPONENTS) throw new Error(`circuit box "${bm.name}" has ${bm.components.length} components: the game's circuit box holds at most ${CIRCUITBOX_MAX_COMPONENTS} (the rest are lost on load). Split it into two boxes.`);
       F.autoLayout(bm);
       const slotIds = [], compIdx = {};
       bm.components.forEach((c, i) => {
@@ -192,6 +195,9 @@
         else if (new Set(e.map(x => x.split(':')[1])).size !== 2) problems.push(`wire ${w} ends both use the same index (${e.join(', ')})`);
       }
       if (this.maxId > 65535) problems.push('more than 65535 IDs');
+      for (const n of this.items.values()) {
+        if (n.children.some(c => c.tag === 'CircuitBox')) { const k = (X.get(X.kids(n, 'ItemContainer')[0] || { attrs: [] }, 'contained') || '').split(',').filter(Boolean).length; if (k > CIRCUITBOX_MAX_COMPONENTS) problems.push(`circuit box ${X.get(n, 'ID')} holds ${k} components (max ${CIRCUITBOX_MAX_COMPONENTS})`); }
+      }
       return problems;
     }
 

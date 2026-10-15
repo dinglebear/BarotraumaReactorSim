@@ -1,0 +1,112 @@
+# CAMEL OVERKILL: HUMP-R "RATE DISTRIBUTOR" (second box of the power manager: a circuit box holds at most 64 parts).
+name camel_rates
+box battery
+note "HUMP-R RATE DISTRIBUTOR: HOW IT WORKS" "Turns HUMP-P's charging shares (kW) into battery rates. The game rounds each battery's rate to 10 % (50 kW): every battery gets an equal share in 50 kW steps, q = floor(T / (N x 50)) x 10 %, and ONE battery also takes the remainder. Which one rotates every 30 s (oscillator counter), so the banks stay level and the total is exact."
+note "WIRING" "in1 <- HUMP-P out1 (critical share kW), in2 <- HUMP-P out5 (propulsion share kW)\nout1, out5, out6, out7 -> set_rate of propulsion batteries 1..4\nout4, out8 -> set_rate of critical batteries 1, 2"
+c zero mem Value=0
+c k100 mem Value=100
+# equal split in 50 kW steps: the game rounds each battery's rate to 10 % (50 kW here). Every battery gets
+# q = floor(T / (N x 50)) x 10 %, and ONE battery also takes the remainder r. Which one rotates every 30 s, so over
+# time all of them charge the same and the banks stay level, while the total is always exact.
+#   propulsion (N=4, T 0..2000): f = floor(T/200), q = 10 f %, r = T/5 - 40 f %
+#   critical   (N=2, T 0..1000): f = floor(T/100), q = 10 f %, r = T/5 - 20 f %
+c osc osc OutputType=Pulse Frequency=0.0333
+c rot mem Value=0
+c k1 mem Value=1
+c inc add
+c m4 mod Modulus=4
+c m2 mod Modulus=2
+w rot.out inc.1 m2.in
+w osc.out inc.2
+w inc.out m4.in
+w m4.out rot.in
+c k5 mem Value=5
+c k10 mem Value=10
+c k20c mem Value=20
+c k40 mem Value=40
+c k200 mem Value=200
+c k3 mem Value=3
+# critical bank
+c cT div ClampMin=0 ClampMax=10
+c cf floor
+c cq mul
+c c5 div
+c c20 mul
+c cr sub ClampMin=0
+w in1 cT.1 c5.1
+w k100.out cT.2
+w cT.out cf.in
+w cf.out cq.1 c20.1
+w k10.out cq.2
+w k20c.out c20.2
+w k5.out c5.2
+w c5.out cr.1
+w c20.out cr.2
+c ce0 equals
+c ce1 equals
+c cx0 mul
+c cx1 mul
+c ca0 add ClampMax=100
+c ca1 add ClampMax=100
+w m2.out ce0.1 ce1.1
+w zero.out ce0.2
+w k1.out ce1.2
+w ce0.out cx0.1
+w ce1.out cx1.1
+w cr.out cx0.2 cx1.2
+w cq.out ca0.1 ca1.1
+w cx0.out ca0.2
+w cx1.out ca1.2
+w ca0.out out4
+w ca1.out out8
+# propulsion bank
+c pT div
+c pf floor
+c pq mul
+c p5 div
+c p40 mul
+c pr sub ClampMin=0
+w in2 pT.1 p5.1
+w k200.out pT.2
+w pT.out pf.in
+w pf.out pq.1 p40.1
+w k10.out pq.2
+w k40.out p40.2
+w k5.out p5.2
+w p5.out pr.1
+w p40.out pr.2
+c pe0 equals
+c pe1 equals
+c pe2 equals
+c pe3 equals
+c px0 mul
+c px1 mul
+c px2 mul
+c px3 mul
+c pa0 add ClampMax=100
+c pa1 add ClampMax=100
+c pa2 add ClampMax=100
+c pa3 add ClampMax=100
+c k2r mem Value=2
+w rot.out pe0.1 pe1.1 pe2.1 pe3.1
+w zero.out pe0.2
+w k1.out pe1.2
+w k2r.out pe2.2
+w k3.out pe3.2
+w pe0.out px0.1
+w pe1.out px1.1
+w pe2.out px2.1
+w pe3.out px3.1
+w pr.out px0.2 px1.2 px2.2 px3.2
+w pq.out pa0.1 pa1.1 pa2.1 pa3.1
+w px0.out pa0.2
+w px1.out pa1.2
+w px2.out pa2.2
+w px3.out pa3.2
+w pa0.out out1
+w pa1.out out5
+w pa2.out out6
+w pa3.out out7
+c k0 mem Value=0
+w k0.out out3
+

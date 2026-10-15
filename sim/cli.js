@@ -115,7 +115,8 @@ const COMMANDS = {
   check(a) {
     const f = resolve(a._[0], CIRC_DIRS), m = loadModel(f), cfg = loadConfig(a); cfg.start = 'cold';
     const s = new E.Sim(P.substitute(m, P.placeholders(cfg)), cfg);
-    console.log(`ok: ${m.boxes.map(b => `${b.name}(${b.components.length} comps, ${b.wires.length} wires)`).join(' ')}` + (s.warnings.length ? '\n' + s.warnings.join('\n') : ''));
+    const big = m.boxes.filter(b => b.components.length > 64).map(b => `box ${b.name}: ${b.components.length} components, but an in-game circuit box holds at most 64 (the rest are lost on load): split it`);
+    console.log(`${big.length ? 'TOO BIG' : 'ok'}: ${m.boxes.map(b => `${b.name}(${b.components.length} comps, ${b.wires.length} wires)`).join(' ')}` + ([...big, ...s.warnings].length ? '\n' + [...big, ...s.warnings].join('\n') : ''));
   },
   // autopins <circuit.txt> [--force]: find which pin goes where by trial and error, write <name>.pins
   autopins(a) {

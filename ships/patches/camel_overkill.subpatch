@@ -38,15 +38,18 @@ wire @pb1.charge_% @humpP.signal_in1
 wire @pb1.load_value_out @humpP.signal_in2
 wire @tap.load_value_out @humpP.signal_in4
 wire 477.charge_% @humpP.signal_in5
-wire @humpP.signal_out4 477.set_rate
-wire @humpP.signal_out8 531.set_rate
-wire @humpP.signal_out1 @pb1.set_rate
+box @humpR at -1010,230 from camel/camel_rates   # HUMP-P part 2: a circuit box holds at most 64 parts
+wire @humpP.signal_out1 @humpR.signal_in1
+wire @humpP.signal_out5 @humpR.signal_in2
+wire @humpR.signal_out4 477.set_rate
+wire @humpR.signal_out8 531.set_rate
+wire @humpR.signal_out1 @pb1.set_rate
 wire @humpP.signal_out3 @pb1.disable_output
-wire @humpP.signal_out5 @pb2.set_rate
+wire @humpR.signal_out5 @pb2.set_rate
 wire @humpP.signal_out3 @pb2.disable_output
-wire @humpP.signal_out6 @pb3.set_rate
+wire @humpR.signal_out6 @pb3.set_rate
 wire @humpP.signal_out3 @pb3.disable_output
-wire @humpP.signal_out7 @pb4.set_rate
+wire @humpR.signal_out7 @pb4.set_rate
 wire @humpP.signal_out3 @pb4.disable_output
 
 # === 2. HUMP-1 REACTOR BRAIN: feed-forward control of the main bus (turn the reactor's automatic control OFF in game) ===
@@ -159,6 +162,7 @@ wire @sAftHump.signal_out @stAftHump.signal_in
 
 # === 5. HUMP-3 ALERT CORE and HUMP-4 CamelOS (bridge) ===
 box @hump3 at 680,110 from camel/camel_alert
+box @lightshow at 640,110 from camel/camel_lightshow   # wifi only: alert colour 7305 (or a rainbow) -> lights 7303
 unwire 693.signal_out 692.toggle      # the siren button becomes the ALERT ACK (mute 60 s)
 wire 693.signal_out @hump3.signal_in1
 wire @hump3.signal_out1 692.set_state

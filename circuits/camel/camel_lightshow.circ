@@ -1,0 +1,31 @@
+# CAMEL OVERKILL: LIGHT SHOW. Takes the alert core's light colour (7305) and sends it to every main light (7303),
+# unless party mode is on (rainbow). Split out of the alert core: a circuit box holds at most 64 parts.
+name camel_lightshow
+box battery
+note "LIGHT SHOW: HOW IT WORKS" "Normally passes the alert colour (wifi 7305) to the lights (7303).\n'lights party' on the CamelOS bus (7300) switches a multiplexer to a rainbow: an oscillator sawtooth x 360 is the hue of an HSV colour. 'lights normal' switches back."
+note "WIRING" "No wires: wifi only (7300 and 7305 in, 7303 out)."
+c rxa wifi Channel=7305
+c rxc wifi Channel=7300
+c txk wifi Channel=7303
+c pOn regex Expression="^(?i)lights party$" Output=1 FalseOutput="" ContinuousOutput=false
+c pOff regex Expression="^(?i)lights normal$" Output=0 FalseOutput="" ContinuousOutput=false
+c party mem Value=0
+w rxc.out pOn.in pOff.in
+w pOn.out party.in
+w pOff.out party.in
+c osc osc OutputType=Sawtooth Frequency=0.2
+c k360 mem Value=360
+c hue mul
+c one mem Value=1
+c k255 mem Value=255
+c hsv color UseHSV=true
+w osc.out hue.1
+w k360.out hue.2
+w hue.out hsv.signal_r
+w one.out hsv.signal_g hsv.signal_b
+w k255.out hsv.signal_a
+c psel mux
+w party.out psel.set_input
+w rxa.out psel.signal_in0
+w hsv.out psel.signal_in1
+w psel.out txk.in

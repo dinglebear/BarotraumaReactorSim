@@ -176,6 +176,7 @@ const COMMANDS = {
   // sub check <sub>                   loader checks (IDs, wires, links)
   // sub catalog <sub> [regex]          structures (walls/shells/backgrounds/deco) and items you can place, with sizes
   // sub audit <sub> [--base <sub>]     everything that broke in game before: box size, loose items, items in walls, moved originals
+  // sub leaks <sub>                    watertight check with the game's collision shapes (sim/shellgeom.js)
   sub(a) {
     const zlib = require('zlib'), SE = require('./subedit'), SF = require('./subfile');
     const [what, name, arg] = a._;
@@ -222,6 +223,13 @@ const COMMANDS = {
       }
       for (const e of [...seen.values()].sort((a, b) => a.tag.localeCompare(b.tag) || a.idf.localeCompare(b.idf))) if (!re || re.test(e.idf) || re.test(e.name)) console.log(`${e.tag === 'Structure' ? (e.solid ? 'WALL ' : 'DECO ') : 'ITEM '} ${e.idf.padEnd(28)} ${(e.name || '').padEnd(34)} ${e.w}x${e.h}  (x${e.n})`);
       return;
+    }
+    if (what === 'leaks') { // sub leaks <sub>: watertight check with the game's collision shapes (rays from every room must hit a wall)
+      const SF = require('./subfile'), G = require('./shellgeom'), sh = SF.parseSub(doc.text()), L = G.leaks(sh);
+      const slopes = sh.structures.filter(s => G.solid(s) && Math.abs(Math.sin(2 * G.body(s).angle)) > 0.01).length;
+      console.log(`${sh.hulls.length} rooms, ${sh.structures.filter(G.solid).length} solid pieces (${slopes} slanted)`);
+      for (const l of L) console.log(`LEAK  ${l.name || 'room'} #${l.hull}: a ray from ${l.from.join(',')} heading ${l.dir}° escapes`);
+      console.log(L.length ? `${L.length} rooms leak` : 'watertight'); if (L.length) process.exitCode = 1; return;
     }
     if (what === 'check') { const p = doc.check(); console.log(p.length ? p.join('\n') : 'ok: no loader problems'); return; }
     if (what === 'audit') { // sub audit <sub> [--base Camel]: loader checks, box size, loose items, items in walls, moved originals, >5 wires

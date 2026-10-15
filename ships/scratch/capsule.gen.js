@@ -15,13 +15,13 @@ const B = new SubBuilder(templates, {
   description: "Built from nothing by Claude (Anthropic) to test its submarine builder: every wall, room, door, waypoint and wire was placed by a script. Small, orange, and probably a bit wrong somewhere. Tested by Dinglebear.",
 }, { shellColor: ORANGE, wallColor: CREAM, backColor: '235,215,195,255' });
 
-const W = 512, H = 256;
+const W = 512, H = 256, INSET = 128; // the upper deck steps in at both ends, and the builder fills the steps with slopes
 // lower deck (floor y = 0)       upper deck (floor y = 256)
-B.room('engine', -2 * W, 0, W, H, { name: 'Engine Room' }).room('reactor', -W, 0, W, H, { name: 'Reactor' }).room('ballast', 0, 0, W, H, { name: 'Ballast', wet: true });
-B.room('quarters', -2 * W, H, W, H, { name: 'Quarters' }).room('oxygen', -W, H, W, H, { name: 'Life Support' }).room('bridge', 0, H, W, H, { name: 'Bridge' });
+B.room('engine', -2 * W, 0, W, H, { name: 'Engine Room' }).room('reactor', -W, 0, W, H, { name: 'Reactor' }).room('ballast', 0, 0, W, H, { name: 'Ballast', wet: true, bevelBottom: true });
+B.room('quarters', -2 * W + INSET, H, W - INSET, H, { name: 'Quarters' }).room('oxygen', -W, H, W, H, { name: 'Life Support' }).room('bridge', 0, H, W - INSET, H, { name: 'Bridge' });
 B.door('engine', 'reactor').door('quarters', 'oxygen').door('oxygen', 'bridge');
 B.hatch('reactor', 'oxygen', -100);
-B.spawn('bridge', 'captain').spawn('reactor', 'engineer').spawn('engine', 'mechanic').spawn('quarters', 'medicaldoctor').spawn('oxygen', 'securityofficer').spawn('quarters', 'assistant').spawn('quarters', 'cargo', -2 * W + 100);
+B.spawn('bridge', 'captain').spawn('reactor', 'engineer').spawn('engine', 'mechanic').spawn('quarters', 'medicaldoctor').spawn('oxygen', 'securityofficer').spawn('quarters', 'assistant').spawn('quarters', 'cargo', -2 * W + INSET + 100);
 const d = B.build();
 
 // ---- machinery ----
@@ -31,7 +31,7 @@ const pump = d.add('pump', 'pump', 256, 50);
 const oxy = d.add('oxy', 'oxygenerator', -280, H + 98);
 const nav = d.add('nav', 'navterminal', 300, H + 82);
 const status = d.add('status', 'statusmonitor', 120, H + 120);
-const batt = d.add('batt', 'battery', 470, H + 42);
+const batt = d.add('batt', 'battery', W - INSET - 50, H + 42);
 // junction boxes: reactor room (main), life support, bridge, engine room
 const jA = d.add('jA', 'junctionbox', -470, 110), jB = d.add('jB', 'junctionbox', -470, H + 110), jC = d.add('jC', 'junctionbox', 40, H + 110), jD = d.add('jD', 'junctionbox', -560, 110);
 const w = (a, b) => d.wire(a, ...b);
@@ -41,7 +41,7 @@ d.wire(jC, 'power', nav, 'power_in'); d.wire(jC, 'power', status, 'power_in'); d
 d.wire(nav, 'velocity_x_out', engine, 'set_force'); d.wire(nav, 'velocity_y_out', pump, 'set_targetlevel');
 // vents in every dry room, linked to the oxygen generator
 const vents = [];
-for (const [x, y] of [[-2 * W + 300, 200], [-W + 380, 200], [-2 * W + 250, H + 200], [-W + 120, H + 200], [W - 120, H + 200]]) vents.push(d.add(null, 'vent', x, y));
+for (const [x, y] of [[-2 * W + 300, 200], [-W + 380, 200], [-2 * W + 250, H + 200], [-W + 120, H + 200], [W - INSET - 100, H + 200]]) vents.push(d.add(null, 'vent', x, y));
 require('../../sim/subxml').set(d.ref(oxy), 'linked', vents.join(','));
 for (const v of vents) require('../../sim/subxml').set(d.ref(v), 'linked', oxy);
 // a lamp in every room, powered from the nearest junction box

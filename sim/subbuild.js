@@ -3,16 +3,28 @@
 //
 // What it makes (conventions taken from the vanilla subs, see SUBBUILD.md):
 //   room   -> a hull (rect = floor surface .. top of its ceiling slab), a background wall, its ceiling slab
-//   shell  -> outer hull pieces on every room edge that touches the outside (96 thick), corners covered
+//   shell  -> outer hull pieces on every room edge that touches the outside (96 thick), flipped like vanilla (bottom FY,
+//             right FX) so the metal sits against the room; then SMOOTHING (sim/shellgeom.js):
+//             * steps: where the outline steps (a hump, an overhang) a slanted piece fills the notch. It sits in the
+//               empty corner outside both rooms, so it costs no space (how the Camel's humps are done);
+//             * top corners: a shallow slope across each outer top corner (cuts at most ~60 into the ceiling corner);
+//             * bottom corners: opt-in per room ({ bevelBottom: true }), because it cuts into the floor corner.
+//             Every result is checked watertight (rays from each room must hit solid structure).
 //   walls  -> inside walls centred on shared vertical edges (48 thick), slabs on shared horizontal edges
 //   door   -> door item + its gap (linked), the wall segment removed
 //   hatch  -> hatch item + gap in the slab + a ladder through it
 //   waypoints -> a path along every floor at +113, linked through doors (gap=) and ladders (ladders=), spawn points
 // Coordinates: x right, y up (game). A room is given by its floor-left corner and size: { x, y (floor), w, h }.
 'use strict';
-const X = require('./subxml'), SE = require('./subedit');
+const X = require('./subxml'), SE = require('./subedit'), G = require('./shellgeom');
 
 const WALL = 48, SHELL = 96, DOOR_H = 208, WP_H = 113;
+const CL = 36;  // a straight shell's plate centre line is 36 outside the room edge (plate 72 thick, against the room)
+const OV = 24;  // straight shells run this far under a slope so the joint has no crack
+// slanted pieces the builder may use: the submarine shell set that the vanilla subs actually place (sprites unseen, so
+// stay with proven pieces). Geometry comes from the prefab catalog.
+const SLOPES = ['shella04deg', 'shella14degb', 'shella16deg', 'shella16degb', 'shella32deg', 'ShellA17deg', 'Shella18deg', 'shella26deg', 'shella34degb', 'shella38deg', 'shella43deg',
+  'shella45degc', 'shella45degd', 'Shella47deg', 'Shella51deg', 'shella52deg', 'shella54deg', 'shella57deg', 'Shella60deg', 'ShellA61deg', 'Shella70deg'];
 
 function blankSub(meta) {
   const a = Object.assign({
@@ -30,7 +42,8 @@ class SubBuilder {
   constructor(templates, meta, style) {
     this.doc = new SE.SubDoc(blankSub(meta), templates);
     this.rooms = {}; this.doors = []; this.hatches = []; this.spawns = [];
-    this.style = Object.assign({ shell: 'shella0deg', shellV: 'shella90deg', wall: 'ff_x_wall', wallV: 'ff_y_wall', back: 'FF_Wall_G2', shellColor: null, wallColor: null, backColor: null }, style || {});
+    this.style = Object.assign({ shell: 'shella0deg', shellV: 'shella90deg', wall: 'ff_x_wall', wallV: 'ff_y_wall', back: 'FF_Wall_G2', shellColor: null, wallColor: null, backColor: null,
+      smooth: true, bevelTop: true, slopes: SLOPES }, style || {});
   }
   room(key, x, y, w, h, opts) { this.rooms[key] = Object.assign({ key, x0: x, x1: x + w, y0: y, y1: y + h, name: key }, opts || {}); return this; }
   door(a, b, opts) { this.doors.push(Object.assign({ a, b }, opts || {})); return this; }
@@ -64,6 +77,119 @@ class SubBuilder {
     return segs;
   }
 
+  // is (x, y) inside some room?
+  occ(x, y) { return Object.values(this.rooms).some(r => x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1); }
+  // corners of the outline: a convex corner has one occupied quadrant around it, a step (notch) has three.
+  // type = where the outside is: TL TR BL BR. o = outward direction (x, y).
+  outlineCorners() {
+    const pts = new Map(), e = 1;
+    for (const r of Object.values(this.rooms)) for (const [x, y] of [[r.x0, r.y0], [r.x0, r.y1], [r.x1, r.y0], [r.x1, r.y1]]) pts.set(x + ',' + y, [x, y]);
+    const out = [];
+    for (const [x, y] of pts.values()) {
+      const q = { TL: this.occ(x - e, y + e), TR: this.occ(x + e, y + e), BL: this.occ(x - e, y - e), BR: this.occ(x + e, y - e) }, n = Object.values(q).filter(Boolean).length;
+      const opp = { TL: 'BR', TR: 'BL', BL: 'TR', BR: 'TL' };
+      if (n === 1) { const t = opp[Object.keys(q).find(k => q[k])]; out.push({ kind: 'convex', type: t, x, y }); }
+      if (n === 3) { const t = Object.keys(q).find(k => !q[k]); out.push({ kind: 'notch', type: t, x, y }); }
+    }
+    for (const c of out) { c.ox = c.type[1] === 'L' ? -1 : 1; c.oy = c.type[0] === 'T' ? 1 : -1; }
+    return out;
+  }
+  // straight shell runs along exposed room edges: { side, at (the edge's x or y), a0, a1 (span along it), e0, e1 (where the
+  // shell piece actually starts/ends, after corner closing and smoothing) }
+  shellRuns() {
+    const runs = [];
+    for (const r of Object.values(this.rooms)) {
+      for (const side of ['top', 'bottom', 'left', 'right']) for (const [a0, a1] of this.exposed(r, side)) {
+        const at = side === 'top' ? r.y1 : side === 'bottom' ? r.y0 : side === 'left' ? r.x0 : r.x1;
+        runs.push({ side, at, a0, a1, e0: a0, e1: a1, horiz: side === 'top' || side === 'bottom' });
+      }
+    }
+    return runs;
+  }
+  // choose a slanted piece: span (dx, dy) within the limits, angle in range; biggest wins
+  pickSlope(maxDx, maxDy, minDeg, maxDeg) {
+    const all = G.slopePieces().filter(p => this.style.slopes.includes(p.id));
+    const ok = all.filter(p => p.dx <= maxDx && p.dy <= maxDy && p.deg >= minDeg && p.deg <= maxDeg);
+    return ok.sort((a, b) => b.dx * b.dy - a.dx * a.dy)[0] || null;
+  }
+  shell(d, rs, col) {
+    const S = this.style, runs = this.shellRuns(), slopes = [];
+    const runAt = (horiz, at, end) => runs.filter(u => u.horiz === horiz && u.at === at && (u.a0 === end || u.a1 === end));
+    // convex corners: horizontal runs reach past the corner by a shell width to close it (unless smoothed below)
+    const corners = this.outlineCorners();
+    for (const c of corners.filter(c => c.kind === 'convex')) for (const u of runAt(true, c.y, c.x)) { if (u.a0 === c.x && c.ox < 0) u.e0 = c.x - SHELL; if (u.a1 === c.x && c.ox > 0) u.e1 = c.x + SHELL; }
+    const setEnd = (u, end, v) => { if (u.a0 === end) u.e0 = v; else u.e1 = v; };
+    if (S.smooth) {
+      // short steps: a run between an outer corner and a notch of the same type (a small step in the outline) gets
+      // ONE slope across it, from one wall's centre line to the other's (span along the run = the run's length)
+      const used = new Set();
+      for (const u of runs) {
+        const len = u.a1 - u.a0; if (len > 260) continue;
+        const ends = [u.a0, u.a1].map(a => corners.find(c => (u.horiz ? (c.x === a && c.y === u.at) : (c.y === a && c.x === u.at))));
+        if (!ends[0] || !ends[1] || ends[0].kind === ends[1].kind || ends[0].type !== ends[1].type) continue;
+        const cv = ends.find(c => c.kind === 'convex'), nt = ends.find(c => c.kind === 'notch');
+        // the runs across the run at each end (the walls the slope joins)
+        const other = c => runAt(!u.horiz, u.horiz ? c.x : c.y, u.horiz ? c.y : c.x).find(w => w !== u);
+        const wc = other(cv), wn = other(nt); if (!wc || !wn) continue;
+        const room = Math.min(wc.a1 - wc.a0, wn.a1 - wn.a0) - 20;
+        const all = G.slopePieces().filter(p => S.slopes.includes(p.id));
+        const fit = all.filter(p => Math.abs((u.horiz ? p.dx : p.dy) - len) <= 16 && (u.horiz ? p.dy : p.dx) <= room)
+          .sort((a, b) => (u.horiz ? b.dy - a.dy : b.dx - a.dx) || Math.abs((u.horiz ? a.dx : a.dy) - len) - Math.abs((u.horiz ? b.dx : b.dy) - len)); // steepest that fits: reads as a curve
+        const p = fit[0]; if (!p) continue;
+        // centre line points: on the convex end's wall and on the notch end's wall, centred on the run's centre line
+        const c = cv, along = u.horiz ? p.dy : p.dx;
+        let A, Bp;
+        if (u.horiz) { const ys = u.at + c.oy * CL; A = [cv.x + c.ox * CL, ys - c.oy * along / 2]; Bp = [nt.x + c.ox * CL, ys + c.oy * along / 2]; }
+        else { const xs = u.at + c.ox * CL; A = [xs - c.ox * along / 2, cv.y + c.oy * CL]; Bp = [xs + c.ox * along / 2, nt.y + c.oy * CL]; }
+        slopes.push({ piece: p, corner: c.type, a: A, b: Bp, at: c, bridge: true });
+        u.dead = true; used.add(cv); used.add(nt);
+        // trim the two walls: the convex end's wall stops under the slope's low end, the notch end's wall starts at its high end
+        const ax = u.horiz ? 1 : 0; // the coordinate along those walls
+        setEnd(wc, u.horiz ? cv.y : cv.x, A[ax] + (u.horiz ? c.oy : c.ox) * OV);
+        setEnd(wn, u.horiz ? nt.y : nt.x, Bp[ax] - (u.horiz ? c.oy : c.ox) * OV);
+      }
+      // steps: fill the notch with a slope from the horizontal edge's centre line to the vertical edge's centre line
+      for (const c of corners.filter(c => c.kind === 'notch' && !used.has(c))) {
+        const h = runAt(true, c.y, c.x)[0], v = runAt(false, c.x, c.y)[0]; if (!h || !v) continue;
+        const shared = corners.some(o => o !== c && o.kind === 'notch' && ((o.y === c.y && (o.x === h.a0 || o.x === h.a1)) || (o.x === c.x && (o.y === v.a0 || o.y === v.a1))));
+        const maxDx = (h.a1 - h.a0) / (shared ? 2 : 1) - CL - 40, maxDy = v.a1 - v.a0;
+        const p = this.pickSlope(maxDx, maxDy, 25, 65) || this.pickSlope(maxDx, maxDy, 10, 80); if (!p) continue;
+        const Q = [c.x + c.ox * CL, c.y + c.oy * CL], A = [Q[0] + c.ox * p.dx, Q[1]], Bp = [Q[0], Q[1] + c.oy * p.dy];
+        slopes.push({ piece: p, corner: c.type, a: A, b: Bp, at: c });
+        setEnd(h, c.x, A[0] - c.ox * OV);
+        if (p.dy >= maxDy - 1) v.dead = true; else setEnd(v, c.y, Bp[1] - c.oy * OV);
+      }
+      // outer corners: a shallow slope across the top ones (and the bottom ones of rooms that ask for it)
+      for (const c of corners.filter(c => c.kind === 'convex' && !used.has(c))) {
+        const room = Object.values(this.rooms).find(r => (r.x0 === c.x || r.x1 === c.x) && (r.y0 === c.y || r.y1 === c.y));
+        if (c.type[0] === 'T' ? !S.bevelTop : !(room && room.bevelBottom)) continue;
+        const h = runAt(true, c.y, c.x)[0], v = runAt(false, c.x, c.y)[0]; if (!h || !v) continue;
+        const room_w = h.a1 - h.a0, room_h = v.a1 - v.a0;
+        // cut at most ~60 into the room vertically (headroom / floor); a shallow slope can run most of the edge
+        const p = this.pickSlope(Math.min(room_w * 0.85, 520), CL + 62, 3, 25); if (!p) continue;
+        const C = [c.x + c.ox * CL, c.y + c.oy * CL], A = [C[0] - c.ox * p.dx, C[1]], Bp = [C[0], C[1] - c.oy * p.dy];
+        slopes.push({ piece: p, corner: c.type, a: A, b: Bp, at: c });
+        setEnd(h, c.x, A[0] + c.ox * OV);
+        if (p.dy >= room_h) v.dead = true; else setEnd(v, c.y, Bp[1] + c.oy * OV);
+      }
+    }
+    // straight shells (vanilla flips: bottom FY, right FX, so the plate sits against the room)
+    for (const u of runs) {
+      if (u.dead) continue;
+      const lo = Math.min(u.e0, u.e1), hi = Math.max(u.e0, u.e1); if (hi - lo < 8) continue;
+      const fl = u.side === 'bottom' ? { flippedy: 'true' } : u.side === 'right' ? { flippedx: 'true' } : {};
+      if (u.side === 'top') d.addStructure(S.shell, lo, u.at + SHELL, hi - lo, SHELL, Object.assign(col(S.shellColor), fl));
+      if (u.side === 'bottom') d.addStructure(S.shell, lo, u.at, hi - lo, SHELL, Object.assign(col(S.shellColor), fl));
+      if (u.side === 'left') d.addStructure(S.shellV, u.at - SHELL, hi, SHELL, hi - lo, Object.assign(col(S.shellColor), fl));
+      if (u.side === 'right') d.addStructure(S.shellV, u.at, hi, SHELL, hi - lo, Object.assign(col(S.shellColor), fl));
+    }
+    for (const sl of slopes) {
+      const st = G.place(sl.piece, sl.corner, sl.a, sl.b), [x, top, w, h] = st.rect, fl = {};
+      if (st.flippedx) fl.flippedx = 'true'; if (st.flippedy) fl.flippedy = 'true';
+      d.addStructure(st.identifier, x, top, w, h, Object.assign(col(S.shellColor), fl));
+    }
+    this.slopes = slopes;
+  }
   build() {
     const d = this.doc, S = this.style, rs = Object.values(this.rooms);
     const col = c => c ? { SpriteColor: c } : {};
@@ -72,14 +198,7 @@ class SubBuilder {
       r.hull = d.addHull(r.x0, r.y1, r.x1 - r.x0, r.y1 - r.y0, { RoomName: r.name, IsWetRoom: r.wet ? 'True' : 'False' });
       d.addStructure(S.back, r.x0, r.y1, r.x1 - r.x0, r.y1 - r.y0, col(S.backColor));
     }
-    // outer shell on exposed edges (outside the hulls); horizontal pieces run past the corners to close them
-    for (const r of rs) {
-      const L = this.exposed(r, 'left').length > 0, R = this.exposed(r, 'right').length > 0;
-      for (const [x0, x1] of this.exposed(r, 'top')) d.addStructure(S.shell, x0 - (x0 === r.x0 && L ? SHELL : 0), r.y1 + SHELL, x1 - x0 + (x0 === r.x0 && L ? SHELL : 0) + (x1 === r.x1 && R ? SHELL : 0), SHELL, col(S.shellColor));
-      for (const [x0, x1] of this.exposed(r, 'bottom')) d.addStructure(S.shell, x0 - (x0 === r.x0 && L ? SHELL : 0), r.y0, x1 - x0 + (x0 === r.x0 && L ? SHELL : 0) + (x1 === r.x1 && R ? SHELL : 0), SHELL, col(S.shellColor));
-      for (const [y0, y1] of this.exposed(r, 'left')) d.addStructure(S.shellV, r.x0 - SHELL, y1, SHELL, y1 - y0, col(S.shellColor));
-      for (const [y0, y1] of this.exposed(r, 'right')) d.addStructure(S.shellV, r.x1, y1, SHELL, y1 - y0, col(S.shellColor));
-    }
+    this.shell(d, rs, col);
     const nb = this.neighbours();
     // horizontal slabs between floors (inside the lower room's top), with hatch openings cut out
     for (const e of nb.h) {

@@ -98,7 +98,7 @@ Every new box gets a sandbox script in `sandbox/` with `expect` checks before it
 1. **Humps:** rooms above the main deck, with a hatch and ladder (`B.hatch`). The grid builder already supports this; just verify that the shell wraps the hump corners.
 2. **Docking hatch** on the bottom of the drone bay: copy `dockinghatch` and its gap from a sub that has one. Dingle's shuttle files will show the pairing.
 3. **Turret hardpoints:** `turrethardpoint` + gun + periscope + loader, copied from the Camel Overkill's second chaingun.
-4. **Slanted bow and stern:** at least `shella45degc` caps at the corners, so it isn't a brick. Measure the pieces with `sub catalog Camel shell`.
+4. **Slanted bow and stern:** done in the builder (SUBBUILD.md, "Smooth walls"). Steps, humps and overhangs get slopes, and top corners get shallow bevels, all checked watertight. Design the outline with steps: taper the decks toward the bow and stern.
 5. **Ballast pumps** linked to ballast hulls, with the nav terminal's `velocity_y_out` wired to them as vanilla does.
 6. Then: `d.check()`, `d.audit()`, `ship --transcript`, and Dingle's walk-through checklist from SUBBUILD.md.
 

@@ -95,6 +95,8 @@ In game (Dinglebear's round 3, the 90 s that were logged), the main bus voltage 
   - The engine was checked: its position is identical to the vanilla Camel. Its propeller always overhangs the stern.
   - New `sub audit` tool.
 
+- **Round 6 (walls):** the editor now knows each wall's real collision shape (`sim/shellgeom.js`). It found that the light, motion detector and circuit box in Claude's nook sat partly inside the hump's slanted shell. They moved into the nook. Three screen-wall displays also moved into the spots they were meant to have, which the old box-shaped check had wrongly blocked.
+
 ## Testing it in game
 1. Turn the reactor's **automatic control OFF**. The game doesn't save that switch.
 2. Throttle hard: the main bus should stay at ~1.0 V (`status`).

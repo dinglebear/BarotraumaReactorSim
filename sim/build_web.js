@@ -4,7 +4,10 @@
 const fs = require('fs'), path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
-const sim = ['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/project.js', 'sim/autopins.js', 'sim/subfile.js', 'sim/ship.js'].map(read).join('\n;\n');
+// structure prefab geometry (only what has a collision body) for the sub viewer's true wall shapes
+const prefabs = JSON.parse(read('ships/templates/structure_prefabs.json')).prefabs, bodies = {};
+for (const [k, v] of Object.entries(prefabs)) if (v.body || v.platform) bodies[k] = v;
+const sim = ['self.BaroStructurePrefabs = ' + JSON.stringify({ prefabs: bodies }) + ';', ...['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/project.js', 'sim/autopins.js', 'sim/subfile.js', 'sim/shellgeom.js', 'sim/ship.js'].map(read)].join('\n;\n');
 const lib = { circuits: {}, profiles: {}, ships: {} };
 const list = d => fs.existsSync(path.join(ROOT, d)) ? fs.readdirSync(path.join(ROOT, d)).sort() : [];
 for (const f of list('circuits')) {

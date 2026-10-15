@@ -142,7 +142,7 @@ console.log('real-game checks passed');
   // nothing new sits inside a floor or wall (turrets and their periscope/loader excepted: they replace vanilla parts)
   const doc = new SE.SubDoc(text), vanillaIds = new Set(new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8')).items.keys());
   const inBoxes = new Set(); for (const n of doc.items.values()) if (n.children.some(c => c.tag === 'CircuitBox')) for (const c of n.children) if (c.tag === 'ItemContainer') for (const id of (c.attrs.find(a => a[0] === 'contained') || [0, ''])[1].split(/[,;]/)) inBoxes.add(id);
-  const stuck = [...doc.items.values()].filter(n => !vanillaIds.has(n.attrs.find(a => a[0] === 'ID')[1]) && !inBoxes.has(n.attrs.find(a => a[0] === 'ID')[1]) && !n.children.some(c => c.tag === 'Wire')).filter(n => !/gun|periscope|loader/.test(n.attrs.find(a => a[0] === 'identifier')[1]) && doc.freeSpot(n) !== null);
+  const stuck = [...doc.items.values()].filter(n => !vanillaIds.has(n.attrs.find(a => a[0] === 'ID')[1]) && !inBoxes.has(n.attrs.find(a => a[0] === 'ID')[1]) && !n.children.some(c => c.tag === 'Wire')).filter(n => !/gun|periscope|loader/.test(n.attrs.find(a => a[0] === 'identifier')[1]) && doc.freeSpot(n, 16) !== null);
   assert(stuck.length === 0, 'items inside floors or walls: ' + stuck.map(n => n.attrs.find(a => a[0] === 'identifier')[1]).join(', '));
   const au = doc.audit(new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8'))).filter(x => x.level !== 'info');
   assert(au.length === 0, 'Camel Overkill audit: ' + au.map(x => x.msg).join('; '));
@@ -192,4 +192,30 @@ console.log('real-game checks passed');
   // atan starts from 0,0 like the game's float arrays: "0" for the first 0.1 s
   { const { c, outs } = mk('atan', {}); c.update(1 / 60); assert.deepStrictEqual(outs[0], ['signal_out', '0']); }
   console.log('component details passed');
+}
+
+// structure geometry and hull smoothing (sim/shellgeom.js, sim/subbuild.js)
+{
+  const zlib = require('zlib'), SF = require('./subfile'), G = require('./shellgeom'), SE = require('./subedit'), { SubBuilder } = require('./subbuild');
+  const rd = f => { const b = fs.readFileSync(path.join(ROOT, f)); return (b[0] === 0x1f ? zlib.gunzipSync(b) : b).toString('utf8').replace(/^﻿/, ''); };
+  // the game's body maths: every vanilla sub is watertight, and taking away the Camel's hump slopes makes it leak
+  for (const n of ['Camel', 'Dugong', 'Humpback', 'Typhon2']) assert.strictEqual(G.leaks(SF.parseSub(rd(`ships/vanilla/${n}.sub`))).length, 0, n + ' watertight');
+  const camel = SF.parseSub(rd('ships/vanilla/Camel.sub'));
+  assert(G.leaks(Object.assign({}, camel, { structures: camel.structures.filter(s => s.identifier !== 'shella52deg') })).length > 0, 'leak check notices missing slopes');
+  // a hump slope goes "/" on the left side (prefab rotation -52, the body is set to -BodyRotation)
+  const b = G.body({ identifier: 'shella52deg', rect: [-1113, 759, 285, 338] }); assert(b.seg[1][0] > b.seg[0][0] && b.seg[1][1] > b.seg[0][1], 'left hump slope rises to the right');
+  // builder: a stepped layout gets slopes in its steps, flips like vanilla, and stays watertight
+  const T = ['ships/vanilla/Dugong.sub', 'ships/vanilla/Camel.sub', 'ships/templates/vanilla_items.xml'].map(f => new SE.SubDoc(rd(f)));
+  const B = new SubBuilder(T, { name: 'steps' }, {});
+  B.room('a', -768, 0, 512, 256).room('b', -256, 0, 512, 256).room('c', 256, 0, 512, 256).room('u', -256, 256, 512, 256).room('o', -896, 256, 640, 256);
+  const d = B.build(), sh = SF.parseSub(d.text ? d.text() : d.toString());
+  assert.strictEqual(G.leaks(sh).length, 0, 'stepped build watertight');
+  assert(B.slopes.length >= 3, 'slopes placed: ' + B.slopes.length);
+  const flat = sh.structures.filter(s => s.identifier === 'shella0deg'), vert = sh.structures.filter(s => s.identifier === 'shella90deg');
+  assert(flat.some(s => s.flippedy) && vert.some(s => s.flippedx), 'bottom shells FY, right shells FX');
+  // the capsule: stepped top deck, smoothed, watertight
+  const cap = SF.parseSub(rd('ships/custom/Claudes_Test_Capsule.sub'));
+  assert.strictEqual(G.leaks(cap).length, 0, 'capsule watertight');
+  assert(cap.structures.filter(s => G.solid(s) && G.body(s).angle % (Math.PI / 2) !== 0).length >= 4, 'capsule has slopes');
+  console.log('hull smoothing passed');
 }

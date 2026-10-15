@@ -27,6 +27,7 @@ Everything needed to do it again is in this repo. A human then tests in game, an
 | `sub list <Sub> [regex]` | Electrical items with ID, position, room and wiring. |
 | `sub patch <Sub> <patch>` | Applies a `.subpatch` script and writes `ships/custom/<Name>.sub` (plus the mod folder if there is one). Runs the loader checks and **audit** automatically. |
 | `sub catalog <Sub> [regex]` | Every structure (walls, shells, backgrounds, deco) and item you can place, with typical sizes. |
+| `sub leaks <Sub>` | Watertight check using the game's own collision shapes: rays from every room must hit a wall. Vanilla subs pass. Run it after any shell work. |
 | `sub audit <Sub> --base <Original>` | Everything that has broken in game before: loose items, items inside walls/floors, boxes over 64 parts, moved originals, wires > 5. |
 | `sub templates <out.xml> <ids> <files...>` | Adds vanilla item templates (from any sub) so the editor can place those items. |
 | `ship <Sub> --transcript [--breach S --breach-hull ID] [--fire S --fire-hull ID] [--type "t:cmd"] [--radio "t:camel cmd"] [--duration S]` | Practice round in the whole-sub mock: power metrics, plus the radio chat, terminal and display text. |

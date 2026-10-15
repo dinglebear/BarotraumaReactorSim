@@ -36,7 +36,7 @@
     const byId = new Map(), wireItems = new Map();
     for (const n of sub.children) {
       if (n.tag === 'Hull') { const name = n.attrs.roomname || n.attrs.RoomName || ''; ship.hulls.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), name, label: roomLabel(name), linked: n.attrs.linked || '' }); }
-      if (n.tag === 'Structure') ship.structures.push({ id: n.attrs.ID, identifier: n.attrs.identifier, name: n.attrs.name || '', rect: rect(n.attrs.rect), solid: SOLID.test(n.attrs.name || ''), rotation: num(n.attrs.Rotation) || 0, flippedx: n.attrs.flippedx === 'true' });
+      if (n.tag === 'Structure') ship.structures.push({ id: n.attrs.ID, identifier: n.attrs.identifier, name: n.attrs.name || '', rect: rect(n.attrs.rect), solid: SOLID.test(n.attrs.name || ''), rotation: num(n.attrs.Rotation) || 0, flippedx: n.attrs.flippedx === 'true', flippedy: n.attrs.flippedy === 'true', scale: num(n.attrs.Scale) || num(n.attrs.scale) || 0 });
       if (n.tag === 'Gap') ship.gaps.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), horizontal: n.attrs.horizontal === 'true' });
       if (n.tag === 'WayPoint') ship.waypoints.push({ id: n.attrs.ID, x: num(n.attrs.x), y: num(n.attrs.y), spawn: n.attrs.spawn || 'Path', job: n.attrs.job || '', links: Object.keys(n.attrs).filter(k => /^linkedto\d+$/.test(k)).map(k => n.attrs[k]) });
       if (n.tag !== 'Item') continue;

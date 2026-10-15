@@ -10,9 +10,9 @@
 //     template item of the same identifier (all connections, prefab order); a <link w=wireID i=0|1/> joins a wire end
 //   - a wire is an <Item> with a <Wire nodes="x;y;x;y..."/> (sub coordinates); both its ends must be linked
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./subxml'), require('./components'), require('./format'));
-  else root.BaroSubEdit = factory(root.BaroSubXml, root.BaroComponents, root.BaroFormat);
-})(typeof self !== 'undefined' ? self : this, function (X, C, F) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./subxml'), require('./components'), require('./format'), require('./shellgeom'));
+  else root.BaroSubEdit = factory(root.BaroSubXml, root.BaroComponents, root.BaroFormat, root.BaroShellGeom || { prefab: () => null });
+})(typeof self !== 'undefined' ? self : this, function (X, C, F, G) {
   'use strict';
   const SOLID = /^(Shell|Shuttle Shell|Large (Horizontal|Vertical) Inside Wall|Large Inside Wall Cap|Platform|Submarine Bow|Stairs)/i; // structure names that are real walls/floors
   const CIRCUITBOX_MAX_COMPONENTS = 64; // in game: "Circuit box error: failed to find an item in the container" for slot 64 and up
@@ -75,8 +75,12 @@
       const id = this.addRaw(n, handle); this.log.push(`hull #${id} ${x},${top} ${w}x${h}${props && props.RoomName ? ' ' + props.RoomName : ''}`); return id;
     }
     addStructure(identifier, x, top, w, h, props, handle) { // walls, shells, backgrounds, platforms (resizable)
-      const t = this.templateEl('Structure', identifier); if (!t) throw new Error(`no structure template "${identifier}" (in this sub or the template subs)`);
-      const n = X.clone(t); X.set(n, 'rect', `${Math.round(x)},${Math.round(top)},${Math.round(w)},${Math.round(h)}`); X.del(n, 'flippedx'); X.del(n, 'flippedy');
+      let t = this.templateEl('Structure', identifier), generic = false;
+      if (!t && G.prefab(identifier)) { t = this.templateEl('Structure', 'shella0deg') || this.templateEl('Structure'); generic = true; } // any vanilla structure from the prefab catalog
+      if (!t) throw new Error(`no structure template "${identifier}" (in this sub, the template subs or ships/templates/structure_prefabs.json)`);
+      const n = X.clone(t);
+      if (generic) { const pf = G.prefab(identifier); X.set(n, 'identifier', identifier); X.set(n, 'name', ''); X.set(n, 'Scale', String(pf.scale || 1)); X.set(n, 'Rotation', '0'); }
+      X.set(n, 'rect', `${Math.round(x)},${Math.round(top)},${Math.round(w)},${Math.round(h)}`); X.del(n, 'flippedx'); X.del(n, 'flippedy');
       n.children = n.children.filter(c => c.tag !== 'Upgrade');
       for (const [k, v] of Object.entries(props || {})) X.set(n, k, v);
       const id = this.addRaw(n, handle); return id;
@@ -102,18 +106,40 @@
     // Solid structure = the sub's real walls (shell, inside walls and caps, platforms, bow, stairs); "Back Wall" and
     // background/deco pieces are only scenery. A room (hull) rectangle includes the thickness of its floor and ceiling,
     // so an item placed at a room's edge would sit inside the floor: nudge it to the nearest free spot in the same room.
+    // solid pieces as their real collision shapes (sim/shellgeom.js: rotated, offset, flipped like the game), so a slope's
+    // big sprite box doesn't push fittings away from the room it only clips
     solids() {
-      if (!this._solids) this._solids = this.sub.children.filter(n => n.tag === 'Structure' && SOLID.test(X.get(n, 'name') || '')).map(n => { const r = rectOf(n); return { x0: r[0], x1: r[0] + r[2], y1: r[1], y0: r[1] - r[3] }; });
+      if (!this._solids) this._solids = this.sub.children.filter(n => n.tag === 'Structure').map(n => {
+        const id = X.get(n, 'identifier'), pf = G.prefab && G.prefab(id), r = rectOf(n);
+        if (pf ? !(pf.body || pf.platform || pf.stairs) : !SOLID.test(X.get(n, 'name') || '')) return null;
+        const q = pf ? G.body({ identifier: id, rect: r, flippedx: X.get(n, 'flippedx') === 'true', flippedy: X.get(n, 'flippedy') === 'true', scale: Number(X.get(n, 'Scale')) || 0, rotation: Number(X.get(n, 'Rotation')) || 0 }).quad
+          : [[r[0], r[1] - r[3]], [r[0] + r[2], r[1] - r[3]], [r[0] + r[2], r[1]], [r[0], r[1]]];
+        const xs = q.map(p => p[0]), ys = q.map(p => p[1]);
+        return { q, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+      }).filter(Boolean);
       return this._solids;
     }
     hulls() { if (!this._hulls) this._hulls = this.sub.children.filter(n => n.tag === 'Hull').map(n => { const r = rectOf(n); return { x0: r[0], x1: r[0] + r[2], y1: r[1], y0: r[1] - r[3] }; }); return this._hulls; }
-    freeSpot(n) {
+    // tol: how far an item may already overlap a wall and still count as fine (0 when placing; 16 when auditing a
+    // finished sub: an attached item clipping a slope's plate by a few units is harmless in game)
+    freeSpot(n, tol = 0) {
       const r = rectOf(n), w = r[2], h = r[3], cx = r[0] + w / 2, cy = r[1] - h / 2;
       const box = (x, y) => ({ x0: x - w / 2 - 2, x1: x + w / 2 + 2, y0: y - h / 2 - 2, y1: y + h / 2 + 2 }); // 2 px margin: rects are rounded when written
-      const hit = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+      const hit = (a, b) => { // box a against solid b: bounding boxes first, then separating axes against b's real shape
+        if (!(a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0)) return false;
+        if (!b.q) return true;
+        const A = [[a.x0, a.y0], [a.x1, a.y0], [a.x1, a.y1], [a.x0, a.y1]];
+        for (const P of [A, b.q]) for (let i = 0; i < 4; i++) {
+          const [x1, y1] = P[i], [x2, y2] = P[(i + 1) % 4], nx = y2 - y1, ny = x1 - x2;
+          const pa = A.map(p => p[0] * nx + p[1] * ny), pb = b.q.map(p => p[0] * nx + p[1] * ny);
+          if (Math.max(...pa) <= Math.min(...pb) || Math.max(...pb) <= Math.min(...pa)) return false;
+        }
+        return true;
+      };
       const ok = b => !this.solids().some(s => hit(b, s));
       const inside = this.hulls().some(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1);
-      if (ok(box(cx, cy)) && inside) return null;
+      const shrink = b => ({ x0: b.x0 + tol, x1: b.x1 - tol, y0: b.y0 + tol, y1: b.y1 - tol });
+      if (ok(tol ? shrink(box(cx, cy)) : box(cx, cy)) && inside) return null;
       const dist = H => Math.hypot(Math.max(H.x0 - cx, 0, cx - H.x1), Math.max(H.y0 - cy, 0, cy - H.y1));
       const home = this.hulls().find(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1) || this.hulls().slice().sort((a, b) => dist(a) - dist(b))[0]; // outside every room: pull it into the nearest one
       const cands = [];
@@ -295,7 +321,7 @@
         if (inBox.has(id) || inCont.has(id) || this.comp(n, 'Wire')) continue;
         const h = this.comp(n, 'Holdable');
         if (h && X.get(h, 'Attached') !== 'True' && !baseIds.has(id)) add('error', `${tag(n)} is not attached: it will fall to the floor`);
-        if (!baseIds.has(id) && this.freeSpot(n) && !/gun|periscope|loader|hardpoint|turret|coil|laser|cannon|depthcharge|engine|reactor|door|hatch|ladder|dockingport/i.test(idf)) add('warn', `${tag(n)} sits inside a floor or wall`);
+        if (!baseIds.has(id) && this.freeSpot(n, 16) && !/gun|periscope|loader|hardpoint|turret|coil|laser|cannon|depthcharge|engine|reactor|door|hatch|ladder|dockingport/i.test(idf)) add('warn', `${tag(n)} sits inside a floor or wall`);
         const r = rectOf(n), cx = r[0] + r[2] / 2, cy = r[1] - r[3] / 2;
         if (!baseIds.has(id) && !this.hulls().some(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1) && !/gun|turret|coil|laser|cannon|depthcharge|light/i.test(idf)) add('warn', `${tag(n)} is outside every room`);
         const p = this.panel(n); if (p) for (const c of p.children) { const k = X.kids(c, 'link').length; if (k > 5) add('info', `${tag(n)}.${X.get(c, 'name')} has ${k} wires (more than 5: loads fine, can't add more by hand)`); }

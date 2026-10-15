@@ -74,8 +74,10 @@
       const box = (x, y) => ({ x0: x - w / 2, x1: x + w / 2, y0: y - h / 2, y1: y + h / 2 });
       const hit = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
       const ok = b => !this.solids().some(s => hit(b, s));
-      if (ok(box(cx, cy))) return null;
-      const home = this.hulls().find(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1);
+      const inside = this.hulls().some(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1);
+      if (ok(box(cx, cy)) && inside) return null;
+      const dist = H => Math.hypot(Math.max(H.x0 - cx, 0, cx - H.x1), Math.max(H.y0 - cy, 0, cy - H.y1));
+      const home = this.hulls().find(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1) || this.hulls().slice().sort((a, b) => dist(a) - dist(b))[0]; // outside every room: pull it into the nearest one
       const cands = [];
       for (let dy = -240; dy <= 240; dy += 4) for (let dx = -160; dx <= 160; dx += 8) cands.push([dx, dy, Math.hypot(dx, dy * 1.5)]);
       cands.sort((a, b) => a[2] - b[2]);

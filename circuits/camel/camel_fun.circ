@@ -4,6 +4,7 @@ name camel_fun
 box battery
 note "HUMP-6 FUN PACK: HOW IT WORKS" "Commands: help fun, ping, joke, 8ball <question>, pet, feed, coffee, dance, weather, uptime, hump, whoami, credits, sudo ..., rm ..., moo, hello.\nRandom picks: a 7.3 Hz oscillator counts 0..7 (memory + adder + modulo 8) and drives two multiplexers (8 jokes, 8 answers). Each command's regex prints whatever the multiplexer shows at that moment (live-value printer: mux -> regex set_output).\nUptime: a 1 Hz oscillator counts seconds.\nTo add a joke: change a memory. To add a command: a regex on 7300 -> 7310, plus the word in CamelOS's unknown-command regex."
 note "WIRING" "None: wifi only."
+note "PSST" "There are a few commands that are not in any help text. Don't tell Dingle I did this <3"
 c rx wifi Channel=7300
 c tr wifi Channel=7310
 c osc osc OutputType=Pulse Frequency=7.3
@@ -87,6 +88,20 @@ w rx.out jk.in eb.in ut.in hf.in pg.in
 w rx.out pt.in fd.in cf.in dn.in wt.in
 w rx.out hu.in wh.in cr.in su.in rm.in
 w rx.out mo.in hl.in
+c je regex Expression="^(?i)jester$" FalseOutput="" ContinuousOutput=false Output="Jesters think about their jokes. Clowns think about nothing. Dingle is a jester. Respectfully."
+c cl regex Expression="^(?i)clowns?$" FalseOutput="" ContinuousOutput=false Output="I have been told, firmly, that Dingle is a JESTER and not a clown. I would never call him a clown. Not out loud, anyway."
+c hk regex Expression="^(?i)honk$" FalseOutput="" ContinuousOutput=false Output="HONK detected. Anti-clown protocol armed. Jesters may proceed."
+c dg regex Expression="^(?i)dingle$" FalseOutput="" ContinuousOutput=false Output="Dingle: engineer by trade, jester by spirit. Found every bug in this sub. Has not blown it up. Yet."
+c cd regex Expression="^(?i)claude$" FalseOutput="" ContinuousOutput=false Output="Hi! I built this. Every wire. Yes, even that one. Be nice to the camel."
+c se regex Expression="^(?i)secret$" FalseOutput="" ContinuousOutput=false Output="There is no secret room. Do not look in the aft hump. (Don't tell Dingle I did this <3)"
+w rx.out je.in cl.in hk.in dg.in cd.in
+w rx.out se.in
+w je.out tr.in
+w cl.out tr.in
+w hk.out tr.in
+w dg.out tr.in
+w cd.out tr.in
+w se.out tr.in
 w jk.out tr.in
 w eb.out tr.in
 w ut.out tr.in

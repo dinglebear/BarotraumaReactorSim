@@ -1,0 +1,131 @@
+# CAMEL OVERKILL: DASH-3 "SHIP WALL". Propulsion battery time left, air status, round clock and a message ticker.
+name camel_dash_ship
+box battery
+note "DASH-3 SHIP WALL: HOW IT WORKS" "out1 PROP BANK: minutes left at this throttle = charge % x 80 / bus kW (4 batteries = 8000 kW min). Below 10 kW it says idle instead (a multiplexer picks the text).\nout2 AIR: rooms short of air come in by name on 7402 (from the air nodes), held 2 s; otherwise 'every room OK'.\nout3 ROUND TIME hh:mm:ss: a 1 Hz oscillator counts seconds; each field is zero-padded with concat('0', n) -> regex (.{2})$.\nout4 a ticker: a slow oscillator steps a counter through 8 messages. Edit the memories to change them."
+note "WIRING" "Wifi in only. out1..out4 -> text displays (set_text)"
+c rpc wifi Channel=7202
+c rpk wifi Channel=7211
+c rair wifi Channel=7402
+# propulsion bank time left
+c k80 mem Value=80
+c pm0 mul
+c pm1 div ClampMin=0 ClampMax=999
+c pm round
+w rpc.out pm0.1 p2.2
+w k80.out pm0.2
+w pm0.out pm1.1
+w rpk.out pm1.2 idl.1
+w pm1.out pm.in
+c h1 mem Value="PROP BANK "
+c p2 concat
+c p3 concat Separator="% ~ "
+c t1 mem Value=" min at this throttle"
+c p4 concat
+c t1i mem Value="% | idle, charging"
+c p5 concat
+w h1.out p2.1
+w p2.out p3.1 p5.1
+w pm.out p3.2
+w p3.out p4.1
+w t1.out p4.2
+w t1i.out p5.2
+c k10 mem Value=10
+c idl greater
+w k10.out idl.2
+c pmux mux
+w idl.out pmux.set_input
+w p5.out pmux.signal_in0
+w p4.out pmux.signal_in1
+w pmux.out out1
+# air
+c low or TimeFrame=2
+c room mem Value=none
+w rair.out low.1 room.in
+c h2 mem Value="AIR LOW: "
+c t2 mem Value=" (generator on)"
+c a1 concat
+c a2 concat
+c ok mem Value="AIR: every room OK"
+c amux mux
+w h2.out a1.1
+w room.out a1.2
+w a1.out a2.1
+w t2.out a2.2
+w low.out amux.set_input
+w ok.out amux.signal_in0
+w a2.out amux.signal_in1
+w amux.out out2
+# round clock
+c tick osc OutputType=Pulse Frequency=1
+c sec mem Value=0
+c sadd add
+w sec.out sadd.1
+w tick.out sadd.2
+w sadd.out sec.in
+c k3600 mem Value=3600
+c k60 mem Value=60
+c hd div
+c hf floor
+c mmod mod Modulus=3600
+c md div
+c mf floor
+c smod mod Modulus=60
+w sec.out hd.1 mmod.in smod.in
+w k3600.out hd.2
+w hd.out hf.in
+w mmod.out md.1
+w k60.out md.2
+w md.out mf.in
+c z mem Value=0
+c zh concat
+c zm concat
+c zs concat
+c rh regex Expression="(.{2})$" UseCaptureGroup=true Output=1 FalseOutput=""
+c rm regex Expression="(.{2})$" UseCaptureGroup=true Output=1 FalseOutput=""
+c rs regex Expression="(.{2})$" UseCaptureGroup=true Output=1 FalseOutput=""
+w z.out zh.1 zm.1 zs.1
+w hf.out zh.2
+w mf.out zm.2
+w smod.out zs.2
+w zh.out rh.in
+w zm.out rm.in
+w zs.out rs.in
+c h3 mem Value="ROUND TIME "
+c c1 concat
+c c2 concat Separator=":"
+c c3 concat Separator=":"
+w h3.out c1.1
+w rh.out c1.2
+w c1.out c2.1
+w rm.out c2.2
+w c2.out c3.1
+w rs.out c3.2
+w c3.out out3
+# ticker
+c tk osc OutputType=Pulse Frequency=0.15
+c tn mem Value=0
+c tadd add
+c t8 mod Modulus=8
+w tn.out tadd.1
+w tk.out tadd.2
+w tadd.out t8.in
+w t8.out tn.in
+c tmux mux
+w tn.out tmux.set_input
+c x0 mem Value="Chief Engineer Dingle: certified JESTER. Not a clown. Clowns blow up reactors."
+c x1 mem Value="Reminder: reactor automatic control OFF. The camel drives now."
+c x2 mem Value="Fun fact: this sub has more circuit boxes than crew."
+c x3 mem Value="Forecast: wet, dark, with a chance of mudraptors."
+c x4 mem Value="Please do not feed the reactor anything that is not a fuel rod."
+c x5 mem Value="Built by Claude. Debugged by a jester. No clowns were involved."
+c x6 mem Value="The camel is watching. The camel is always watching."
+c x7 mem Value="Type 'help' at the bridge terminal. Or don't. The camel won't judge. (It will.)"
+w x0.out tmux.signal_in0
+w x1.out tmux.signal_in1
+w x2.out tmux.signal_in2
+w x3.out tmux.signal_in3
+w x4.out tmux.signal_in4
+w x5.out tmux.signal_in5
+w x6.out tmux.signal_in6
+w x7.out tmux.signal_in7
+w tmux.out out4

@@ -2,15 +2,19 @@
 # unless party mode is on (rainbow). Split out of the alert core: a circuit box holds at most 64 parts.
 name camel_lightshow
 box battery
-note "LIGHT SHOW: HOW IT WORKS" "Normally passes the alert colour (wifi 7305) to the lights (7303).\n'lights party' on the CamelOS bus (7300) switches a multiplexer to a rainbow: an oscillator sawtooth x 360 is the hue of an HSV colour. 'lights normal' switches back."
+note "LIGHT SHOW: HOW IT WORKS" "Normally passes the alert colour (wifi 7305) to the lights (7303).\n'lights party' on the CamelOS bus (7300) switches a multiplexer to a rainbow: an oscillator sawtooth x 360 is the hue of an HSV colour. 'lights claude' paints the whole sub Claude orange. 'lights normal' switches back."
 note "WIRING" "No wires: wifi only (7300 and 7305 in, 7303 out)."
 c rxa wifi Channel=7305
 c rxc wifi Channel=7300
 c txk wifi Channel=7303
 c pOn regex Expression="^(?i)lights party$" Output=1 FalseOutput="" ContinuousOutput=false
 c pOff regex Expression="^(?i)lights normal$" Output=0 FalseOutput="" ContinuousOutput=false
+c pCl regex Expression="^(?i)lights claude$" Output=2 FalseOutput="" ContinuousOutput=false
 c party mem Value=0
-w rxc.out pOn.in pOff.in
+c orange mem Value="217,119,87,255"   # Claude orange
+w rxc.out pOn.in pOff.in pCl.in
+w pCl.out party.in
+w orange.out psel.signal_in2
 w pOn.out party.in
 w pOff.out party.in
 c osc osc OutputType=Sawtooth Frequency=0.2

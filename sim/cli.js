@@ -29,7 +29,7 @@ function loadConfig(a) {
 }
 function resolve(p, dirs) {
   if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
-  for (const d of dirs) for (const ext of ['', '.circ', '.txt', '.csv', '_reactor.txt']) { const q = path.join(ROOT, d, p + ext); if (fs.existsSync(q)) return q; }
+  for (const d of dirs) for (const ext of ['', '.circ', '.sbx', '.txt', '.csv', '_reactor.txt']) { const q = path.join(ROOT, d, p + ext); if (fs.existsSync(q)) return q; }
   throw new Error('file not found: ' + p);
 }
 const CIRC_DIRS = ['circuits', 'context/community_circuits', 'context/reactor_circuits'];
@@ -174,7 +174,9 @@ const COMMANDS = {
   // sub list <sub> [filter]           items with ID, position, room and every connection (what it is wired to)
   // sub patch <sub> <patch> [-o out]  apply an edit script (SUBEDIT.md), check it, save ships/custom/<name>.sub
   // sub check <sub>                   loader checks (IDs, wires, links)
+  // sub catalog <sub> [regex]          structures (walls/shells/backgrounds/deco) and items you can place, with sizes
   // sub audit <sub> [--base <sub>]     everything that broke in game before: box size, loose items, items in walls, moved originals
+  // sub leaks <sub>                    watertight check with the game's collision shapes (sim/shellgeom.js)
   sub(a) {
     const zlib = require('zlib'), SE = require('./subedit'), SF = require('./subfile');
     const [what, name, arg] = a._;
@@ -212,6 +214,23 @@ const COMMANDS = {
       fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, '<?xml version="1.0" encoding="utf-8"?>\n' + X.serialize(root)); console.log(`wrote ${items.length} templates to ${out}`); return;
     }
     const doc = new SE.SubDoc(text, templates);
+    if (what === 'catalog') { // sub catalog [regex]: every structure and item available to copy (this sub + templates), with typical size
+      const X = require('./subxml'), seen = new Map(), re = arg ? new RegExp(arg, 'i') : null;
+      for (const d of [doc, ...templates]) for (const n of d.sub.children) {
+        if (n.tag !== 'Structure' && n.tag !== 'Item') continue; const idf = X.get(n, 'identifier'); if (!idf || /wire$/.test(idf)) continue;
+        const key = n.tag + ':' + idf; if (seen.has(key)) { seen.get(key).n++; continue; }
+        const r = (X.get(n, 'rect') || '0,0,0,0').split(',').map(Number); seen.set(key, { tag: n.tag, idf, name: X.get(n, 'name') || '', w: r[2], h: r[3], n: 1, solid: n.tag === 'Structure' && SF.SOLID.test(X.get(n, 'name') || '') });
+      }
+      for (const e of [...seen.values()].sort((a, b) => a.tag.localeCompare(b.tag) || a.idf.localeCompare(b.idf))) if (!re || re.test(e.idf) || re.test(e.name)) console.log(`${e.tag === 'Structure' ? (e.solid ? 'WALL ' : 'DECO ') : 'ITEM '} ${e.idf.padEnd(28)} ${(e.name || '').padEnd(34)} ${e.w}x${e.h}  (x${e.n})`);
+      return;
+    }
+    if (what === 'leaks') { // sub leaks <sub>: watertight check with the game's collision shapes (rays from every room must hit a wall)
+      const SF = require('./subfile'), G = require('./shellgeom'), sh = SF.parseSub(doc.text()), L = G.leaks(sh);
+      const slopes = sh.structures.filter(s => G.solid(s) && Math.abs(Math.sin(2 * G.body(s).angle)) > 0.01).length;
+      console.log(`${sh.hulls.length} rooms, ${sh.structures.filter(G.solid).length} solid pieces (${slopes} slanted)`);
+      for (const l of L) console.log(`LEAK  ${l.name || 'room'} #${l.hull}: a ray from ${l.from.join(',')} heading ${l.dir}° escapes`);
+      console.log(L.length ? `${L.length} rooms leak` : 'watertight'); if (L.length) process.exitCode = 1; return;
+    }
     if (what === 'check') { const p = doc.check(); console.log(p.length ? p.join('\n') : 'ok: no loader problems'); return; }
     if (what === 'audit') { // sub audit <sub> [--base Camel]: loader checks, box size, loose items, items in walls, moved originals, >5 wires
       const bf = a.base ? find(a.base) : null, base = bf ? new SE.SubDoc(readSub(bf)) : null;
@@ -242,6 +261,11 @@ const COMMANDS = {
     const zlib = require('zlib'), f = path.resolve(a._[0] || ''); if (!fs.existsSync(f)) throw new Error('no file ' + a._[0]);
     const b = fs.readFileSync(f), text = (b[0] === 0x1f && b[1] === 0x8b ? zlib.gunzipSync(b) : b).toString('utf8').replace(/^\uFEFF/, '');
     console.log(require('./explain').explain(text, { filter: a._[1], all: !!a.all }));
+  },
+  // sandbox <file.sbx>: circuit sandbox (sim/sandbox.js): boxes, loose parts, virtual devices, scripted inputs, errors
+  sandbox(a) {
+    const f = resolve(a._[0], ['.', 'sandbox']), S = require('./sandbox'), { sb, report } = S.run(read(f), { readFile: q => read(path.isAbsolute(q) ? q : path.join(ROOT, q)) });
+    console.log(report); if (sb.unexpectedErrors.length || sb.results.some(r => !r.ok)) process.exitCode = 1;
   },
   // verify <trace.csv>: replay a ReactorTrace recorded in game and show where the simulator differs
   verify(a) { const f = resolve(a._[0], ['traces', 'load_profiles']); process.stdout.write(require('./verify').verify(read(f), { from: a.from != null ? Number(a.from) : null, mode: a.physics ? 'physics' : a.autotemp ? 'autotemp' : null, debug: a.debug ? String(a.debug).split('-').map(Number) : null })); },

@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Circuit Sandbox</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the bench's engineering console. Script on the left, the live wiring bench on the right (devices you can
+   operate, the circuit boxes drawn to scale inside their 8192-unit area), findings underneath. */
+:root {
+  --bg: #e9eef0; --panel: #fbfcfc; --sunk: #dfe6e9; --ink: #13222b; --muted: #57707b; --line: #c6d2d7;
+  --accent: #0a7069; --accent-ink: #ffffff; --amber: #b86e00; --bad: #b93225; --good: #2b7a3d;
+  --sig: #0a7069; --sig-off: #9fb0b7; --lamp: #f2b234; --screen: #0e1a16; --screen-ink: #7ef0b0; --border-zone: #b93225;
+  --f-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r: 6px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
+  --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
+  --sig: #3cb7ac; --sig-off: #3a525b; --lamp: #ffc552; --screen: #04100c; --screen-ink: #7ef0b0; --border-zone: #ff6f61; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
+  --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277;
+  --sig: #3cb7ac; --sig-off: #3a525b; --lamp: #ffc552; --screen: #04100c; --screen-ink: #7ef0b0; --border-zone: #ff6f61; color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html { -webkit-text-size-adjust: 100% }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: max(14px, env(safe-area-inset-top, 0px)) max(40px, env(safe-area-inset-bottom, 0px)) }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0 }
+a { color: var(--accent) }
+.wrap { max-width: 1500px; margin: 0 auto; display: grid; gap: 14px }
+header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; justify-content: space-between }
+.brand h1 { font-size: 26px; font-weight: 700; letter-spacing: .02em }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; max-width: 70ch }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+button, .btn { font: 600 13px var(--f-body); border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: var(--r); padding: 7px 12px; cursor: pointer; text-decoration: none }
+button:hover, .btn:hover { border-color: var(--accent) }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+button:disabled { opacity: .5; cursor: default }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden }
+.seg button { border: 0; border-radius: 0; padding: 7px 10px; font-family: var(--f-mono); font-weight: 500 }
+.seg button + button { border-left: 1px solid var(--line) }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg) }
+.clock { font: 500 15px var(--f-mono); font-variant-numeric: tabular-nums; min-width: 13ch }
+.progress { height: 4px; background: var(--sunk); border-radius: 2px; overflow: hidden }
+.progress > div { height: 100%; width: 0; background: var(--accent) }
+.grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; align-items: start }
+@media (max-width: 1000px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+.col { display: grid; gap: 14px; min-width: 0 }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); min-width: 0 }
+.phead { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--line) }
+.phead h2 { font: 600 11px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
+.pbody { padding: 12px; display: grid; gap: 10px; min-width: 0 }
+select, input[type=text], input[type=number] { font: 13px var(--f-mono); color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0 }
+textarea { width: 100%; min-height: 460px; resize: vertical; font: 12.5px/1.55 var(--f-mono); color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 10px; tab-size: 2; white-space: pre; overflow: auto }
+.hint { color: var(--muted); font-size: 12px; margin: 0 }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 500 }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+details.cheat summary { cursor: pointer; font: 600 12px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+details.cheat pre { margin: 8px 0 0; max-height: 360px; overflow: auto; font: 11.5px/1.5 var(--f-mono); background: var(--sunk); padding: 10px; border-radius: 4px; white-space: pre }
+/* devices */
+.devs { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px }
+.dev { border: 1px solid var(--line); border-radius: 4px; padding: 9px 10px; display: grid; gap: 6px; align-content: start; min-width: 0; background: var(--panel) }
+.dev.wide { grid-column: span 2 }
+@media (max-width: 460px) { .dev.wide { grid-column: auto } }
+.dev .dh { display: flex; justify-content: space-between; gap: 6px; align-items: baseline }
+.dev .dn { font: 600 13px var(--f-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.dev .dt { font: 600 10px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
+.dev .dv { font: 500 13px var(--f-mono); font-variant-numeric: tabular-nums; color: var(--muted); overflow-wrap: anywhere }
+.lamp { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); background: var(--sunk); transition: background .12s, box-shadow .12s }
+.lamp.on { background: var(--lamp); box-shadow: 0 0 14px var(--lamp) }
+.screen { background: var(--screen); color: var(--screen-ink); font: 500 13px/1.35 var(--f-mono); padding: 8px 9px; border-radius: 3px; min-height: 38px; white-space: pre-wrap; overflow-wrap: anywhere }
+.termlog { background: var(--screen); color: var(--screen-ink); font: 12px/1.4 var(--f-mono); padding: 8px 9px; border-radius: 3px; height: 128px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere }
+.termlog .me { color: var(--sig-off) }
+.dev form { display: flex; gap: 6px } .dev form input { flex: 1 1 auto; width: 0 }
+.meter { position: relative; height: 14px; border: 1px solid var(--line); border-radius: 3px; background: var(--sunk) }
+.meter::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted) }
+.meter i { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; background: var(--accent) }
+.gun { width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--line); background: var(--sunk); position: relative }
+.gun i { position: absolute; left: 50%; top: calc(50% - 3px); width: 50%; height: 6px; background: var(--ink); border-radius: 3px; transform-origin: 0 50% }
+.doorbar { height: 30px; border: 2px solid var(--line); border-radius: 3px; position: relative; overflow: hidden; background: var(--sunk) }
+.doorbar i { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background: var(--muted); transition: width .25s }
+.doorbar.open i { width: 12% }
+.tog { position: relative; width: 46px; height: 24px; border-radius: 12px; border: 1px solid var(--line); background: var(--sunk); padding: 0 }
+.tog::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--muted); transition: left .12s }
+.tog[aria-pressed="true"] { background: var(--accent); border-color: var(--accent) }
+.tog[aria-pressed="true"]::after { left: 24px; background: var(--accent-ink) }
+input[type=range] { width: 100%; accent-color: var(--accent) }
+/* boxes */
+.boxwrap { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--sunk); height: clamp(380px, 62vh, 760px); overflow: hidden; touch-action: none }
+.boxwrap svg { width: 100%; height: 100%; display: block; cursor: grab; user-select: none }
+.boxwrap .zoom { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px }
+.boxwrap .zoom button { padding: 3px 9px; font-family: var(--f-mono) }
+.nd rect.b { fill: var(--panel); stroke: var(--line); stroke-width: 6 }
+.nd rect.h { fill: var(--ink) }
+.nd.sel rect.b { stroke: var(--accent); stroke-width: 14 }
+.nd.io rect.b { stroke-dasharray: 30 20 }
+.nd text { font-family: var(--f-mono) }
+.nd .ht { fill: var(--panel); font-family: var(--f-display); font-weight: 600 }
+.nd .pt { fill: var(--muted) }
+.nd .vt { fill: var(--accent) }
+.wr { fill: none; stroke-width: 8; stroke: var(--sig-off) }
+.wr.live { stroke: var(--sig) }
+.note rect { fill: var(--panel); stroke: var(--line); stroke-width: 4; opacity: .7 }
+.note text { fill: var(--muted); font-family: var(--f-display) }
+.edge { fill: none; stroke: var(--border-zone); stroke-width: 10; stroke-dasharray: 60 40 }
+.edgelbl { fill: var(--border-zone); font: 600 90px var(--f-display) }
+.insp { font: 12px/1.5 var(--f-mono); background: var(--sunk); border-radius: 4px; padding: 8px 10px; min-height: 40px; overflow-wrap: anywhere; white-space: pre-wrap }
+/* findings */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); padding: 0 8px; overflow-x: auto }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 12px; color: var(--muted); white-space: nowrap }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
+.count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; font: 600 11px var(--f-mono); background: var(--sunk); color: var(--muted); text-align: center }
+.count.bad { background: var(--bad); color: var(--panel) } .count.warn { background: var(--amber); color: var(--panel) } .count.ok { background: var(--good); color: var(--panel) }
+ul.find { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 420px; overflow: auto }
+ul.find li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; font: 12.5px/1.45 var(--f-mono); padding: 6px 8px; border-radius: 4px; background: var(--sunk); overflow-wrap: anywhere }
+.pill { display: inline-block; font: 600 10px var(--f-body); letter-spacing: .06em; text-transform: uppercase; padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap }
+.ok { color: var(--good) } .warn { color: var(--amber) } .bad { color: var(--bad) } .mut { color: var(--muted) }
+pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f-mono); background: var(--sunk); border-radius: 4px; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere }
+.status { font-size: 13px; padding: 8px 10px; border-radius: 4px; background: var(--sunk); border-left: 3px solid var(--accent) }
+.status.err { border-left-color: var(--bad) } .status.okd { border-left-color: var(--good) }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Circuit Sandbox</h1>
+      <p>Wire circuit boxes, loose components and devices together, script what happens, then press buttons and type into terminals yourself. Same component engine as the reactor bench, 60 ticks a second. <a href="index.html">Reactor bench</a></p>
+    </div>
+    <div class="controls" role="group" aria-label="Run controls">
+      <button id="btnRun" class="primary">Run</button>
+      <button id="btnStep" title="One tick (1/60 s)">Step</button>
+      <button id="btnReset" title="Rebuild from the script and start over">Reset</button>
+      <div class="seg" id="speed" role="group" aria-label="Speed"><button data-s="0.25" aria-pressed="false">x¼</button><button data-s="1" aria-pressed="true">x1</button><button data-s="5" aria-pressed="false">x5</button><button data-s="max" aria-pressed="false">Max</button></div>
+      <span class="clock" id="clock">0.00 / 0 s</span>
+    </div>
+  </header>
+  <div class="progress" aria-hidden="true"><div id="prog"></div></div>
+  <div id="status" class="status">Loading…</div>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel" aria-label="Script">
+        <div class="phead"><h2>Script (.sbx)</h2>
+          <div class="bar"><select id="exSel" aria-label="Example"></select><button id="btnApply" class="primary" title="Ctrl+Enter">Apply &amp; restart</button></div></div>
+        <div class="pbody">
+          <textarea id="src" spellcheck="false" aria-label="Sandbox script"></textarea>
+          <div class="bar"><label class="check"><input type="checkbox" id="keep" checked> Keep running after the script ends</label><button id="btnCopy">Copy report</button><span id="copyMsg" class="hint"></span></div>
+          <details class="cheat"><summary>Syntax, devices and parts</summary><pre id="cheat"></pre></details>
+        </div>
+      </section>
+      <section class="panel" aria-label="Findings">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="prob" aria-selected="true">Problems<span class="count" id="nProb">0</span></button>
+          <button role="tab" data-tab="exp" aria-selected="false">Checks<span class="count" id="nExp">0</span></button>
+          <button role="tab" data-tab="trace" aria-selected="false">Trace</button>
+          <button role="tab" data-tab="log" aria-selected="false">Device log</button>
+          <button role="tab" data-tab="chat" aria-selected="false">Radio<span class="count" id="nChat">0</span></button>
+        </div>
+        <div class="pbody" data-pane="prob"><ul class="find" id="prob"></ul></div>
+        <div class="pbody" data-pane="exp" hidden><ul class="find" id="exp"></ul></div>
+        <div class="pbody" data-pane="trace" hidden><pre class="log" id="trace"></pre></div>
+        <div class="pbody" data-pane="log" hidden><pre class="log" id="dlog"></pre></div>
+        <div class="pbody" data-pane="chat" hidden><pre class="log" id="chat"></pre></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel" aria-label="Devices">
+        <div class="phead"><h2>Devices</h2><span class="hint">Operate them while it runs</span></div>
+        <div class="pbody"><div class="devs" id="devs"></div><div id="radio" hidden></div></div>
+      </section>
+      <section class="panel" aria-label="Circuit boxes">
+        <div class="phead"><h2>Circuit boxes</h2><div class="bar"><select id="boxSel" aria-label="Box"></select><span class="hint" id="boxInfo"></span></div></div>
+        <div class="pbody">
+          <div class="boxwrap" id="boxWrap"><svg id="boxSvg" tabindex="0" aria-label="Circuit box drawn inside its 8192 by 8192 area"></svg>
+            <div class="zoom"><button id="zIn" aria-label="Zoom in">+</button><button id="zOut" aria-label="Zoom out">−</button><button id="zFit" title="Zoom to the parts">Fit</button><button id="zArea" title="The whole 8192 x 8192 box area">Area</button></div></div>
+          <div class="insp" id="insp">Click a part to see its settings and live pin values. Lit wires carry a value other than 0. The dashed red square is the edge of the box area: parts placed past it get pushed onto it.</div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>/*__SIM__*/</script>
+<script type="application/json" id="lib">/*__LIB__*/</script>
+<script>
+(() => {
+'use strict';
+const S = self.BaroSandbox, C = self.BaroComponents, F = self.BaroFormat;
+const LIB = JSON.parse(document.getElementById('lib').textContent);
+const $ = id => document.getElementById(id);
+const store = { get(k, d) { try { const v = localStorage.getItem('sbx.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('sbx.' + k, JSON.stringify(v)); } catch (e) { } } };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
+const truthy = v => v !== undefined && v !== null && v !== '' && v !== '0';
+
+let sb = null, playing = false, speed = store.get('speed', '1'), lastTs = 0, carry = 0, curBox = null, shown = {};
+
+// ---------- examples + cheat sheet ----------
+const EX = LIB.examples;
+for (const k of Object.keys(EX)) { const o = document.createElement('option'); o.value = k; o.textContent = k.replace(/_/g, ' '); $('exSel').appendChild(o); }
+{ const o = document.createElement('option'); o.value = ''; o.textContent = 'My script'; $('exSel').prepend(o); }
+const head = (S.HELP || '').trim();
+$('cheat').textContent = head + '\n\nDEVICES\n' + Object.entries(S.DEVICES).map(([k, d]) => `  ${k.padEnd(9)} ${d.about}\n            pins: ${[...d.outs, ...d.ins.filter(p => p !== '*')].join(', ') || 'any'}`).join('\n')
+  + '\n\nPARTS (c <id> <type> ... inside a box, or part <id> <type> outside)\n' + C.CAT.map(d => `  ${d.alias.padEnd(7)} in: ${d.ins.join(', ')}   out: ${d.outs.join(', ')}\n          ${Object.entries(d.defaults).map(([k, v]) => k + '=' + JSON.stringify(v)).join(' ')}`).join('\n')
+  + '\n\nFILES you can load with  box <name> file=<path> [KEY=value]\n' + Object.keys(LIB.files).map(f => '  ' + f).join('\n');
+
+// ---------- build ----------
+function build(text) {
+  playing = false; carry = 0; setRunBtn();
+  const spec = S.parse(text, { readFile: p => { const f = LIB.files[p.replace(/^\.?\//, '')]; if (f === undefined) throw new Error(`no file "${p}" in this page (see the list under Syntax)`); return f; } });
+  sb = new S.Sandbox(spec); sb.live = true;
+  shown = {}; renderDevices(); fillBoxes(); render(true);
+  const n = sb.errors.length;
+  setStatus(n ? `${n} error${n > 1 ? 's' : ''} in the script: see Problems.` : `Built: ${sb.boxes.filter(b => !b.model.name.startsWith('part:')).length} box(es), ${spec.parts.length} loose part(s), ${sb.devs.length} device(s). Press Run.`, n ? 'err' : '');
+}
+function setStatus(t, cls) { const s = $('status'); s.textContent = t; s.className = 'status' + (cls ? ' ' + cls : ''); }
+
+// ---------- devices ----------
+function renderDevices() {
+  const box = $('devs'); box.innerHTML = '';
+  for (const [id, o] of Object.entries(sb.objs)) {
+    if (o.kind !== 'dev') continue;
+    const d = document.createElement('div'); d.className = 'dev' + (o.type === 'terminal' ? ' wide' : ''); d.dataset.id = id;
+    d.innerHTML = `<div class="dh"><span class="dn">${esc(id)}</span><span class="dt">${o.type}</span></div>`;
+    const act = (a, v) => { o.act(a, v); render(); };
+    const T = o.type;
+    if (T === 'button') { const b = document.createElement('button'); b.textContent = 'Press'; b.className = 'primary'; b.onclick = () => act('press'); d.appendChild(b); }
+    else if (T === 'switch' || T === 'motion' || T === 'smoke') {
+      const b = document.createElement('button'); b.className = 'tog'; b.setAttribute('aria-label', T === 'switch' ? 'Lever' : T === 'motion' ? 'Someone there' : 'Smoke');
+      b.onclick = () => T === 'switch' ? act('toggle') : act('set', o.s.value !== '0' ? '0' : '1'); d.appendChild(b); o.ui = { tog: b };
+      const v = document.createElement('div'); v.className = 'dv'; d.appendChild(v); o.ui.v = v;
+    }
+    else if (T === 'const' || T === 'water' || T === 'oxygen') {
+      const num = /^-?[\d.]+$/.test(o.s.value), row = document.createElement('div'); row.className = 'bar';
+      if (num || T !== 'const') { const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = T === 'const' ? Math.max(100, Number(o.s.value) * 2 || 100) : 100; r.step = 1; r.value = Number(o.s.value) || 0; r.setAttribute('aria-label', id + ' value'); r.oninput = () => act('set', r.value); d.appendChild(r); o.ui = { r }; }
+      const f = document.createElement('form'); f.innerHTML = `<input type="text" aria-label="${esc(id)} value" value="${esc(o.s.value)}"><button>Set</button>`;
+      f.onsubmit = e => { e.preventDefault(); act('set', f.elements[0].value); }; d.appendChild(f); o.ui = Object.assign(o.ui || {}, { f });
+    }
+    else if (T === 'terminal') {
+      const lg = document.createElement('div'); lg.className = 'termlog'; d.appendChild(lg);
+      const f = document.createElement('form'); f.innerHTML = `<input type="text" aria-label="Type into ${esc(id)}" placeholder="type a command, Enter sends"><button>Send</button>`;
+      f.onsubmit = e => { e.preventDefault(); const v = f.elements[0].value; if (v) { act('type', v); f.elements[0].value = ''; } }; d.appendChild(f); o.ui = { lg };
+    }
+    else if (T === 'light') { const l = document.createElement('div'); l.className = 'lamp'; d.appendChild(l); o.ui = { l }; }
+    else if (T === 'display') { const s = document.createElement('div'); s.className = 'screen'; d.appendChild(s); o.ui = { s }; d.classList.add('wide'); }
+    else if (T === 'door') { const b = document.createElement('div'); b.className = 'doorbar'; b.innerHTML = '<i></i>'; d.appendChild(b); const v = document.createElement('div'); v.className = 'dv'; d.appendChild(v); o.ui = { b, v }; }
+    else if (T === 'probe') { const v = document.createElement('div'); v.className = 'dv'; d.appendChild(v); o.ui = { v }; }
+    else if (T === 'periscope') {
+      const r = document.createElement('input'); r.type = 'range'; r.min = -180; r.max = 180; r.step = 1; r.value = Number(o.s.value) || 0; r.setAttribute('aria-label', id + ' aim (degrees)'); r.oninput = () => act('set', r.value); d.appendChild(r);
+      const row = document.createElement('div'); row.className = 'bar'; const f = document.createElement('button'); f.textContent = 'Fire'; f.className = 'primary'; f.onclick = () => act('press'); const h = document.createElement('button'); h.textContent = 'Hold fire'; h.onclick = () => act('toggle'); row.append(f, h); d.appendChild(row);
+      o.ui = { r, h };
+    }
+    else if (T === 'nav') {
+      const mk = (lbl, i) => { const r = document.createElement('input'); r.type = 'range'; r.min = -100; r.max = 100; r.step = 1; r.setAttribute('aria-label', id + ' ' + lbl); r.oninput = () => { const v = String(o.s.value).split(',').map(Number); v[i] = Number(r.value); act('set', `${v[0] || 0},${v[1] || 0}`); }; const l = document.createElement('label'); l.className = 'hint'; l.textContent = lbl; l.appendChild(r); d.appendChild(l); return r; };
+      const rx = mk('left / right', 0), ry = mk('down / up', 1); const b = document.createElement('button'); b.textContent = 'Docking'; b.onclick = () => act('press'); d.appendChild(b); o.ui = { rx, ry };
+    }
+    else if (T === 'engine' || T === 'pump') { const b = document.createElement('div'); b.className = 'meter'; b.innerHTML = '<i></i>'; d.appendChild(b); o.ui = { m: b.firstChild }; }
+    else if (T === 'turret') { const g = document.createElement('div'); g.className = 'gun'; g.innerHTML = '<i></i>'; d.appendChild(g); o.ui = { g: g.firstChild }; }
+    else if (T === 'dock') { const b = document.createElement('button'); b.className = 'tog'; b.setAttribute('aria-label', 'Another port is near'); b.onclick = () => act('set', o.s.value !== '0' ? '0' : '1'); const l = document.createElement('label'); l.className = 'check'; l.append(b, document.createTextNode('port near')); d.appendChild(l); o.ui = { tog: b }; }
+    if (!o.ui) o.ui = {};
+    if (!o.ui.v && !['terminal', 'display', 'light'].includes(T)) { const v = document.createElement('div'); v.className = 'dv'; d.appendChild(v); o.ui.v = v; }
+    box.appendChild(d);
+  }
+  if (!box.children.length) box.innerHTML = '<p class="hint">No devices. Add some with <code>dev &lt;id&gt; &lt;type&gt;</code>.</p>';
+  // radio chat input when any wifi links to chat
+  const chatWifis = sb.wifis.filter(w => String(w.p.LinkToChat).toLowerCase() === 'true');
+  const r = $('radio'); r.hidden = !chatWifis.length;
+  if (chatWifis.length) {
+    const chs = [...new Set(chatWifis.map(w => w.p.Channel))];
+    r.innerHTML = `<div class="dev wide"><div class="dh"><span class="dn">radio</span><span class="dt">chat channel ${chs.join(', ')}</span></div><form id="radioF"><input type="text" aria-label="Say on the radio" placeholder="say something on channel ${chs[0]}"><button>Say</button></form></div>`;
+    $('radioF').onsubmit = e => { e.preventDefault(); const i = e.target.elements[0]; if (i.value) { sb.say(chs[0], i.value); i.value = ''; render(); } };
+  }
+}
+function lightColor(c) { const m = String(c || '').split(',').map(Number); return m.length >= 3 && m.every(n => Number.isFinite(n)) ? `rgb(${m[0]},${m[1]},${m[2]})` : null; }
+function updateDevices() {
+  for (const o of sb.devs) {
+    const T = o.type, s = o.s, u = o.ui || {};
+    if (T === 'switch' || T === 'motion' || T === 'smoke') { const on = T === 'switch' ? s.on : s.value !== '0'; u.tog.setAttribute('aria-pressed', on); u.v.textContent = T === 'switch' ? (on ? 'on' : 'off') : T === 'motion' ? (on ? 'someone there' : 'nobody') : (on ? 'smoke' : 'clear'); }
+    else if (T === 'const' || T === 'water' || T === 'oxygen') { if (u.r && document.activeElement !== u.r) u.r.value = Number(s.value) || 0; if (u.v) u.v.textContent = (T === 'water' ? 'water ' : T === 'oxygen' ? 'oxygen ' : 'sends ') + s.value + (T === 'const' ? '' : ' %'); }
+    else if (T === 'terminal') { if (u.n !== s.lines.length) { u.n = s.lines.length; u.lg.innerHTML = s.lines.slice(-200).map(l => l.startsWith('> ') ? `<span class="me">${esc(l)}</span>` : esc(l)).join('\n'); u.lg.scrollTop = u.lg.scrollHeight; } }
+    else if (T === 'light') { u.l.classList.toggle('on', s.on); const c = lightColor(s.color); u.l.style.background = s.on && c ? c : ''; u.l.style.boxShadow = s.on && c ? `0 0 14px ${c}` : ''; }
+    else if (T === 'display') { u.s.textContent = s.text; const c = lightColor(s.color); u.s.style.color = c || ''; }
+    else if (T === 'door') { u.b.classList.toggle('open', s.on); u.v.textContent = s.on ? 'open' : 'closed'; }
+    else if (T === 'probe') u.v.textContent = s.last === undefined ? 'nothing yet' : JSON.stringify(s.last);
+    else if (T === 'periscope') { if (document.activeElement !== u.r) u.r.value = Number(s.value) || 0; u.h.setAttribute('aria-pressed', !!s.fire); u.h.textContent = s.fire ? 'Release' : 'Hold fire'; u.v.textContent = `aim ${s.value}°${s.fire ? ' · firing' : ''}`; }
+    else if (T === 'nav') { const [x, y] = String(s.value).split(',').map(Number); if (document.activeElement !== u.rx) u.rx.value = x || 0; if (document.activeElement !== u.ry) u.ry.value = y || 0; u.v.textContent = `steer x ${x || 0}, y ${y || 0} → pumps ${-(y || 0)}`; }
+    else if (T === 'engine') { const f = s.force || 0; u.m.style.left = f < 0 ? (50 + f / 2) + '%' : '50%'; u.m.style.width = Math.abs(f) / 2 + '%'; u.v.textContent = `force ${Math.round(f)} %`; }
+    else if (T === 'pump') { const f = s.speed || 0; u.m.style.left = f < 0 ? (50 + f / 2) + '%' : '50%'; u.m.style.width = Math.abs(f) / 2 + '%'; u.v.textContent = `${s.on ? 'on' : 'off'} · speed ${Math.round(f)} %${s.target !== undefined ? ' · target ' + Math.round(s.target) + ' %' : ''}`; }
+    else if (T === 'turret') { u.g.style.transform = `rotate(${-(s.angle || 0)}deg)`; u.v.textContent = `${Number(s.angle || 0).toFixed(0)}° · ${s.shots || 0} shot${s.shots === 1 ? '' : 's'}`; }
+    else if (T === 'dock') { u.tog.setAttribute('aria-pressed', s.value !== '0'); u.v.textContent = s.on ? 'docked' : 'undocked'; }
+    else if (T === 'button' && u.v) u.v.textContent = 'sends ' + JSON.stringify(o.props.Output || '1');
+  }
+}
+
+// ---------- circuit box drawing (game units; y up in game, down in SVG) ----------
+const NW = 340, HH = 64, ROW = 44;
+let vb = null, drawn = null;
+function fillBoxes() {
+  const sel = $('boxSel'); sel.innerHTML = '';
+  const boxes = sb.boxes.filter(b => !b.model.name.startsWith('part:'));
+  for (const b of boxes) { const o = document.createElement('option'); o.value = b.model.name; o.textContent = `${b.model.name} (${b.model.components.length}/64 parts)`; sel.appendChild(o); }
+  $('boxWrap').hidden = !boxes.length; sel.hidden = !boxes.length;
+  if (!boxes.length) { $('insp').textContent = 'No circuit boxes in this script (loose parts only).'; drawn = null; return; }
+  curBox = boxes.find(b => b.model.name === curBox) ? curBox : boxes[0].model.name; sel.value = curBox; drawBox();
+}
+function nodeSize(def) { const n = Math.max(def ? def.ins.length : 1, def ? def.outs.length : 1); return [NW, HH + 30 + ROW * n]; }
+function drawBox() {
+  const svg = $('boxSvg'); svg.innerHTML = ''; const box = sb.boxes.find(b => b.model.name === curBox); if (!box) return;
+  const bm = box.model, H = F.CB_HALF;
+  $('boxInfo').textContent = `${bm.components.length}/64 parts, ${bm.wires.length} wires`;
+  el('rect', { x: -H, y: -H, width: 2 * H, height: 2 * H, class: 'edge' }, svg);
+  el('text', { x: -H + 40, y: -H - 40, class: 'edgelbl' }, svg).textContent = 'box edge: ±4096';
+  const gW = el('g', {}, svg), gN = el('g', {}, svg);
+  for (const l of bm.labels || []) { if (!l.pos) continue; const g = el('g', { class: 'note' }, gN), [w, h] = l.size || [1400, 300]; el('rect', { x: l.pos[0] - w / 2, y: -l.pos[1] - h / 2, width: w, height: h, rx: 20 }, g); el('text', { x: l.pos[0] - w / 2 + 30, y: -l.pos[1] - h / 2 + 90, 'font-size': 70 }, g).textContent = (l.header || '').slice(0, 40); }
+  const pins = {}; // "<comp|io>|pin" -> [x,y]
+  const nodes = {};
+  const mkNode = (key, cx, cy, title, ins, outs, cls) => {
+    const n = Math.max(ins.length, outs.length, 1), w = NW, h = HH + 30 + ROW * n, x = cx - w / 2, y = -cy - h / 2;
+    const g = el('g', { class: 'nd ' + (cls || ''), 'data-k': key }, gN);
+    el('rect', { class: 'b', x, y, width: w, height: h, rx: 14 }, g); el('rect', { class: 'h', x, y, width: w, height: HH, rx: 14 }, g);
+    el('text', { class: 'ht', x: x + 18, y: y + 46, 'font-size': 40 }, g).textContent = title;
+    ins.forEach((p, i) => { const py = y + HH + 40 + i * ROW; pins[key + '|' + p] = [x, py]; el('circle', { cx: x, cy: py, r: 10, fill: 'var(--muted)' }, g); el('text', { class: 'pt', x: x + 18, y: py + 10, 'font-size': 28 }, g).textContent = F.shortPin ? F.shortPin(p) : p; });
+    const vals = [];
+    outs.forEach((p, i) => { const py = y + HH + 40 + i * ROW; pins[key + '|' + p] = [x + w, py]; el('circle', { cx: x + w, cy: py, r: 10, fill: 'var(--muted)' }, g); const t = el('text', { class: 'vt', x: x + w - 18, y: py + 10, 'font-size': 28, 'text-anchor': 'end' }, g); vals.push([p, t]); });
+    nodes[key] = { g, vals };
+    g.addEventListener('click', e => { e.stopPropagation(); select(key); });
+  };
+  const ioIns = Array.from({ length: 10 }, (_, i) => 'signal_in' + i), ioOuts = Array.from({ length: 10 }, (_, i) => 'signal_out' + i);
+  // box inputs feed the box from the left: their pins are outputs inside the box
+  mkNode('IN', bm.inPos[0], bm.inPos[1], 'INPUTS', [], ioIns, 'io'); mkNode('OUT', bm.outPos[0], bm.outPos[1], 'OUTPUTS', ioOuts, [], 'io');
+  for (const c of bm.components) { const ci = box.compById[c.id]; if (!ci) continue; mkNode('c:' + c.id, c.pos[0], c.pos[1], `${ci.def.alias} ${c.id}`.slice(0, 15), ci.def.ins, ci.def.outs); }
+  const wires = [];
+  for (const w of bm.wires) {
+    const a = w.from.c === null ? pins['IN|' + w.from.pin] : pins['c:' + w.from.c + '|' + w.from.pin], b = w.to.c === null ? pins['OUT|' + w.to.pin] : pins['c:' + w.to.c + '|' + w.to.pin];
+    if (!a || !b) continue; const dx = Math.max(120, Math.abs(b[0] - a[0]) / 2);
+    const p = el('path', { class: 'wr', d: `M${a[0]},${a[1]} C${a[0] + dx},${a[1]} ${b[0] - dx},${b[1]} ${b[0]},${b[1]}` }, gW);
+    const conn = w.from.c === null ? box.conns[w.from.pin] : (box.compById[w.from.c] || {}).conns?.[w.from.pin];
+    wires.push({ p, conn, src: w.from });
+  }
+  drawn = { box, nodes, wires, svg };
+  svg.onclick = () => select(null);
+  if (!vb) fit(); else svg.setAttribute('viewBox', vb.join(' '));
+  updateBox();
+}
+function connVal(item, pin) { const c = item && item.conns && item.conns[pin]; return c ? c.last : undefined; }
+function updateBox() {
+  if (!drawn) return; const { box, nodes, wires } = drawn;
+  for (const w of wires) { const v = w.conn ? w.conn.last : undefined; w.p.classList.toggle('live', truthy(v)); }
+  for (const [k, n] of Object.entries(nodes)) {
+    if (k === 'IN') n.vals.forEach(([p, t]) => { const v = connVal(box, p); t.textContent = v === undefined ? '' : String(v).slice(0, 14); });
+    else if (k.startsWith('c:')) { const ci = box.compById[k.slice(2)]; n.vals.forEach(([p, t]) => { const v = connVal(ci, p); t.textContent = v === undefined ? '' : String(v).slice(0, 10); }); }
+  }
+  if (selKey) showInsp();
+}
+let selKey = null;
+function select(k) { selKey = k; if (drawn) for (const [kk, n] of Object.entries(drawn.nodes)) n.g.classList.toggle('sel', kk === k); showInsp(); }
+function showInsp() {
+  const i = $('insp'); if (!drawn || !selKey) return;
+  const box = drawn.box;
+  if (selKey === 'IN' || selKey === 'OUT') { const pre = selKey === 'IN' ? 'signal_in' : 'signal_out'; i.textContent = `${selKey === 'IN' ? 'Box inputs' : 'Box outputs'} of ${box.model.name}\n` + Array.from({ length: 10 }, (_, n) => `  ${pre}${n} = ${JSON.stringify(connVal(box, pre + n) ?? '')}`).join('\n'); return; }
+  const id = selKey.slice(2), ci = box.compById[id], cm = box.model.components.find(c => c.id === id); if (!ci) return;
+  const props = Object.entries(ci.comp.p).map(([k, v]) => `  ${k} = ${JSON.stringify(v)}${cm.props[k] !== undefined ? '' : '  (default)'}`).join('\n');
+  const pinv = [...ci.def.ins, ...ci.def.outs].map(p => `  ${p.padEnd(16)} ${JSON.stringify(connVal(ci, p) ?? '')}`).join('\n');
+  i.textContent = `${ci.def.alias} ${id} at ${cm.pos.map(Math.round).join(',')}\nSETTINGS\n${props}\nPINS (last value)\n${pinv}`;
+}
+// pan / zoom
+function area() { const H = F.CB_HALF + 260; vb = [-H, -H, 2 * H, 2 * H]; $('boxSvg').setAttribute('viewBox', vb.join(' ')); }
+// zoom to the parts (and the I/O nodes) with a margin
+function fit() {
+  const box = drawn && drawn.box; if (!box || !box.model.components.length) return area(); const bm = box.model, pts = bm.components.map(c => c.pos);
+  const xs = pts.map(p => p[0]), ys = pts.map(p => -p[1]), pad = 500;
+  let x0 = Math.min(...xs) - NW / 2 - pad, x1 = Math.max(...xs) + NW / 2 + pad, y0 = Math.min(...ys) - pad - 200, y1 = Math.max(...ys) + pad + 200;
+  const r = $('boxSvg').getBoundingClientRect(), asp = r.width && r.height ? r.width / r.height : 1.4;
+  if ((x1 - x0) / (y1 - y0) < asp) { const w = (y1 - y0) * asp, c = (x0 + x1) / 2; x0 = c - w / 2; x1 = c + w / 2; } else { const h = (x1 - x0) / asp, c = (y0 + y1) / 2; y0 = c - h / 2; y1 = c + h / 2; }
+  vb = [x0, y0, x1 - x0, y1 - y0]; $('boxSvg').setAttribute('viewBox', vb.join(' '));
+}
+function zoom(f, cx, cy) { if (!vb) area(); cx = cx ?? vb[0] + vb[2] / 2; cy = cy ?? vb[1] + vb[3] / 2; const w = Math.min(12000, Math.max(400, vb[2] * f)), h = vb[3] * w / vb[2]; vb = [cx - (cx - vb[0]) * w / vb[2], cy - (cy - vb[1]) * h / vb[3], w, h]; $('boxSvg').setAttribute('viewBox', vb.join(' ')); }
+{
+  const svg = $('boxSvg'); let drag = null;
+  const toSvg = e => { const r = svg.getBoundingClientRect(), s = Math.max(vb[2] / r.width, vb[3] / r.height); return [vb[0] + vb[2] / 2 + (e.clientX - r.left - r.width / 2) * s, vb[1] + vb[3] / 2 + (e.clientY - r.top - r.height / 2) * s, s]; };
+  svg.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = toSvg(e); zoom(e.deltaY > 0 ? 1.15 : 1 / 1.15, x, y); }, { passive: false });
+  svg.addEventListener('pointerdown', e => { if (e.target.closest('.nd')) return; drag = { x: e.clientX, y: e.clientY, vb: vb.slice() }; svg.setPointerCapture(e.pointerId); });
+  svg.addEventListener('pointermove', e => { if (!drag) return; const r = svg.getBoundingClientRect(), s = Math.max(vb[2] / r.width, vb[3] / r.height); vb = [drag.vb[0] - (e.clientX - drag.x) * s, drag.vb[1] - (e.clientY - drag.y) * s, vb[2], vb[3]]; svg.setAttribute('viewBox', vb.join(' ')); });
+  svg.addEventListener('pointerup', () => drag = null);
+  $('zIn').onclick = () => zoom(1 / 1.3); $('zOut').onclick = () => zoom(1.3); $('zFit').onclick = fit; $('zArea').onclick = area;
+  $('boxSel').onchange = () => { curBox = $('boxSel').value; selKey = null; vb = null; drawBox(); };
+}
+
+// ---------- findings ----------
+function render(force) {
+  if (!sb) return;
+  const dur = sb.spec.duration; $('clock').textContent = `${sb.time.toFixed(2)} / ${dur} s`; $('prog').style.width = Math.min(100, sb.time / dur * 100) + '%';
+  updateDevices(); updateBox();
+  const warns = sb.allWarnings, errs = sb.errors;
+  const pk = errs.length + '|' + warns.length;
+  if (force || shown.prob !== pk) {
+    shown.prob = pk;
+    $('prob').innerHTML = errs.map(e => `<li><span class="pill bad">error</span><span>${esc(e)}</span></li>`).join('') + warns.map(w => `<li><span class="pill warn">warn</span><span>${esc(w)}</span></li>`).join('') || '<li><span class="pill ok">clean</span><span>No problems found so far.</span></li>';
+    const c = $('nProb'); c.textContent = errs.length + warns.length; c.className = 'count' + (errs.length ? ' bad' : warns.length ? ' warn' : '');
+  }
+  const ek = sb.results.length + '|' + sb.finished;
+  if (force || shown.exp !== ek) {
+    shown.exp = ek; const pend = sb.spec.expects.filter(x => x.t > sb.time).map(x => `t=${x.t}s ${x.target} ${x.op} ${x.value}`).concat(sb.finished ? [] : sb.spec.msgExpects.map(m => `${m.kind} /${m.re}/ (checked at the end)`));
+    $('exp').innerHTML = sb.results.map(r => `<li><span class="pill ${r.ok ? 'ok' : 'bad'}">${r.ok ? 'pass' : 'fail'}</span><span>${esc(r.msg)}</span></li>`).join('') + pend.map(p => `<li><span class="pill mut">later</span><span>${esc(p)}</span></li>`).join('') || '<li><span class="pill mut">none</span><span>No checks in this script. Add <code>expect &lt;t&gt; &lt;device&gt; = &lt;value&gt;</code> lines.</span></li>';
+    const bad = sb.results.filter(r => !r.ok).length, c = $('nExp'); c.textContent = `${sb.results.length - bad}/${sb.results.length + pend.length}`; c.className = 'count' + (bad ? ' bad' : sb.results.length ? ' ok' : '');
+  }
+  const tail = (id, arr, key) => { if (force || shown[key] !== arr.length) { shown[key] = arr.length; const p = $(id); const atEnd = p.scrollTop + p.clientHeight >= p.scrollHeight - 20; p.textContent = arr.slice(-400).join('\n') || '(nothing yet)'; if (atEnd) p.scrollTop = p.scrollHeight; } };
+  tail('trace', sb.trace.length ? sb.trace : (sb.watched.length ? [] : ['No watched pins. Add  watch <box>.out1 <part>.out ...  to the script.']), 'trace');
+  tail('dlog', sb.log, 'log');
+  const chat = sb.chat.map(c => `${c.t.toFixed(2)}s ch${c.ch} ${c.crew ? '(crew)' : '(wifi)'}: ${c.text}`); tail('chat', chat, 'chat'); $('nChat').textContent = sb.chat.length;
+}
+document.querySelector('.tabs').onclick = e => { const b = e.target.closest('button[role=tab]'); if (!b) return; for (const x of document.querySelectorAll('.tabs button')) x.setAttribute('aria-selected', x === b); for (const p of document.querySelectorAll('[data-pane]')) p.hidden = p.dataset.pane !== b.dataset.tab; store.set('tab', b.dataset.tab); };
+{ const t = store.get('tab', 'prob'), b = document.querySelector(`.tabs button[data-tab="${t}"]`); if (b) b.click(); }
+
+// ---------- run loop ----------
+function endCheck() {
+  if (sb.finished || sb.time < sb.spec.duration) return;
+  sb.finish(); render(true);
+  const bad = sb.results.filter(r => !r.ok).length, ue = sb.unexpectedErrors.length;
+  setStatus(`Script finished at ${sb.spec.duration} s: ${sb.results.length - bad}/${sb.results.length} checks passed, ${ue} error(s), ${sb.allWarnings.length} warning(s).${$('keep').checked ? ' Still running: keep playing with the devices.' : ''}`, bad || ue ? 'err' : 'okd');
+  if (!$('keep').checked) { playing = false; setRunBtn(); }
+}
+function frame(ts) {
+  const dt = Math.min(0.1, (ts - (lastTs || ts)) / 1000); lastTs = ts;
+  if (playing && sb) {
+    if (speed === 'max') { const t0 = performance.now(); while (performance.now() - t0 < 25) { sb.step(); if (!sb.finished && sb.time >= sb.spec.duration) { endCheck(); if (!playing) break; } } }
+    else { carry += dt * 60 * Number(speed); let n = Math.floor(carry); carry -= n; while (n-- > 0) { sb.step(); if (!sb.finished && sb.time >= sb.spec.duration) { endCheck(); if (!playing) break; } } }
+    render();
+  }
+  requestAnimationFrame(frame);
+}
+function setRunBtn() { $('btnRun').textContent = playing ? 'Pause' : 'Run'; }
+$('btnRun').onclick = () => { if (!sb) return; playing = !playing; if (playing && sb.finished && !$('keep').checked) $('keep').checked = true; setRunBtn(); };
+$('btnStep').onclick = () => { if (!sb) return; playing = false; setRunBtn(); sb.step(); endCheck(); render(); };
+$('btnReset').onclick = () => build($('src').value);
+$('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return; speed = b.dataset.s; store.set('speed', speed); for (const x of $('speed').children) x.setAttribute('aria-pressed', x === b); };
+for (const x of $('speed').children) x.setAttribute('aria-pressed', x.dataset.s === speed);
+$('btnApply').onclick = () => { store.set('src', $('src').value); $('exSel').value = EX[$('exSel').value] === $('src').value ? $('exSel').value : ''; build($('src').value); };
+$('src').addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); $('btnApply').click(); } });
+$('src').addEventListener('input', () => store.set('src', $('src').value));
+$('exSel').onchange = () => { const k = $('exSel').value; if (!k) { $('src').value = store.get('mine', $('src').value); } else { if ($('src').value && !Object.values(EX).includes($('src').value)) store.set('mine', $('src').value); $('src').value = EX[k]; } store.set('ex', k); store.set('src', $('src').value); vb = null; build($('src').value); };
+$('btnCopy').onclick = () => {
+  if (!sb) return; const txt = sb.report();
+  const done = m => { $('copyMsg').textContent = m; setTimeout(() => $('copyMsg').textContent = '', 2500); };
+  try { navigator.clipboard.writeText(txt).then(() => done('Report copied.'), () => { $('dlog').textContent = txt; done('Copy was blocked: the report is in the Device log tab, select it there.'); }); } catch (e) { $('dlog').textContent = txt; done('Copy was blocked: the report is in the Device log tab.'); }
+};
+
+// ---------- start ----------
+{
+  const ex = store.get('ex', 'mini_os'), src = store.get('src', null);
+  $('exSel').value = EX[ex] !== undefined ? ex : '';
+  $('src').value = src !== null && src.trim() ? src : (EX[ex] || EX[Object.keys(EX)[0]]);
+  try { build($('src').value); } catch (e) { setStatus('Could not build: ' + e.message, 'err'); }
+  requestAnimationFrame(frame);
+}
+})();
+</script>
+</body>
+</html>

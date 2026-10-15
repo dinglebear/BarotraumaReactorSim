@@ -1,0 +1,52 @@
+# Every classic wiring mistake in one place. The run passes when the sandbox CATCHES each one.
+# Use it to check the linter still works: node sim/cli.js sandbox pitfalls
+name pitfalls (the sandbox must catch all of these)
+dev btn button
+dev level const 50
+dev zero const 0
+dev scr display
+dev scr2 display
+
+box mistakes
+note "PITFALLS" "each part below is wrong on purpose"
+# 1. an AND with one input: it never outputs anything
+c lonely and
+w in1 lonely.1
+w lonely.out out1
+# 2. \d in a .circ file: the backslash escapes the d, the game gets "d+"
+c digits regex Expression="set (d+)" UseCaptureGroup=true
+w in1 digits.in
+w digits.out out2
+# 3. an output that goes nowhere
+c orphan not
+w in1 orphan.in
+# 4. divide by zero
+c ratio div
+w in2 ratio.1
+w in3 ratio.2
+w ratio.out out3
+# 7. a part placed far outside the 8192 x 8192 box area (@x,y): the game clamps it to the border
+c far not @6000,0
+w in1 far.in
+w far.out out4
+
+# 5. two senders into one display's set_text: it shows whichever came last each tick
+wire level.out mistakes.in2 scr.set_text
+wire zero.out mistakes.in3 scr.set_text
+wire btn.out mistakes.in1
+wire mistakes.out1 scr2.set_text
+# 6. a wifi channel nobody listens on
+part tx wifi Channel=99
+wire level.out tx.in
+
+at 1 press btn
+expectwarn lonely.*only signal_in1 is wired
+expectwarn digits.*d\+
+expectwarn orphan.*goes nowhere
+expectwarn scr.set_text: got different values in one tick
+expectwarn scr flickers
+expectwarn channel 99: nobody listens
+expectwarn ratio.*divides by zero
+expectwarn far.*outside the box area
+expect 3 scr2 = 0      # the half-wired AND sends its FalseOutput, never "1"
+run 3

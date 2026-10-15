@@ -1,0 +1,69 @@
+# A tiny terminal OS split over two boxes that only talk by wifi, plus radio chat.
+# Pattern from CIRCUIT_PATTERNS: a command bus (100) and a reply bus (110); every command box listens on the bus
+# and answers on the reply bus; regexes answer once per received command (ContinuousOutput=false, FalseOutput="").
+name mini OS: command bus + reply bus + radio
+dev term terminal
+dev lvl display
+dev lamp light
+
+box shell
+note "SHELL" "terminal -> bus 100. Replies on 110 -> terminal. Radio: 'os <cmd>' on channel 0 also goes to the bus, and replies go back to chat."
+c bus wifi Channel=100
+c rep wifi Channel=110
+c radio wifi Channel=0 LinkToChat=true MinChatMessageInterval=1
+c strip regex Expression="^os (.+)$" UseCaptureGroup=true Output=1 ContinuousOutput=false FalseOutput=""
+c tag concat Separator=" "
+c pre mem Value="[OS]"
+w in1 bus.in
+w radio.out strip.in
+w strip.out bus.in
+w rep.out out1
+w pre.out tag.1
+w rep.out tag.2
+w tag.out radio.in
+
+box cmds
+note "COMMANDS" "ping -> pong. set level N -> memory -> display. lamp on/off."
+c bus wifi Channel=100
+c rep wifi Channel=110
+c ping regex Expression="^ping$" Output=pong ContinuousOutput=false FalseOutput=""
+c setl regex Expression="^set level ([0-9]+)$" UseCaptureGroup=true Output=1 ContinuousOutput=false FalseOutput=""
+c lvl mem Value=0
+c ok concat Separator=""
+c okp mem Value="level = "
+c lon regex Expression="^lamp (on|off)$" UseCaptureGroup=true Output=1 ContinuousOutput=false FalseOutput=""
+c lbit equals
+c onw mem Value=on
+c lst mem Value=0
+w bus.out ping.in setl.in lon.in
+w ping.out rep.in
+w setl.out lvl.in
+w lvl.out out1
+w okp.out ok.1
+w setl.out ok.2
+w ok.out rep.in
+w lon.out lbit.1
+w onw.out lbit.2
+w lbit.out lst.in
+w lst.out out2
+w lon.out rep.in
+
+wire term.out shell.in1
+wire shell.out1 term.signal_in
+wire cmds.out1 lvl.set_text
+wire cmds.out2 lamp.set_state
+
+at 1 type term ping
+at 2 type term set level 42
+at 3 type term lamp on
+at 4 type term fly
+at 6 say ch0 os lamp off
+at 7 say ch0 os ping
+watch cmds.out2
+expect 1.5 term = pong
+expect 2.5 lvl = 42
+expect 2.5 term = "level = 42"
+expect 3.5 lamp = on
+expect 6.5 lamp = off
+expect 8 term = pong
+run 9

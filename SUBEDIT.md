@@ -25,6 +25,8 @@ set <id|@h> <Component.Attr>=<value> ...        # e.g. RelayComponent.IsOn=false
 wire <id|@h>.<conn> <id|@h>.<conn> [red|blue|green|orange|yellow|black|brown|white]
 unwire <id|@h>.<conn> <id|@h>.<conn>
 name @h <id>                                    # give an existing item a handle
+hull @h x,top,w,h [RoomName=..]  /  structure @h <identifier> x,top,w,h [SpriteColor=..]  /  gap @h x,top,w,h horizontal|vertical
+waypoint @h x,y [spawn=Human job=..] [gap=@g ladders=@l]  /  wplink @a @b      # structure editing (SUBBUILD.md)
 box @h at <x>,<y> from <circuit> [box reactor|battery] [NAME=value ...]   # a circuit box with its components built in; NAME=value fills $NAME in the circuit (one circuit, many rooms)
 ```
 - A box's pins are `signal_in0..9` / `signal_out0..9`; wire them like any other connection. `$MAX`/`$BATT_*` in the circuit are filled from this sub.

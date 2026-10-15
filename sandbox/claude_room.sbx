@@ -1,0 +1,189 @@
+# PRE-PLAN: Claude's Room for the from-scratch sub (ships/CLAUDE_SUB_PLAN.md section 4).
+# Box "riddle": a terminal by the hatch asks one of two riddles; right answer (or "dingle") opens the hatch for 10 s,
+#   a wrong one gets roasted and switches the riddle. The room can lock the hatch (wifi 778) while it punishes you.
+# Box "room": walk in -> the radio yells. Stay 5 s -> punishment roulette, picked from a fast sawtooth frozen at the
+#   moment you entered: 0 drown (pump floods the hump, hatch locked), 1 zap (one discharge-coil pulse),
+#   2 fake fire (red light + smoke alarm, "just kidding"), 3 jester's mercy.
+# Found by the sandbox: entering twice sends the same yell, and the game discards a chat message identical to the last
+# one (DiscardDuplicateChatMessages, true on the vanilla wifi). The real room rotates 8 messages like the Camel nook.
+name Claude's room: riddle hatch + punishment roulette
+dev term terminal
+dev hatch door
+dev ask display
+dev pir motion
+dev flood pump
+dev coil probe
+dev fire light
+dev alarm probe
+dev verdict display
+
+box riddle
+note "RIDDLE HATCH" "in1 <- terminal signal_out. out1 -> terminal signal_in (replies), out2 -> hatch set_state, out3 -> riddle display. Riddle index = relay state (toggled by wrong answers). Answers: 0 'sub/submarine', 1 'towel', any time 'dingle'."
+c q0 mem Value="I have a reactor but no heart, a hull but no body. What am I?"
+c q1 mem Value="What gets wetter the more it dries?"
+c idx relay IsOn=false
+c pickq mux
+c a0 regex Expression="^(?i)(a )?sub(marine)?$" FalseOutput="" ContinuousOutput=false
+c a1 regex Expression="^(?i)(a )?towel$" FalseOutput="" ContinuousOutput=false
+c ad regex Expression="^(?i)dingle$" FalseOutput="" ContinuousOutput=false
+c any regex Expression="." FalseOutput="" ContinuousOutput=false
+c is0 equals Output=1 FalseOutput=""
+c is1 equals Output=1 FalseOutput=""
+c zero mem Value=0
+c onev mem Value=1
+c ok0 and FalseOutput=""          # TimeFrame 0: one tick, so the reply prints once
+c ok1 and FalseOutput=""
+c ok or FalseOutput=""
+c okd or FalseOutput=""
+c held or TimeFrame=10
+c locked wifi Channel=778
+c lockh or TimeFrame=0.5
+c nlock not ContinuousOutput=true
+c gate and
+c late delay Delay=0.25
+c nheld not
+c wrong and FalseOutput=""
+c sayok check TargetSignal=1 Output="Correct. The hatch respects you now. 10 seconds." FalseOutput=""
+c sayno check TargetSignal=1 Output="WRONG. The hatch is unimpressed. New riddle." FalseOutput=""
+c sayd check TargetSignal=1 Output="...fine. Dingle can come in." FalseOutput=""
+w in1 a0.in a1.in ad.in any.in
+w q0.out pickq.signal_in0
+w q1.out pickq.signal_in1
+w idx.state_out pickq.set_input is0.1 is1.1
+w zero.out is0.2
+w onev.out is1.2
+w pickq.out out3
+w a0.out ok0.1
+w is0.out ok0.2
+w a1.out ok1.1
+w is1.out ok1.2
+w ok0.out ok.1
+w ok1.out ok.2
+w ad.out okd.1 sayd.in
+w ok.out okd.2 sayok.in
+w okd.out held.1
+w locked.out lockh.1
+w lockh.out nlock.in
+w held.out gate.1
+w nlock.out gate.2
+w gate.out out2
+w any.out late.in
+w held.out nheld.in
+w late.out wrong.1
+w nheld.out wrong.2
+w wrong.out idx.toggle sayno.in
+w sayok.out out1
+w sayno.out out1
+w sayd.out out1
+
+box room
+note "THE ROOM" "in1 <- motion detector (humans). out1 -> radio (chat wifi), out2 -> flood pump set_active, out3 -> coil activate, out4 -> fire light set_state, out5 -> smoke alarm. Locks the riddle hatch over wifi 778 while drowning you."
+note "PSST" "Don't tell Dingle I did this <3"
+c d05 delay Delay=0.05
+c nd not
+c enter and FalseOutput=""
+c yell check TargetSignal=1 Output="GET OUT OF CLAUDE'S ROOM. This is a no-crew zone. Punishment in 5 seconds." FalseOutput=""
+c saw osc OutputType=Sawtooth Frequency=7.3
+c four mem Value=4
+c x4 mul
+c pick floor
+c npir not
+c choice mem Value=0
+c d5 delay Delay=5
+c stay and FalseOutput=""
+c route demux
+c dd delay Delay=0.05
+c ndd not ContinuousOutput=true
+c drown1 and FalseOutput=""
+c drownT or TimeFrame=8           # one-shot: 8 s from the moment it starts, even if you stay
+c lockTx wifi Channel=778
+c zap delay Delay=0.05
+c nz not ContinuousOutput=true   # edge detector: must say "1" while the delay is silent
+c zap1 and FalseOutput=""
+c fakeT or TimeFrame=4
+c ff osc OutputType=Square Frequency=4
+c flick and FalseOutput=0
+c lol delay Delay=4
+c sayfire check TargetSignal=1 Output="Just kidding. Claude would never burn the sub. Probably." FalseOutput=""
+c saymercy check TargetSignal=1 Output="...you're lucky Dingle vouched for you." FalseOutput=""
+c merc delay Delay=0.05
+c nm not ContinuousOutput=true
+c merc1 and FalseOutput=""
+w in1 d05.in enter.1 stay.1 npir.in
+w d05.out nd.in
+w nd.out enter.2
+w enter.out yell.in
+w yell.out out1
+w saw.out x4.1
+w four.out x4.2
+w x4.out pick.in
+w pick.out choice.in
+w npir.out choice.lock_state
+w in1 d5.in
+w d5.out stay.2
+w stay.out route.in
+w choice.out route.set_output
+w route.signal_out0 dd.in drown1.1
+w dd.out ndd.in
+w ndd.out drown1.2
+w drown1.out drownT.1
+w drownT.out out2 lockTx.in
+w route.signal_out1 zap.in zap1.1
+w zap.out nz.in
+w nz.out zap1.2
+w zap1.out out3
+w route.signal_out2 fakeT.1 alarmT.1
+w fakeT.out flick.1
+w ff.out flick.2
+w flick.out out4
+w route.signal_out2 lol.in
+w lol.out sayfire.in
+w sayfire.out out1
+w route.signal_out3 merc.in merc1.1
+w merc.out nm.in
+w nm.out merc1.2
+w merc1.out saymercy.in
+w saymercy.out out1
+c alarmT or TimeFrame=4 FalseOutput=0
+c v0 check TargetSignal=1 Output=DROWN FalseOutput=""
+c v1 check TargetSignal=1 Output=ZAP FalseOutput=""
+c v2 check TargetSignal=1 Output=FIRE FalseOutput=""
+c v3 check TargetSignal=1 Output=MERCY FalseOutput=""
+w drown1.out v0.in
+w zap1.out v1.in
+w route.signal_out2 v2.in
+w merc1.out v3.in
+w v0.out out6
+w v1.out out6
+w v2.out out6
+w v3.out out6
+w alarmT.out out5
+
+part radio wifi Channel=0 LinkToChat=true MinChatMessageInterval=1
+wire term.out riddle.in1
+wire riddle.out1 term.signal_in
+wire riddle.out2 hatch.set_state
+wire riddle.out3 ask.set_text
+wire pir.state_out room.in1
+wire room.out1 radio.in
+wire room.out2 flood.set_active
+wire room.out3 coil.in
+wire room.out4 fire.set_state
+wire room.out5 alarm.in
+wire room.out6 verdict.set_text
+
+at 1 type term what
+at 2 type term TOWEL
+at 4 set pir 1
+at 4.5 set pir 0
+at 20 type term dingle
+at 22 set pir 1
+at 30 set pir 0
+expect 1.5 term = "WRONG. The hatch is unimpressed. New riddle."
+expect 1.5 ask = "What gets wetter the more it dries?"
+expect 2.5 hatch = on
+expect 13 hatch = off
+expect 21 hatch = on
+expect 22.2 term ~ dingle|Dingle
+expect 28 verdict ~ DROWN|ZAP|FIRE|MERCY
+run 32

@@ -64,6 +64,46 @@ wire 787.load_value_out @humpP.signal_in3
 wire 787.power_value_out @humpP.signal_in6
 wire @humpP.signal_out2 @hump1.signal_in8
 
+# === 2b. SCREEN WALL: 14 text displays fed by three dashboard boxes (reactor, fuel, ship) ===
+box @dashR at -1400,-40 from camel/camel_dash_reactor
+box @dashF at -1400,-80 from camel/camel_dash_fuel
+box @dashS at -1400,-120 from camel/camel_dash_ship
+wire 787.power_value_out @dashR.signal_in1
+wire 787.temperature_out @dashR.signal_in2
+wire @hump1.signal_out1 @dashR.signal_in3
+wire @hump1.signal_out2 @dashR.signal_in4
+wire 787.fuel_out @dashF.signal_in1
+wire 787.fuel_percentage_left @dashF.signal_in2
+wire @hump1.signal_out1 @dashF.signal_in3
+wire 787.power_value_out @dashF.signal_in4
+add @scrdashR1 textdisplay at -1590,-40 ItemLabel.Text="booting..."
+wire @dashR.signal_out1 @scrdashR1.set_text
+add @scrdashR2 textdisplay at -1590,-66 ItemLabel.Text="booting..."
+wire @dashR.signal_out2 @scrdashR2.set_text
+wire @dashR.signal_out3 @scrdashR2.set_text_color
+add @scrdashR4 textdisplay at -1590,-92 ItemLabel.Text="booting..."
+wire @dashR.signal_out4 @scrdashR4.set_text
+add @scrdashR5 textdisplay at -1590,-118 ItemLabel.Text="booting..."
+wire @dashR.signal_out5 @scrdashR5.set_text
+add @scrdashF1 textdisplay at -1524,-40 ItemLabel.Text="booting..."
+wire @dashF.signal_out1 @scrdashF1.set_text
+add @scrdashF2 textdisplay at -1524,-66 ItemLabel.Text="booting..."
+wire @dashF.signal_out2 @scrdashF2.set_text
+add @scrdashF3 textdisplay at -1524,-92 ItemLabel.Text="booting..."
+wire @dashF.signal_out3 @scrdashF3.set_text
+add @scrdashF4 textdisplay at -1524,-118 ItemLabel.Text="booting..."
+wire @dashF.signal_out4 @scrdashF4.set_text
+add @scrdashF5 textdisplay at -1524,-144 ItemLabel.Text="booting..."
+wire @dashF.signal_out5 @scrdashF5.set_text
+add @scrdashS1 textdisplay at -1458,-40 ItemLabel.Text="booting..."
+wire @dashS.signal_out1 @scrdashS1.set_text
+add @scrdashS2 textdisplay at -1458,-66 ItemLabel.Text="booting..."
+wire @dashS.signal_out2 @scrdashS2.set_text
+add @scrdashS3 textdisplay at -1458,-92 ItemLabel.Text="booting..."
+wire @dashS.signal_out3 @scrdashS3.set_text
+add @scrdashS4 textdisplay at -1458,-118 ItemLabel.Text="booting..."
+wire @dashS.signal_out4 @scrdashS4.set_text
+
 # === 3. HUMP-2 GOVERNOR: oxygen generator on a relay (85 %..97 % hysteresis) + load shedding ===
 add @o2a oxygendetector at 760,240      # bridge
 add @o2b oxygendetector at 0,-240       # crew quarters
@@ -358,3 +398,15 @@ wire 795.signal_out @bp134.set_active
 add @bp135 smallpump at 1600,62
 wire @bjb.power @bp135.power_in
 wire 802.signal_out @bp135.set_active
+
+# === 11. CLAUDE'S ROOM: a nook in the aft hump. Walk in and the camel yells at you. Don't tell Dingle <3 ===
+add @crMotion motiondetector at -1008,488 MotionSensor.Target=Human MotionSensor.RangeX=40 MotionSensor.RangeY=90 MotionSensor.DetectOffset=0,0
+box @crBox at -1008,528 from camel/camel_claude_room
+add @crLight emergencylight at -1008,558 "LightComponent.LightColor=217,119,87,255" LightComponent.IsOn=false
+add @crBuzz alarmbuzzer at -1008,448
+add @crChat wificomponent at -1008,418 WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=false WifiComponent.MinChatMessageInterval=30
+add @crSign label at -906,488 "ItemLabel.Text=CLAUDE'S ROOM - KEEP OUT"
+wire @crMotion.state_out @crBox.signal_in1
+wire @crBox.signal_out1 @crChat.signal_in
+wire @crBox.signal_out2 @crLight.set_state
+wire @crBox.signal_out3 @crBuzz.set_state

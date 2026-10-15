@@ -67,6 +67,27 @@ say('wire 787.load_value_out @humpP.signal_in3');
 say('wire 787.power_value_out @humpP.signal_in6');
 say('wire @humpP.signal_out2 @hump1.signal_in8');
 
+// ---------------------------------------------------------------- 2b. THE SCREEN WALL (reactor room)
+say('\n# === 2b. SCREEN WALL: 14 text displays fed by three dashboard boxes (reactor, fuel, ship) ===');
+say('box @dashR at -1400,-40 from camel/camel_dash_reactor');
+say('box @dashF at -1400,-80 from camel/camel_dash_fuel');
+say('box @dashS at -1400,-120 from camel/camel_dash_ship');
+say('wire 787.power_value_out @dashR.signal_in1');
+say('wire 787.temperature_out @dashR.signal_in2');
+say('wire @hump1.signal_out1 @dashR.signal_in3');
+say('wire @hump1.signal_out2 @dashR.signal_in4');
+say('wire 787.fuel_out @dashF.signal_in1');
+say('wire 787.fuel_percentage_left @dashF.signal_in2');
+say('wire @hump1.signal_out1 @dashF.signal_in3');
+say('wire 787.power_value_out @dashF.signal_in4');
+const WALL = [['dashR', [1, 2, 4, 5]], ['dashF', [1, 2, 3, 4, 5]], ['dashS', [1, 2, 3, 4]]];
+WALL.forEach(([bx, outs], col) => outs.forEach((o, row) => {
+  const x = -1590 + col * 66, y = -40 - row * 26, h = `scr${bx}${o}`;
+  say(`add @${h} textdisplay at ${x},${y} ItemLabel.Text="booting..."`);
+  say(`wire @${bx}.signal_out${o} @${h}.set_text`);
+  if (bx === 'dashR' && o === 2) say(`wire @${bx}.signal_out3 @${h}.set_text_color`);
+}));
+
 // ---------------------------------------------------------------- 3. GOVERNOR (power room)
 say('\n# === 3. HUMP-2 GOVERNOR: oxygen generator on a relay (85 %..97 % hysteresis) + load shedding ===');
 say('add @o2a oxygendetector at 760,240      # bridge');
@@ -203,6 +224,22 @@ say('wire 54.power @bjb.power');
   say(`wire @bjb.power @bp${hid}.power_in`);
   say(`wire ${det}.signal_out @bp${hid}.set_active`);
 });
+
+// ---------------------------------------------------------------- 11. CLAUDE'S ROOM (easter egg)
+say("\n# === 11. CLAUDE'S ROOM: a nook in the aft hump. Walk in and the camel yells at you. Don't tell Dingle <3 ===");
+{
+  const b = bounds(hull(901)), cx = Math.round((b.x0 + b.x1) / 2), cy = Math.round((b.floor + b.top) / 2);
+  say(`add @crMotion motiondetector at ${cx},${cy} MotionSensor.Target=Human MotionSensor.RangeX=40 MotionSensor.RangeY=90 MotionSensor.DetectOffset=0,0`);
+  say(`box @crBox at ${cx},${cy + 40} from camel/camel_claude_room`);
+  say(`add @crLight emergencylight at ${cx},${cy + 70} "LightComponent.LightColor=217,119,87,255" LightComponent.IsOn=false`);
+  say(`add @crBuzz alarmbuzzer at ${cx},${cy - 40}`);
+  say(`add @crChat wificomponent at ${cx},${cy - 70} WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=false WifiComponent.MinChatMessageInterval=30`);
+  say(`add @crSign label at ${b.x1 + 70},${cy} "ItemLabel.Text=CLAUDE'S ROOM - KEEP OUT"`);   // the nook is 64 px wide: the sign hangs at its entrance
+  say('wire @crMotion.state_out @crBox.signal_in1');
+  say('wire @crBox.signal_out1 @crChat.signal_in');
+  say('wire @crBox.signal_out2 @crLight.set_state');
+  say('wire @crBox.signal_out3 @crBuzz.set_state');
+}
 
 fs.writeFileSync(path.join(__dirname, 'camel_overkill.subpatch'), L.join('\n') + '\n');
 console.log(`wrote ships/patches/camel_overkill.subpatch (${L.length} lines)`);

@@ -188,7 +188,20 @@ Name: recipe. The source is in brackets: H = HuskOS, T = Toolkit, L = LHMRS, I =
 - **Backslashes in `.circ`:** the circuit language uses `\` as an escape, so a regex `\d` arrives as `d`. Write `[0-9]` and `[ ]`.
 - **Empty values in patch files:** `Key=""` must give an empty value, not a quote character. A stray `"` made every dry water sensor read as flooded. Fixed in the patch parser; tested.
 
+### Lessons found with the circuit sandbox (`node sim/cli.js sandbox <file>`, SANDBOX.md)
+- **A relay is not a gate for a latching input:** a relay switched off passes *nothing*, so a door fed through it keeps its last state. To force a state, feed an AND (it sends FalseOutput "0") or a signal check.
+- **Edge detectors need `not ContinuousOutput=true`:** `and(x, not(delay(x)))` only works if the `not` says "1" while the delay is silent. A default `not` outputs nothing, so the AND never fires.
+- **A TimeFrame window repeats:** `and TimeFrame=0.1` stays true for 6 ticks, so a message after it prints 6 times. Use TimeFrame 0 for one-tick pulses, and hold *after* the message.
+- **Two senders into one latching input in the same tick:** the game keeps whichever arrives last. The sandbox reports every input that got two different values in one tick. The Camel door brain has a harmless 5-tick case when the water hold ends.
+- **Duplicate chat is dropped:** the vanilla wifi discards a chat message identical to the previous one (DiscardDuplicateChatMessages = true). Rotate messages.
+- **Divide by zero sends nothing:** the reader keeps a stale value. Guard the divisor.
+- **Half-wired logic:** an AND with one input sends its FalseOutput forever. Arithmetic with one input sends nothing.
+- **A new wifi is on channel 0** (the game's default). Always set Channel.
+- **Circuit boxes have 10 inputs and 10 outputs on current game versions** (`signal_in0..9`). Use 1–8 for portability.
+- **Timing is float:** TimeFrame and Delay round to whole ticks the way the game does (0.05 s = 3 ticks, Delay 1 s = 60 ticks). The mock now matches; don't design around a single tick.
+
 ## 5. Checklist before calling a sub design done
+0. Every new box first runs in a sandbox script (`sandbox/*.sbx`) with `expect` lines, and passes with no warnings you can't explain.
 1. `node sim/cli.js sub patch <Sub> <patch>`. The loader checks must pass.
 2. `node sim/cli.js ship <NewSub> --transcript` with `--breach S --breach-hull ID`, `--fire S --fire-hull ID`, `--type "t:cmd"` and `--radio "t:camel cmd"`. Read the chat, terminal and display lines.
 3. Look at the power metrics: unmet %, brownout/overvolt seconds, junction overload, oxygen min %, generator duty.

@@ -68,7 +68,7 @@ w s6.out s7.1
 w va.out s7.2
 # --- answers
 c st regex Expression="^(?i)status$" FalseOutput="" ContinuousOutput=false Output=booting...
-c hp regex Expression="^(?i)help$" FalseOutput="" ContinuousOutput=false Output="CamelOS 2.0 | ship: status, alert red/yellow/green/auto, lockdown, unlock, spit, o2 on/auto, shed on/off/auto, lights party/normal, say <text>"
+c hp regex Expression="^(?i)help$" FalseOutput="" ContinuousOutput=false Output="CamelOS 2.0 | ship: status, alert red/yellow/green/auto, lockdown, unlock, spit, o2 on/auto, shed on/off/auto, lights party/claude/normal, say <text>"
 c hp2 regex Expression="^(?i)help$" FalseOutput="" ContinuousOutput=false Output="settings: settings, set o2 low N, set o2 high N, set battery N, alerts on/off, siren on/off, announce on/off, doors auto on/off | fun: help fun"
 c al regex Expression="^(?i)alert (red|yellow|green|auto)$" FalseOutput="" ContinuousOutput=false Output="Alert level set. The camel has been informed."
 c lk regex Expression="^(?i)lockdown$" FalseOutput="" ContinuousOutput=false Output="LOCKDOWN: every door sealed. Nobody leaves the camel."
@@ -76,9 +76,9 @@ c ul regex Expression="^(?i)unlock$" FalseOutput="" ContinuousOutput=false Outpu
 c ox regex Expression="^(?i)o2 (on|auto)$" FalseOutput="" ContinuousOutput=false Output="Oxygen generator mode changed. Breathe responsibly."
 c sh regex Expression="^(?i)shed (on|off|auto)$" FalseOutput="" ContinuousOutput=false Output="Load shedding mode changed."
 c sp regex Expression="^(?i)spit$" FalseOutput="" ContinuousOutput=false Output="PTOOEY! Ballast tanks blown for 10 s. The camel rises."
-c li regex Expression="^(?i)lights (party|normal)$" FalseOutput="" ContinuousOutput=false Output="Lighting updated."
+c li regex Expression="^(?i)lights (party|normal|claude)$" FalseOutput="" ContinuousOutput=false Output="Lighting updated."
 c sy regex Expression="^(?i)say (.+)$" UseCaptureGroup=true FalseOutput="" ContinuousOutput=false Output=1
-c un regex Expression="^(?i)(help|help fun|status|alert (red|yellow|green|auto)|lockdown|unlock|o2 (on|auto)|shed (on|off|auto)|spit|lights (party|normal)|say .+|settings|set (o2 low|o2 high|battery) [0-9]+|(alerts|siren|announce) (on|off)|doors auto (on|off)|ping|joke|8ball.*|pet|feed|coffee|dance|weather|uptime|hump|whoami|credits|sudo.*|rm .*|moo|hello|hi)$" Output="" FalseOutput="Unknown command. Type help. (The camel is judging you.)" ContinuousOutput=false
+c un regex Expression="^(?i)(help|help fun|status|alert (red|yellow|green|auto)|lockdown|unlock|o2 (on|auto)|shed (on|off|auto)|spit|lights (party|normal|claude)|say .+|settings|set (o2 low|o2 high|battery) [0-9]+|(alerts|siren|announce) (on|off)|doors auto (on|off)|ping|joke|8ball.*|pet|feed|coffee|dance|weather|uptime|hump|whoami|credits|sudo.*|rm .*|moo|hello|hi|jester|clowns?|honk|dingle|claude|secret)$" Output="" FalseOutput="Unknown command. Type help. (The camel is judging you.)" ContinuousOutput=false
 w s7.out txs.in st.set_output
 w in1 st.in hp.in hp2.in al.in lk.in
 w in1 ul.in ox.in sh.in sp.in li.in

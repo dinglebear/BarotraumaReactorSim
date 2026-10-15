@@ -1,0 +1,56 @@
+# PRE-PLAN for Dingle's bike: "point and go". One periscope does everything: where you aim is where you drive,
+# and the trigger fires the gun at the same spot. A lever is the throttle (off = coast, so you can look around).
+#   engine force = cos(aim) * 100 * throttle      pump speed = -sin(aim) * 100 * throttle  (pumping out = rise)
+# TO VERIFY IN GAME: the periscope's angle convention (0 = right? up = +90 or -90?). If the bike dives when you aim
+# up, flip the pump multiplier ( mem Value=100 -> -100 ). Engine force +100 pushes the way the sub faces.
+name bike: aim to drive, trigger to shoot
+dev scope periscope 0
+dev throttle switch 1
+dev eng engine
+dev ballast pump
+dev gun turret Reload=0.25
+
+box drive
+note "POINT AND GO" "in1 = periscope angle (deg), in2 = throttle lever (0/1). out1 -> engine set_force, out2 -> pump set_speed, out3 -> turret position_in (passed straight through)"
+c cx cos
+c sy sin
+c k mem Value=100
+c kn mem Value=-100
+c fx mul
+c fy mul
+c tx mul
+c ty mul
+w in1 cx.in sy.in out3
+w cx.out fx.1
+w k.out fx.2
+w sy.out fy.1
+w kn.out fy.2
+w fx.out tx.1
+w fy.out ty.1
+w in2 tx.2 ty.2
+w tx.out out1
+w ty.out out2
+
+wire scope.position_out drive.in1
+wire throttle.out drive.in2
+wire drive.out1 eng.set_force
+wire drive.out2 ballast.set_speed
+wire drive.out3 gun.position_in
+wire scope.trigger_out gun.trigger_in
+
+at 2 set scope 90         # aim straight up
+at 4 set scope 180        # aim behind
+at 6 toggle throttle      # throttle off: coast
+at 8 toggle scope         # hold the trigger for 1 s
+at 9 toggle scope
+watch drive.out1 drive.out2
+expect 1 eng = 100
+expect 1 ballast = 0
+expect 3 eng = 0
+expect 3 ballast = -100
+expect 5 eng = -100
+expect 7 eng = 0
+expect 7 ballast = 0
+expect 10 gun.shots = 4
+expect 10 gun.angle = 180
+run 11

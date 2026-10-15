@@ -1,0 +1,136 @@
+# CAMEL OVERKILL: DASH-2 "FUEL WALL". Rods, fuel, time left, burn rate, energy made and efficiency, worked out from the
+# game's own fuel math (reference/BAROTRAUMA_MECHANICS.md 1.2-1.3).
+name camel_dash_fuel
+box battery
+note "DASH-2 FUEL WALL: HOW IT WORKS" "Game facts: fuel_out = 80 per live uranium rod, fuel_percentage_left = sum of rod condition %, and every rod loses fission% x 0.2 / 100 condition per second.\nout1 RODS 3 x uranium | FUEL 287%: rods = fuel_out / 80.\nout2 FUEL LEFT ~4h 12m at this burn: average rod % / (fission x 0.002) seconds, split into hours and minutes.\nout3 BURN 0.81 rods/hour: rods x fission x 0.072.\nout4 MADE 123 kWh this round: power / 216000 added every tick (60 ticks/s, 3600 s/h).\nout5 EFFICIENCY 410 kWh/rod: energy made / rods burned (rods x fission x 0.002 / 100 / 60 added every tick).\nNo rods: out1 says so."
+note "WIRING" "in1 <- reactor fuel_out, in2 <- reactor fuel_percentage_left, in3 <- HUMP-1 out1 (fission), in4 <- reactor power_value_out\nout1..out5 -> text displays (set_text)"
+c k80 mem Value=80
+c rd div
+c rods round ClampMin=0
+w in1 rd.1 none.in
+w k80.out rd.2
+w rd.out rods.in
+c h1 mem Value="RODS "
+c m1 mem Value="%"
+c a1 concat
+c a2 concat Separator=" x uranium | FUEL "
+c a3 concat
+w h1.out a1.1
+w rods.out a1.2
+w a1.out a2.1
+w in2 a2.2
+w a2.out a3.1
+w m1.out a3.2
+w a3.out out1
+c none check TargetSignal=0 Output="NO FUEL RODS. Feed the camel." FalseOutput=""
+w none.out out1
+# time left
+c avg div
+c k002 mem Value=0.002
+c eps mem Value=0.0001
+c rate0 mul
+c rate add
+c tl div ClampMin=0 ClampMax=359999
+w in2 avg.1
+w rods.out avg.2
+w in3 rate0.1
+w k002.out rate0.2
+w rate0.out rate.1
+w eps.out rate.2
+w avg.out tl.1
+w rate.out tl.2
+c k3600 mem Value=3600
+c k60 mem Value=60
+c hh0 div
+c hh floor
+c mm0 mod Modulus=3600
+c mm1 div
+c mm floor
+w tl.out hh0.1 mm0.in
+w k3600.out hh0.2
+w hh0.out hh.in
+w mm0.out mm1.1
+w k60.out mm1.2
+w mm1.out mm.in
+c h2 mem Value="FUEL LEFT ~"
+c t2 mem Value="m at this burn"
+c b1 concat
+c b2 concat Separator="h "
+c b3 concat
+w h2.out b1.1
+w hh.out b1.2
+w b1.out b2.1
+w mm.out b2.2
+w b2.out b3.1
+w t2.out b3.2
+w b3.out out2
+# burn rate rods/hour = rods x fission x 0.072, 2 decimals
+c k072 mem Value=0.072
+c k100 mem Value=100
+c br0 mul
+c br1 mul
+c br2 mul
+c br3 round
+c br4 div
+w rods.out br0.1
+w in3 br0.2
+w br0.out br1.1
+w k072.out br1.2
+w br1.out br2.1
+w k100.out br2.2 br4.2
+w br2.out br3.in
+w br3.out br4.1
+c h3 mem Value="BURN "
+c t3 mem Value=" rods/hour"
+c c1 concat
+c c2 concat
+w h3.out c1.1
+w br4.out c1.2
+w c1.out c2.1
+w t3.out c2.2
+w c2.out out3
+# energy made this round (kWh), integrated every tick
+c kwt mem Value=0.00000463   # 1 / 216000
+c e0 mul
+c en mem Value=0
+c ea add
+w in4 e0.1
+w kwt.out e0.2
+w en.out ea.1
+w e0.out ea.2
+w ea.out en.in
+c er round
+c h4 mem Value="MADE "
+c t4 mem Value=" kWh this round"
+c d1 concat
+c d2 concat
+w en.out er.in
+w h4.out d1.1
+w er.out d1.2
+w d1.out d2.1
+w t4.out d2.2
+w d2.out out4
+# rods burned this round, integrated every tick: rods x fission x 0.002 / 100 / 60 = rods x fission x 0.000000333
+c krb mem Value=0.000000333
+c rb0 mul
+c rbm mem Value=0
+c rba add
+w br0.out rb0.1
+w krb.out rb0.2
+w rbm.out rba.1
+w rb0.out rba.2
+w rba.out rbm.in
+c eff div ClampMax=99999
+c efr round
+c h5 mem Value="EFFICIENCY "
+c t5 mem Value=" kWh per rod"
+c f1 concat
+c f2 concat
+w en.out eff.1
+w rbm.out eff.2
+w eff.out efr.in
+w h5.out f1.1
+w efr.out f1.2
+w f1.out f2.1
+w t5.out f2.2
+w f2.out out5

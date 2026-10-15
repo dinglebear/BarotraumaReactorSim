@@ -1,0 +1,44 @@
+# The real Camel Overkill door brain (circuits/camel/camel_door.circ), loaded from its file and put through a flood,
+# a lockdown and 'doors auto off'. The bridge terminal reaches it over the CamelOS bus (7300) and the setting bus (7411).
+name Camel door brain: flood, lockdown, doors auto
+box door file=circuits/camel/camel_door.circ
+dev pir motion
+dev wetA water
+dev wetB water
+dev dr door
+dev term terminal
+dev auto switch 1
+part bus wifi Channel=7300
+part setb wifi Channel=7411
+wire term.out bus.in
+wire auto.out setb.in
+wire pir.state_out door.in1
+wire wetA.signal_out door.in2
+wire wetB.signal_out door.in3
+wire door.out1 dr.set_state
+watch door.out1
+
+at 1 set pir 1          # someone walks up: opens
+at 2 set pir 0          # leaves: closes 3 s later
+expect 1.5 dr = on
+expect 5.5 dr = off
+at 7 set pir 1          # standing in the doorway when the water arrives
+at 8 set wetA 30        # flood: one close pulse, and motion no longer opens it
+expect 8.5 dr = off
+at 9 set wetA 0         # sloshing: dry for a moment...
+at 9.5 set wetA 40      # ...wet again: the 5 s hold means no flapping
+expect 10 dr = off
+at 12 set wetA 0
+at 18 set pir 0
+expect 17.5 dr = on     # 5 s after the water is gone, motion opens it again
+at 20 type term lockdown
+expect 20.5 dr = off
+at 21 set pir 1
+expect 22 dr = off      # lockdown beats motion
+at 23 type term unlock
+expect 23.5 dr = on
+at 24 set pir 0
+at 28 toggle auto       # doors auto off
+at 29 set pir 1
+expect 30 dr = off
+run 31

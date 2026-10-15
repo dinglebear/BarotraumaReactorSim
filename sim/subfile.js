@@ -7,6 +7,8 @@
   else root.BaroSubFile = factory(root.BaroFormat, root.BaroComponents);
 })(typeof self !== 'undefined' ? self : this, function (F, C) {
   'use strict';
+  // structure names that are real walls/floors (collide); 'Back Wall', backgrounds and deco are scenery
+  const SOLID = /^(Shell|Shuttle Shell|Large (Horizontal|Vertical) Inside Wall|Large Inside Wall Cap|Platform|Submarine Bow|Stairs)/i;
   const num = v => (v === undefined || v === '' ? undefined : Number(v));
   const rect = s => (s || '0,0,0,0').split(',').map(Number); // x, y(top, y up), w, h
   // components that make an item electrically interesting
@@ -14,14 +16,29 @@
     'Turret', 'ElectricalDischarger', 'LightComponent', 'Door', 'Fabricator', 'Deconstructor', 'MiniMap', 'Controller', 'MotionSensor', 'WaterDetector', 'SmokeDetector',
     'OxygenDetector', 'Terminal', 'ButtonTerminal', 'TextDisplay', 'CircuitBox', 'WifiComponent', 'Vent', 'Powered', 'StatusMonitor', 'ItemLabel']);
 
+  // vanilla room names are localization keys ("roomname.engineroom"); show them the way the game's English text does
+  const ROOM_WORDS = { engineroom: 'Engine Room', commandroom: 'Command Room', airlockaccess: 'Airlock Access', medbay: 'Medical Bay', engineering: 'Engineering',
+    armory: 'Armory', airlock: 'Airlock', oxygengenerator: 'Oxygen Generator', crewquarters: 'Crew Quarters', reactorroom: 'Reactor Room', dockingport: 'Docking Port',
+    centralaccessshaft: 'Central Access Shaft', centralaccesspassage: 'Central Access Passage', junctioncompartment: 'Junction Compartment', electrical: 'Electrical',
+    subcenter: 'Center', subbottomcenter: 'Bottom Center', rearballast: 'Rear Ballast', frontballast: 'Front Ballast', gunnerycompartment: 'Gunnery Compartment',
+    bilge: 'Bilge', cargo: 'Cargo', ballasttank: 'Ballast Tank', storage: 'Storage', brig: 'Brig', bridge: 'Bridge', lab: 'Laboratory', hangar: 'Hangar' };
+  function roomLabel(name) {
+    const m = /^roomname\.([a-z]+?)(\d*)$/i.exec(name || ''); if (!m) return name || '';
+    const w = ROOM_WORDS[m[1].toLowerCase()] || m[1].charAt(0).toUpperCase() + m[1].slice(1);
+    return w + (m[2] ? ' ' + m[2] : '');
+  }
   function parseSub(xml) {
     const doc = F.parseXml(xml), sub = doc.children.find(n => n.tag === 'Submarine' || n.tag === 'ItemAssembly'); // assemblies hold items the same way
     if (!sub) throw new Error('not a submarine file (no <Submarine>)');
     const a = sub.attrs;
-    const ship = { name: a.name || 'sub', description: a.description || '', class: a.class || '', tier: num(a.tier), dimensions: a.dimensions || '', hulls: [], items: [], wires: [], warnings: [] };
+    const ship = { name: a.name || 'sub', description: a.description || '', class: a.class || '', tier: num(a.tier), dimensions: a.dimensions || '', hulls: [], items: [], wires: [], warnings: [],
+      structures: [], gaps: [], waypoints: [], props: [] }; // structures/gaps/waypoints/props: for the viewer and for building subs
     const byId = new Map(), wireItems = new Map();
     for (const n of sub.children) {
-      if (n.tag === 'Hull') ship.hulls.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), name: n.attrs.roomname || '' });
+      if (n.tag === 'Hull') { const name = n.attrs.roomname || n.attrs.RoomName || ''; ship.hulls.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), name, label: roomLabel(name), linked: n.attrs.linked || '' }); }
+      if (n.tag === 'Structure') ship.structures.push({ id: n.attrs.ID, identifier: n.attrs.identifier, name: n.attrs.name || '', rect: rect(n.attrs.rect), solid: SOLID.test(n.attrs.name || ''), rotation: num(n.attrs.Rotation) || 0, flippedx: n.attrs.flippedx === 'true', flippedy: n.attrs.flippedy === 'true', scale: num(n.attrs.Scale) || num(n.attrs.scale) || 0 });
+      if (n.tag === 'Gap') ship.gaps.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), horizontal: n.attrs.horizontal === 'true' });
+      if (n.tag === 'WayPoint') ship.waypoints.push({ id: n.attrs.ID, x: num(n.attrs.x), y: num(n.attrs.y), spawn: n.attrs.spawn || 'Path', job: n.attrs.job || '', links: Object.keys(n.attrs).filter(k => /^linkedto\d+$/.test(k)).map(k => n.attrs[k]) });
       if (n.tag !== 'Item') continue;
       const it = { id: n.attrs.ID, identifier: n.attrs.identifier, rect: rect(n.attrs.rect), tags: n.attrs.Tags || n.attrs.tags || '', comps: {}, conns: [], contained: [], flipped: n.attrs.flippedx === 'true' };
       for (const c of n.children) {
@@ -60,6 +77,10 @@
       if (it.comps.Reactor || it.comps.PowerContainer) out.contained = it.contained.flat().flat().map(id => byId.get(id)).filter(Boolean).map(x => x.identifier);
       ship.items.push(out);
     }
+    // everything else that is placed in the sub (decorations, cabinets, ladders...): props, for the viewer
+    const contained = new Set(); for (const it of byId.values()) for (const cont of it.contained) for (const slot of cont) for (const id of slot) contained.add(id);
+    const shown = new Set(ship.items.map(i => i.id));
+    for (const it of byId.values()) if (!shown.has(it.id) && !contained.has(it.id) && it.wireNodes === undefined) ship.props.push({ id: it.id, identifier: it.identifier, rect: it.rect });
     const keep = new Set(ship.items.map(i => i.id));
     ship.wires = ship.wires.filter(w => keep.has(w.from.item) && keep.has(w.to.item));
     return ship;
@@ -101,5 +122,5 @@
     L.push('items: ' + Object.entries(count).sort((a, b) => b[1] - a[1]).map(([k, v]) => v > 1 ? `${k}×${v}` : k).join(', '));
     return L.join('\n');
   }
-  return { parseSub, summary };
+  return { parseSub, summary, SOLID, roomLabel };
 });

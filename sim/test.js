@@ -142,9 +142,80 @@ console.log('real-game checks passed');
   // nothing new sits inside a floor or wall (turrets and their periscope/loader excepted: they replace vanilla parts)
   const doc = new SE.SubDoc(text), vanillaIds = new Set(new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8')).items.keys());
   const inBoxes = new Set(); for (const n of doc.items.values()) if (n.children.some(c => c.tag === 'CircuitBox')) for (const c of n.children) if (c.tag === 'ItemContainer') for (const id of (c.attrs.find(a => a[0] === 'contained') || [0, ''])[1].split(/[,;]/)) inBoxes.add(id);
-  const stuck = [...doc.items.values()].filter(n => !vanillaIds.has(n.attrs.find(a => a[0] === 'ID')[1]) && !inBoxes.has(n.attrs.find(a => a[0] === 'ID')[1]) && !n.children.some(c => c.tag === 'Wire')).filter(n => !/gun|periscope|loader/.test(n.attrs.find(a => a[0] === 'identifier')[1]) && doc.freeSpot(n) !== null);
+  const stuck = [...doc.items.values()].filter(n => !vanillaIds.has(n.attrs.find(a => a[0] === 'ID')[1]) && !inBoxes.has(n.attrs.find(a => a[0] === 'ID')[1]) && !n.children.some(c => c.tag === 'Wire')).filter(n => !/gun|periscope|loader/.test(n.attrs.find(a => a[0] === 'identifier')[1]) && doc.freeSpot(n, 16) !== null);
   assert(stuck.length === 0, 'items inside floors or walls: ' + stuck.map(n => n.attrs.find(a => a[0] === 'identifier')[1]).join(', '));
   const au = doc.audit(new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8'))).filter(x => x.level !== 'info');
   assert(au.length === 0, 'Camel Overkill audit: ' + au.map(x => x.msg).join('; '));
   console.log('camel overkill passed');
+}
+
+// a sub built from scratch (sim/subbuild.js): loader checks, audit, and it runs: the reactor circuit holds the load
+{
+  const { execFileSync } = require('child_process');
+  execFileSync('node', [path.join(ROOT, 'ships/scratch/capsule.gen.js')]);
+  const zlib = require('zlib'), SE = require('./subedit'), SF = require('./subfile'), SH = require('./ship');
+  const text = zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/custom/Claudes_Test_Capsule.sub'))).toString('utf8');
+  const doc = new SE.SubDoc(text);
+  assert(doc.check().length === 0, 'capsule loader checks: ' + doc.check().join('; '));
+  assert(doc.audit(null).filter(x => x.level !== 'info').length === 0, 'capsule audit');
+  const ship = SF.parseSub(text);
+  assert(ship.hulls.length === 6 && ship.gaps.length === 4 && ship.waypoints.length > 30, 'capsule rooms, gaps, waypoints');
+  const sim = new SH.ShipSim(ship, { duration: 120, scenario: { fights: false } }); const r = sim.runToEnd();
+  assert(r.unmet_pct < 2, 'capsule power: unmet ' + r.unmet_pct);
+  console.log('scratch build passed');
+}
+
+// circuit sandbox (sim/sandbox.js): every demo in sandbox/ passes, and the border/size limits are errors
+{
+  const S = require('./sandbox');
+  for (const f of fs.readdirSync(path.join(ROOT, 'sandbox')).filter(f => f.endsWith('.sbx'))) {
+    const { sb, report } = S.run(fs.readFileSync(path.join(ROOT, 'sandbox', f), 'utf8'), { readFile: q => fs.readFileSync(path.join(ROOT, q), 'utf8') });
+    assert(sb.unexpectedErrors.length === 0 && sb.results.every(r => r.ok), `sandbox ${f}:\n${report}`);
+  }
+  const big = ['box big', ...Array.from({ length: 70 }, (_, i) => `c n${i} not`), 'w in1 n0.in', ...Array.from({ length: 69 }, (_, i) => `w n${i}.out n${i + 1}.in`), 'w n69.out out1', 'run 1'].join('\n');
+  const r = S.run(big).sb;
+  assert(r.errors.some(e => /70 components/.test(e)), 'sandbox: a 70-part box is an error');
+  console.log('sandbox passed');
+}
+
+// component details checked against the game's C# (float timers, delay ticks, HSV, optional regex groups, mux in a box)
+{
+  const mk = (alias, props) => { const d = C.byAlias(alias), outs = []; const c = { p: Object.assign({}, d.defaults, props), send: (p, v) => outs.push([p, v]), fwd: (s, p, v) => outs.push([p, v]), isWired: () => true }; d.make(c); return { c, outs }; };
+  // TimeFrame 0.05 on an OR: the game's float timer keeps it true for 3 frames after the signal (4 with double maths)
+  { const { c, outs } = mk('or', { TimeFrame: '0.05', FalseOutput: '' }); c.recv('signal_in1', { v: '1' }); for (let i = 0; i < 10; i++) c.update(1 / 60); assert.strictEqual(outs.length, 3, 'or TimeFrame 0.05 -> 3 frames, got ' + outs.length); }
+  // delay 1 s = (int)(1f / (1/60.0)) = 60 ticks
+  { const { c } = mk('delay', { Delay: '1' }); assert.strictEqual(c.ticks, 60, 'delay ticks ' + c.ticks); }
+  // HSV 0,1,0.5 -> R 127 (Color truncates)
+  { const { c, outs } = mk('color', { UseHSV: 'true' }); c.recv('signal_g', { v: '1' }); c.recv('signal_b', { v: '0.5' }); c.update(1 / 60); assert.strictEqual(outs.pop()[1], '127,0,0,0'); }
+  // an optional group that didn't take part: "" (not FalseOutput), sent only with OutputEmptyCaptureGroup
+  { const { c, outs } = mk('regex', { Expression: 'a(b)?', UseCaptureGroup: 'true', Output: '1', FalseOutput: 'F' }); c.recv('signal_in', { v: 'a' }); c.update(1 / 60); assert.strictEqual(outs.length, 0, 'regex empty group sends nothing'); }
+  // atan starts from 0,0 like the game's float arrays: "0" for the first 0.1 s
+  { const { c, outs } = mk('atan', {}); c.update(1 / 60); assert.deepStrictEqual(outs[0], ['signal_out', '0']); }
+  console.log('component details passed');
+}
+
+// structure geometry and hull smoothing (sim/shellgeom.js, sim/subbuild.js)
+{
+  const zlib = require('zlib'), SF = require('./subfile'), G = require('./shellgeom'), SE = require('./subedit'), { SubBuilder } = require('./subbuild');
+  const rd = f => { const b = fs.readFileSync(path.join(ROOT, f)); return (b[0] === 0x1f ? zlib.gunzipSync(b) : b).toString('utf8').replace(/^﻿/, ''); };
+  // the game's body maths: every vanilla sub is watertight, and taking away the Camel's hump slopes makes it leak
+  for (const n of ['Camel', 'Dugong', 'Humpback', 'Typhon2']) assert.strictEqual(G.leaks(SF.parseSub(rd(`ships/vanilla/${n}.sub`))).length, 0, n + ' watertight');
+  const camel = SF.parseSub(rd('ships/vanilla/Camel.sub'));
+  assert(G.leaks(Object.assign({}, camel, { structures: camel.structures.filter(s => s.identifier !== 'shella52deg') })).length > 0, 'leak check notices missing slopes');
+  // a hump slope goes "/" on the left side (prefab rotation -52, the body is set to -BodyRotation)
+  const b = G.body({ identifier: 'shella52deg', rect: [-1113, 759, 285, 338] }); assert(b.seg[1][0] > b.seg[0][0] && b.seg[1][1] > b.seg[0][1], 'left hump slope rises to the right');
+  // builder: a stepped layout gets slopes in its steps, flips like vanilla, and stays watertight
+  const T = ['ships/vanilla/Dugong.sub', 'ships/vanilla/Camel.sub', 'ships/templates/vanilla_items.xml'].map(f => new SE.SubDoc(rd(f)));
+  const B = new SubBuilder(T, { name: 'steps' }, {});
+  B.room('a', -768, 0, 512, 256).room('b', -256, 0, 512, 256).room('c', 256, 0, 512, 256).room('u', -256, 256, 512, 256).room('o', -896, 256, 640, 256);
+  const d = B.build(), sh = SF.parseSub(d.text ? d.text() : d.toString());
+  assert.strictEqual(G.leaks(sh).length, 0, 'stepped build watertight');
+  assert(B.slopes.length >= 3, 'slopes placed: ' + B.slopes.length);
+  const flat = sh.structures.filter(s => s.identifier === 'shella0deg'), vert = sh.structures.filter(s => s.identifier === 'shella90deg');
+  assert(flat.some(s => s.flippedy) && vert.some(s => s.flippedx), 'bottom shells FY, right shells FX');
+  // the capsule: stepped top deck, smoothed, watertight
+  const cap = SF.parseSub(rd('ships/custom/Claudes_Test_Capsule.sub'));
+  assert.strictEqual(G.leaks(cap).length, 0, 'capsule watertight');
+  assert(cap.structures.filter(s => G.solid(s) && G.body(s).angle % (Math.PI / 2) !== 0).length >= 4, 'capsule has slopes');
+  console.log('hull smoothing passed');
 }

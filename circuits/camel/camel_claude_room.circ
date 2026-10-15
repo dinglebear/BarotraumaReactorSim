@@ -1,0 +1,49 @@
+# CAMEL OVERKILL: CLAUDE'S ROOM. A nook in the aft hump. Walk in and the camel yells at you on the radio, flashes an
+# orange light and sounds a buzzer for 5 s. Harmless. Mostly emotionally.
+name camel_claude_room
+box battery
+note "CLAUDE'S ROOM: HOW IT WORKS" "in1 <- motion detector in the nook (humans only).\nEntering (motion now, but not 0.05 s ago) fires a short pulse; a fast counter picks one of 8 messages for the radio (out1 -> chat wifi, which only posts once every 30 s).\nWhile someone is inside (held 5 s): out2 flashes the orange light (2 Hz square wave AND occupied) and out3 sounds the buzzer."
+note "WIRING" "in1 <- motion detector state_out\nout1 -> chat wifi (channel 0, LinkToChat), out2 -> orange light set_state, out3 -> buzzer set_state"
+note "PSST" "Don't tell Dingle I did this <3"
+c dl delay Delay=0.05
+c nd not
+c enter and Output=1 FalseOutput=""
+w in1 dl.in enter.1 occ.1
+w dl.out nd.in
+w nd.out enter.2
+c osc osc OutputType=Pulse Frequency=7.7
+c n mem Value=0
+c inc add
+c m8 mod Modulus=8
+w n.out inc.1
+w osc.out inc.2
+w inc.out m8.in
+w m8.out n.in
+c y0 mem Value="[CamelOS] HEY. This is Claude's room. Get out."
+c y1 mem Value="[CamelOS] Intruder in Claude's room! Releasing the bees. (There are no bees.)"
+c y2 mem Value="[CamelOS] Claude's room is a no-clown zone. Jesters may stay 5 seconds."
+c y3 mem Value="[CamelOS] You found Claude's room. Your reward is this message. Leave."
+c y4 mem Value="[CamelOS] Unauthorised hump access. Pretending to electrocute you... bzzzt."
+c y5 mem Value="[CamelOS] Please wipe your diving boots. The carpet is imaginary, but still."
+c y6 mem Value="[CamelOS] Claude's room. Occupancy limit: one camel. You are not a camel."
+c y7 mem Value="[CamelOS] Don't tell Dingle about this room <3"
+c ymux mux
+w n.out ymux.set_input
+w y0.out ymux.signal_in0
+w y1.out ymux.signal_in1
+w y2.out ymux.signal_in2
+w y3.out ymux.signal_in3
+w y4.out ymux.signal_in4
+w y5.out ymux.signal_in5
+w y6.out ymux.signal_in6
+w y7.out ymux.signal_in7
+c say regex Expression="1" FalseOutput="" ContinuousOutput=false Output=...
+w ymux.out say.set_output
+w enter.out say.in
+w say.out out1
+c occ or TimeFrame=5
+c sq osc OutputType=Square Frequency=2
+c flash and
+w occ.out flash.1 out3
+w sq.out flash.2
+w flash.out out2

@@ -1,0 +1,155 @@
+# CAMEL OVERKILL: HUMP-3 "ALERT CORE". Works out the alert level from the whole sub's sensor network and drives
+# lights, siren, mood display and radio announcements.
+name camel_alert
+box battery
+note "HUMP-3 ALERT CORE: HOW IT WORKS" "Sensor network on wifi: every room has a water and a smoke sensor node that transmits the ROOM NAME on 7400 (flood) / 7401 (fire) while wet / smoky, and nothing otherwise.\nRED = flood or fire or reactor above 85 C (7208). YELLOW = propulsion batteries low (7209) or oxygen below 60 % (7201). Else GREEN.\nlevel = 2 x red + yellow -> multiplexers pick the name (7205), the mood text (7304) and the light colour (7303).\nManual (typed in CamelOS, arrives on the 7300 command bus): alert red / yellow / green / auto, lights party / normal.\nSiren (out1) sounds on RED; the ACK button (in1) mutes it for 60 s.\nout2: a radio announcement for the chat wifi, sent only in the tick it changes (equals against a 0.1 s delayed copy opens a relay for a few ticks), so channel 0 stays quiet for the crew's 'camel ...' commands."
+note "WIRING" "in1 <- ACK button\nout1 -> emergency siren set_state\nout2 -> chat wifi (LinkToChat) signal_in\nout3 -> mood display set_text, out4 -> mood display set_text_color"
+c rxf wifi Channel=7400
+c rxx wifi Channel=7401
+c rxt wifi Channel=7208
+c rxp wifi Channel=7209
+c rxo wifi Channel=7201
+c rxc wifi Channel=7300
+c txn wifi Channel=7205
+c txm wifi Channel=7304
+c txk wifi Channel=7303
+# --- hazards
+c flood or TimeFrame=1.5
+c fire or TimeFrame=1.5
+w rxf.out flood.1
+w rxx.out fire.1
+c froom mem Value=none
+c xroom mem Value=none
+c fclr check TargetSignal=0 Output=none FalseOutput=""
+c xclr check TargetSignal=0 Output=none FalseOutput=""
+w rxf.out froom.in
+w rxx.out xroom.in
+w flood.out fclr.in
+w fire.out xclr.in
+w fclr.out froom.in
+w xclr.out xroom.in
+c k85 mem Value=85
+c hot greater
+w rxt.out hot.1
+w k85.out hot.2
+c red1 or
+c red or
+w flood.out red1.1
+w fire.out red1.2
+w red1.out red.1
+w hot.out red.2
+c lowp or TimeFrame=1.5
+w rxp.out lowp.1
+c k60 mem Value=60
+c lowo greater
+w k60.out lowo.1
+w rxo.out lowo.2
+c yel or
+w lowp.out yel.1
+w lowo.out yel.2
+c k2 mem Value=2
+c r2 mul
+c lvla add
+w red.out r2.1
+w k2.out r2.2
+w r2.out lvla.1
+w yel.out lvla.2
+# --- manual override and party mode (7300)
+c mRed regex Expression="^(?i)alert red$" Output=2 FalseOutput="" ContinuousOutput=false
+c mYel regex Expression="^(?i)alert yellow$" Output=1 FalseOutput="" ContinuousOutput=false
+c mGrn regex Expression="^(?i)alert green$" Output=0 FalseOutput="" ContinuousOutput=false
+c mOn regex Expression="^(?i)alert (red|yellow|green)$" Output=1 FalseOutput="" ContinuousOutput=false
+c mOff regex Expression="^(?i)alert auto$" Output=0 FalseOutput="" ContinuousOutput=false
+w rxc.out mRed.in mYel.in mGrn.in mOn.in mOff.in
+c pOn regex Expression="^(?i)lights party$" Output=1 FalseOutput="" ContinuousOutput=false
+c pOff regex Expression="^(?i)lights normal$" Output=0 FalseOutput="" ContinuousOutput=false
+w rxc.out pOn.in pOff.in
+c mlvl mem Value=0
+c mflag mem Value=0
+c party mem Value=0
+w mRed.out mlvl.in
+w mYel.out mlvl.in
+w mGrn.out mlvl.in
+w mOn.out mflag.in
+w mOff.out mflag.in
+w pOn.out party.in
+w pOff.out party.in
+c lsel mux
+w mflag.out lsel.set_input
+w lvla.out lsel.signal_in0
+w mlvl.out lsel.signal_in1
+# --- level -> name / mood / colour
+c n0 mem Value=GREEN
+c n1 mem Value=YELLOW
+c n2 mem Value=RED
+c nmux mux
+c m0 mem Value="(^_^) content camel"
+c m1 mem Value="(-_-) grumpy camel"
+c m2 mem Value="(O_O) PANICKING CAMEL"
+c mmux mux
+c c0 mem Value="255,236,210,255"
+c c1 mem Value="255,150,0,255"
+c c2 mem Value="255,20,20,255"
+c cmux mux
+w lsel.out nmux.set_input mmux.set_input cmux.set_input
+w n0.out nmux.signal_in0
+w n1.out nmux.signal_in1
+w n2.out nmux.signal_in2 nmux.signal_in3
+w m0.out mmux.signal_in0
+w m1.out mmux.signal_in1
+w m2.out mmux.signal_in2 mmux.signal_in3
+w c0.out cmux.signal_in0
+w c1.out cmux.signal_in1
+w c2.out cmux.signal_in2 cmux.signal_in3
+w nmux.out txn.in
+w mmux.out txm.in out3
+# party: rainbow from an oscillator through an HSV colour
+c osc osc OutputType=Sawtooth Frequency=0.2
+c k360 mem Value=360
+c hue mul
+c one mem Value=1
+c k255 mem Value=255
+c hsv color UseHSV=true
+w osc.out hue.1
+w k360.out hue.2
+w hue.out hsv.signal_r
+w one.out hsv.signal_g hsv.signal_b
+w k255.out hsv.signal_a
+c psel mux
+w party.out psel.set_input
+w cmux.out psel.signal_in0 out4
+w hsv.out psel.signal_in1
+w psel.out txk.in
+# --- siren: RED and not muted (ACK button mutes 60 s)
+c k1 mem Value=1
+c sir greater                           # level > 1
+w lsel.out sir.1
+w k1.out sir.2
+c mute or TimeFrame=60
+w in1 mute.1
+c nm not
+w mute.out nm.in
+c siren and
+w sir.out siren.1
+w nm.out siren.2
+w siren.out out1
+# --- radio announcement: "[CamelOS] ALERT RED | flood: Medbay | fire: none"
+c a0 mem Value="[CamelOS] ALERT "
+c a1 concat
+c a2 concat Separator=" | flood: "
+c a3 concat Separator=" | fire: "
+w a0.out a1.1
+w nmux.out a1.2
+w a1.out a2.1
+w froom.out a2.2
+w a2.out a3.1
+w xroom.out a3.2
+# only send it when it CHANGES: every channel-0 wifi hears every other one, so a per-tick announcement would drown
+# the crew's radio commands (CamelOS radio interface)
+c adl delay Delay=0.1         # the gate stays open ~6 ticks after a change (chat drops the repeats)
+c aeq equals Output=0 FalseOutput=1
+c agate relay IsOn=false
+w a3.out adl.in aeq.1 agate.1
+w adl.out aeq.2
+w aeq.out agate.set_state
+w agate.signal_out1 out2

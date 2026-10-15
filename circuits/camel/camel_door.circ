@@ -1,0 +1,34 @@
+# CAMEL OVERKILL: DOOR BRAIN (one circuit box per door, 9 of them). Replaces the vanilla "close 4 s after motion" OR gate.
+name camel_door
+box battery
+note "DOOR BRAIN: HOW IT WORKS" "Opens for PEOPLE (motion detector set to humans), closes 3 s after they leave.\nWater on either side (room water detectors in2/in3): auto-open is blocked and the door gets ONE close pulse when the water arrives (and when it leaves). Crew can still open it by hand to escape.\nLOCKDOWN (type 'lockdown' in CamelOS, bus 7300): auto-open blocked AND a close signal every tick: the door stays shut even if someone clicks it. 'unlock' releases it.\nHow: a relay passes the motion signal only while nothing blocks it; a signal check turns 'locked' into a steady 0; an XOR of the water signal and its 0.1 s delayed copy makes the edge pulse."
+note "WIRING" "in1 <- motion detector state_out\nin2, in3 <- water detectors of the rooms on each side (signal_out)\nout1 -> door set_state"
+c rx wifi Channel=7300
+c lkon regex Expression="^(?i)lockdown$" Output=1 FalseOutput="" ContinuousOutput=false
+c lkoff regex Expression="^(?i)unlock$" Output=0 FalseOutput="" ContinuousOutput=false
+c lock mem Value=0
+w rx.out lkon.in lkoff.in
+w lkon.out lock.in
+w lkoff.out lock.in
+c held or TimeFrame=3
+w in1 held.1
+c wet or
+w in2 wet.1
+w in3 wet.2
+c block or
+w wet.out block.1
+w lock.out block.2
+c nb not
+w block.out nb.in
+c gate relay IsOn=true
+w nb.out gate.set_state
+w held.out gate.1
+w gate.signal_out1 out1
+c shut check TargetSignal=1 Output=0 FalseOutput=""
+w lock.out shut.in
+w shut.out out1
+c dw delay Delay=0.1
+c edge xor Output=0 FalseOutput=""
+w wet.out dw.in edge.1
+w dw.out edge.2
+w edge.out out1

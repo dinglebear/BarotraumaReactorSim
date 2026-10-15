@@ -1,0 +1,18 @@
+# CAMEL OVERKILL: SPITTOON. Sits between the nav terminal and the ballast pumps.
+name camel_ballast
+box battery
+note "SPITTOON: HOW IT WORKS" "Normally passes the nav terminal's depth signal straight to the ballast pumps (a relay, on).\nType 'spit' in CamelOS (bus 7300): for 10 s the relay blocks the pilot and a signal check sends -100 (empty the tanks): the camel spits its ballast and rises. Good for a flooded front ballast tank or a dramatic exit.\nThen control returns to the pilot."
+note "WIRING" "in1 <- nav terminal velocity_y_out\nout1 -> set_targetlevel of the ballast pumps"
+c rx wifi Channel=7300
+c sp regex Expression="^(?i)spit$" Output=1 FalseOutput="" ContinuousOutput=false
+c hold or TimeFrame=10
+c ns not
+c gate relay IsOn=true
+c blow check TargetSignal=1 Output=-100 FalseOutput=""
+w rx.out sp.in
+w sp.out hold.1
+w hold.out ns.in blow.in
+w ns.out gate.set_state
+w in1 gate.1
+w gate.signal_out1 out1
+w blow.out out1

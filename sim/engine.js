@@ -202,6 +202,14 @@
         if (sig.src && inConn) { if (sig.src.lsr.includes(inConn)) continue; sig.src.lsr.push(inConn); }
         this.itemSend(w.item, { v: sig.v, steps: sig.steps + 1, src: sig.src }, this.conn(w.item, 'signal_out'));
       }
+      // LinkToChat: the signal is also posted to radio chat on that channel (WifiComponent: MinChatMessageInterval s
+      // between messages, DiscardDuplicateChatMessages drops a message equal to the previous one)
+      const p = srcComp.p;
+      if (String(p.LinkToChat).toLowerCase() === 'true' && sig.v !== '') {
+        const st = srcComp.chatState = srcComp.chatState || { last: null, t: -1e9 };
+        const dup = String(p.DiscardDuplicateChatMessages).toLowerCase() === 'true' && sig.v === st.last;
+        if (!dup && this.time - st.t >= Number(p.MinChatMessageInterval || 1)) { st.last = sig.v; st.t = this.time; (this.chat = this.chat || []).push({ t: this.time, ch: p.Channel, text: sig.v }); }
+      }
     }
     devices(name) {
       if (name === 'reactor') return [this.reactor];

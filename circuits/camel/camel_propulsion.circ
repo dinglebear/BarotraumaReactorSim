@@ -1,0 +1,134 @@
+# CAMEL OVERKILL: HUMP-P "POWER MANAGER". Four new batteries feed ONLY the engine and the two ballast pumps; the two
+# vanilla batteries keep feeding the nav terminal, status monitor and gun capacitors (critical bus).
+# ALL battery charging comes out of the reactor's surplus, so a battery suddenly charging can never brown out the main bus.
+name camel_propulsion
+box battery
+note "HUMP-P POWER MANAGER: HOW IT WORKS" "Main bus demand = reactor load - battery charging, averaged over two ticks. All charging flows through the CHARGE TAP relay, whose load_value_out is exactly what the batteries draw.\nWanted charge: propulsion = its bus load + (80 - charge %) x 40 kW (0..2000), so it hovers at 80 %; critical = (100 - charge %) x 40 kW (0..1000), kept full.\nReactor setpoint (out2 -> HUMP-1) = main demand + both wants + 1000 kW while the governor is about to switch the oxygen generator on (7212).\nSurplus = reactor output - main demand. Critical bank takes min(surplus, its want), propulsion takes the rest. Batteries fill one after another (the game rounds each battery's rate to 10 % = 50 kW steps, so this gives 50 kW resolution). So when the reactor lags behind a step the charging gives way instead of the voltage, and a sudden drop in load is soaked up.\nPropulsion below 25 % -> 1 on 7209 (alert YELLOW). Telemetry: 7202 propulsion charge %, 7211 propulsion kW."
+note "WIRING" "in1 charge_%, in2 load_value_out from ONE propulsion battery\nin4 <- CHARGE TAP relay load_value_out\nin5 charge_% from ONE critical (vanilla) battery\nin3 reactor load_value_out, in6 reactor power_value_out\nout1, out5, out6, out7 -> set_rate of propulsion batteries 1..4, out3 -> their disable_output (held 0)\nout4, out8 -> set_rate of critical batteries 1, 2\nout2 -> HUMP-1 in8 (setpoint kW)"
+c txc wifi Channel=7202
+c txl wifi Channel=7211
+c txw wifi Channel=7209
+c k25 mem Value=25
+c low greater
+w k25.out low.1
+w low.out txw.in
+# --- main bus demand = reactor load - battery charging (measured by the CHARGE TAP relay that feeds both banks)
+c base00 sub
+w in3 base00.1
+w in4 base00.2
+# the oxygen generator (1000 kW) switches in one tick: take it out of the filter and add it back from the relay
+# command itself (7213), so a switch-off is soaked up by the batteries at once instead of 0.3 s later
+c rxg wifi Channel=7213
+c k1000 mem Value=1000
+c gkw mul
+w rxg.out gkw.1
+w k1000.out gkw.2
+c base0 sub
+w base00.out base0.1
+w gkw.out base0.2
+# low-pass for the reactor setpoint (x 0.9 old + 0.1 new per tick): the two loads can arrive a tick apart
+c base mem Value=0
+c f9 mem Value=0.9
+c f1 mem Value=0.1
+c bo mul
+c bn mul
+c bs add
+w base.out bo.1
+w f9.out bo.2
+w base0.out bn.1
+w f1.out bn.2
+w bo.out bs.1
+w bn.out bs.2
+w bs.out base.in
+c basef add
+w base.out basef.1
+w gkw.out basef.2
+# --- wants
+c k80 mem Value=80
+c k100 mem Value=100
+c kg mem Value=40
+c errp sub
+c biasp mul
+c wantp add ClampMin=0 ClampMax=2000
+w k80.out errp.1
+w in1 errp.2 low.2 txc.in
+w errp.out biasp.1
+w kg.out biasp.2
+w in2 wantp.1 txl.in
+w biasp.out wantp.2
+c errc sub
+c biasc mul ClampMin=0 ClampMax=1000
+w k100.out errc.1
+w in5 errc.2
+w errc.out biasc.1
+w kg.out biasc.2
+# --- setpoint
+c rxo wifi Channel=7212
+c pre mul
+w rxo.out pre.1
+w k1000.out pre.2
+c sp1 add
+c sp2 add
+c sp3 add
+w basef.out sp1.1
+w wantp.out sp1.2
+w sp1.out sp2.1
+w biasc.out sp2.2
+w sp2.out sp3.1
+w pre.out sp3.2
+w sp3.out out2
+# --- share the surplus: critical first (min(surplus, want)), propulsion gets the rest
+c sur sub
+w in6 sur.1
+w basef.out sur.2
+c md sub
+c ma abs
+c ms add
+c mm sub
+c k2 mem Value=2
+c cmin div ClampMin=0
+w sur.out md.1 ms.1
+w biasc.out md.2 ms.2
+w md.out ma.in
+w ms.out mm.1
+w ma.out mm.2
+w mm.out cmin.1
+w k2.out cmin.2
+# thermometer coding: the game rounds a battery's recharge to 10 % steps (50 kW here), so the batteries fill ONE AFTER
+# ANOTHER (each takes up to 500 kW of what is left) instead of all at once: 50 kW resolution for the whole bank
+c k5 mem Value=5
+c k500 mem Value=500
+c k1500 mem Value=1500
+c rc1 div ClampMin=0 ClampMax=100
+c cs2 sub
+c rc2 div ClampMin=0 ClampMax=100
+w cmin.out rc1.1 cs2.1
+w k5.out rc1.2 rc2.2
+w k500.out cs2.2
+w cs2.out rc2.1
+w rc1.out out4
+w rc2.out out8
+c rest sub
+w sur.out rest.1
+w cmin.out rest.2
+c rp1 div ClampMin=0 ClampMax=100
+c ps2 sub
+c rp2 div ClampMin=0 ClampMax=100
+c ps3 sub
+c rp3 div ClampMin=0 ClampMax=100
+c ps4 sub
+c rp4 div ClampMin=0 ClampMax=100
+w rest.out rp1.1 ps2.1 ps3.1 ps4.1
+w k5.out rp1.2 rp2.2 rp3.2 rp4.2
+w k500.out ps2.2
+w k1000.out ps3.2
+w k1500.out ps4.2
+w ps2.out rp2.1
+w ps3.out rp3.1
+w ps4.out rp4.1
+w rp1.out out1
+w rp2.out out5
+w rp3.out out6
+w rp4.out out7
+c k0 mem Value=0
+w k0.out out3

@@ -286,7 +286,7 @@
     c.sent = true; c.prevIn = ''; c.res = false; c.groups = null; c.rx = null; c.rxSrc = null;
     c.recv = (pin, s) => { if (pin === 'signal_in') { c.inp = s.v; c.sent = false; } else if (pin === 'set_output') c.p.Output = s.v; };
     c.update = () => {
-      if (c.rxSrc !== c.p.Expression) { c.rxSrc = c.p.Expression; c.prevIn = ''; try { c.rx = new RegExp(c.p.Expression.replace(/\(\?<(\w+)>/g, '(?<$1>')); } catch (e) { c.rx = null; } }
+      if (c.rxSrc !== c.p.Expression) { c.rxSrc = c.p.Expression; c.prevIn = ''; try { const src = c.p.Expression.replace(/\(\?<(\w+)>/g, '(?<$1>'), ci = /\(\?i\)/.test(src); c.rx = new RegExp(ci ? src.replace(/\(\?i\)/g, '') : src, ci ? 'i' : ''); } catch (e) { c.rx = null; } } // .NET inline (?i) -> the i flag
       if (!c.p.Expression || !c.p.Expression.trim() || !c.rx) return;
       const cont = bool(c.p.ContinuousOutput);
       if (!cont && c.sent) return;
@@ -326,7 +326,7 @@
   def('demux', 'demultiplexercomponent', 'DemultiplexerComponent', selDefs, ['signal_in', 'set_output', 'move_output'], ['signal_out0', 'signal_out1', 'signal_out2', 'signal_out3', 'signal_out4', 'signal_out5', 'signal_out6', 'signal_out7', 'signal_out8', 'signal_out9', 'selected_output_out'], makeSel(false));
 
   // Wifi: forwards signal_in instantly to every other wifi on the same channel whose signal_out is wired (stepsTaken+1).
-  def('wifi', 'wificomponent', 'WifiComponent', { Channel: '1' }, ['signal_in', 'set_channel'], OUT, (c) => {
+  def('wifi', 'wificomponent', 'WifiComponent', { Channel: '1', LinkToChat: 'false', MinChatMessageInterval: '1', DiscardDuplicateChatMessages: 'false' }, ['signal_in', 'set_channel'], OUT, (c) => {
     c.recv = (pin, s) => {
       if (pin === 'signal_in') c.wifiTx(s);
       else if (pin === 'set_channel') { const r = parseI(s.v); if (r.ok) c.p.Channel = String(clamp(r.v, 0, 10000)); }

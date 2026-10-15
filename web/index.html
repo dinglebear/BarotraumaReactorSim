@@ -1904,6 +1904,7 @@ body.noscroll { overflow: hidden }
         for (const o of n.children) if (o.tag === 'ConnectionLabelOverride') (n.tag === 'InputNode' ? box.inLabels : box.outLabels)[o.attrs.name] = o.attrs.value;
       } else if (n.tag === 'Component') {
         const [s, k] = (n.attrs.backingitemid || '').split(',').map(Number), id = (slots[s] || [])[k || 0], ci = byId.get(id);
+        if (s >= 64) { ship.warnings.push(`circuit box ${it.id}: the component in slot ${s} is lost in game (a circuit box holds 64)`); continue; } // the game logs "failed to find an item in the container"
         const ident = ci ? ci.identifier : n.attrs.item;
         const def = C.byItem(ident);
         if (!def) { ship.warnings.push(`circuit box ${it.id}: component "${ident}" is not simulated`); continue; }

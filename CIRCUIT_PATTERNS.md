@@ -96,6 +96,9 @@ Name: recipe. The source is in brackets: H = HuskOS, T = Toolkit, L = LHMRS, I =
 - **First-tick pulse** [I]: `regex Expression="." Output="" FalseOutput="1"` with a looped relay. It gives one "1" at round start.
 
 **Terminals and text (OS)**
+- **Command bus + reply bus** [C]: the terminal sends every line raw on one channel (7300). Any box answers on a reply channel (7310), which the OS box prints. New features become new boxes, and nothing else changes. Keep one "unknown command" regex in the core that lists every command.
+- **Settings panel** [C]: `regex ^set x ([0-9]+)$` capture → memory → its own wifi channel every tick → the user box's memory (default value inside, so it works without the panel). A `settings` command prints a concat chain of all the memories.
+- **Random pick** [C]: a fast oscillator (7 Hz) counts 0..N-1 (memory + adder + modulo) into a mux of answers. The command's regex prints the mux (live-value printer). Use for jokes and the 8-ball.
 - **Command regex** [H]: `regex Expression="^(?i)cmd(\s.*)?$" Output="<reply>" FalseOutput="" ContinuousOutput=false`, with the terminal line into `signal_in` and the output into `terminal.signal_in`.
 - **Argument capture** [H,L]: `^(?i)cmd (.+)$` with `UseCaptureGroup=true Output=1`.
 - **Live-value printer** [H,C]: the value stream → `regex.set_output`, the command → `regex.signal_in`. Use for status lines.
@@ -116,6 +119,7 @@ Name: recipe. The source is in brackets: H = HuskOS, T = Toolkit, L = LHMRS, I =
 - **Sensor node** [C]: a detector with `Output=<RoomName> FalseOutput=""` → `wifi` on a shared channel. Every room reports on one channel and only wet or smoky rooms speak, so the message names the room.
 
 **Doors, flooding and fire**
+- **Air node** [C]: oxygen detector → box with `greater(low, o2) Output=<Room>` → wifi "needs air", and `greater(high, o2)` → wifi "not full". Thresholds come from wifi into memories with defaults.
 - **Auto-close only (vanilla)** [Camel]: `motion → or(TimeFrame=4, Output="", FalseOutput="0") → door.set_state`.
 - **Auto-open for people + flood interlock** [D,I,C]: motion (Target=Human) → `or TimeFrame=3` → relay (blocked while hazard) → `set_state`; plus a hazard edge pulse "0". Crew can still open it by hand during a flood.
 - **Lockdown** [C]: a latch from the command bus → `signalcheck Target=1 Output=0 FalseOutput=""` → `set_state` every tick (truly sealed).
@@ -179,6 +183,9 @@ Name: recipe. The source is in brackets: H = HuskOS, T = Toolkit, L = LHMRS, I =
 - **Placed items must be attached (found in game):** a wifi template saved loose made 42 wifi components fall to the floor. The editor now sets `Attached=True` on every placed item.
 - **Sloshing water flickers detectors (found in game):** anything driven by a water detector needs a hold, `or TimeFrame=5..10`, or it will flap: doors reopened and closed, and alert announcements repeated. Announce on level changes only, and give chat wifis a long MinChatMessageInterval.
 - **Room rectangles include floor and ceiling slabs (found in game):** text displays placed near a room's edge ended up inside the floor. The editor now nudges new fittings out of solid structure.
+- **Oxygen per room (found in game):** watching 2 rooms let others run low. Use one air node per room: an oxygen detector into a tiny box that sends the room name below a threshold. The generator is ON when any room asks.
+- **Relay headroom:** a stock relay (MaxPower 1000) feeding exactly 1000 kW has no margin. Set MaxPower higher.
+- **Backslashes in `.circ`:** the circuit language uses `\` as an escape, so a regex `\d` arrives as `d`. Write `[0-9]` and `[ ]`.
 - **Empty values in patch files:** `Key=""` must give an empty value, not a quote character. A stray `"` made every dry water sensor read as flooded. Fixed in the patch parser; tested.
 
 ## 5. Checklist before calling a sub design done

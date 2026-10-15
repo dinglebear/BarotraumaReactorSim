@@ -8,9 +8,12 @@ Design ideas, game signal rules and proven patterns (command bus, sensor network
 0. **Study:** `node sim/cli.js explain <file.sub|assembly.xml> [regex]` prints a readable netlist of any sub or item assembly (community ones too): every wired or logic item, its non-default settings, where each connection goes, and each circuit box's insides with its notes.
 1. **Look:** `node sim/cli.js sub list <Sub> [regex]` lists every electrical item: ID, identifier, position (sub coordinates, y up), room, connections and what each is wired to. Filter by identifier, ID or room, e.g. `"door|button|^29 "`.
 2. **Write a patch:** `ships/patches/<name>.subpatch` (commands below).
-3. **Apply:** `node sim/cli.js sub patch <Sub> ships/patches/<name>.subpatch` writes `ships/custom/<subname>.sub` (gzipped, loads in game) after the loader checks. Check any sub with `sub check <Sub>`.
+3. **Apply:** (it also runs `sub audit` against the original sub and refreshes a mod folder `ships/custom/<Sub Name>/` if it exists)
+    `node sim/cli.js sub patch <Sub> ships/patches/<name>.subpatch` writes `ships/custom/<subname>.sub` (gzipped, loads in game) after the loader checks. Check any sub with `sub check <Sub>`.
 4. **Test:** `node sim/cli.js ship <subname>` runs a practice round. Add `--transcript` to print radio chat, terminal lines and displays. Scenario flags: `--breach S [--breach-hull ID]`, `--fire S [--fire-hull ID]`, `--crew N`, `--type "30:status"` (typed at the terminal at 30 s; repeatable) and `--radio "40:camel status"` (said on headset channel 0). Or rebuild the bench (`node sim/build_web.js`) and open it in the Sub tab: press buttons, toggle relays, breach rooms, watch the wiring live.
 5. Tell the human what changed and what to try in game. Ask them to open it in the sub editor first and keep the original.
+
+**Audit any time:** `node sim/cli.js sub audit <Sub> --base <Original>` finds loose items, items inside walls/floors, circuit boxes over 64 parts, moved originals and connections with more than 5 wires.
 
 ## Patch commands (one per line, `#` comments)
 ```
@@ -22,7 +25,7 @@ set <id|@h> <Component.Attr>=<value> ...        # e.g. RelayComponent.IsOn=false
 wire <id|@h>.<conn> <id|@h>.<conn> [red|blue|green|orange|yellow|black|brown|white]
 unwire <id|@h>.<conn> <id|@h>.<conn>
 name @h <id>                                    # give an existing item a handle
-box @h at <x>,<y> from <circuit> [box reactor|battery]   # a circuit box with its components built in
+box @h at <x>,<y> from <circuit> [box reactor|battery] [NAME=value ...]   # a circuit box with its components built in; NAME=value fills $NAME in the circuit (one circuit, many rooms)
 ```
 - A box's pins are `signal_in0..9` / `signal_out0..9`; wire them like any other connection. `$MAX`/`$BATT_*` in the circuit are filled from this sub.
 - Power wires connect `power`, `power_in` and `power_out` (default red). Signal wires default to blue.

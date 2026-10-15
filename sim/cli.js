@@ -174,6 +174,7 @@ const COMMANDS = {
   // sub list <sub> [filter]           items with ID, position, room and every connection (what it is wired to)
   // sub patch <sub> <patch> [-o out]  apply an edit script (SUBEDIT.md), check it, save ships/custom/<name>.sub
   // sub check <sub>                   loader checks (IDs, wires, links)
+  // sub audit <sub> [--base <sub>]     everything that broke in game before: box size, loose items, items in walls, moved originals
   sub(a) {
     const zlib = require('zlib'), SE = require('./subedit'), SF = require('./subfile');
     const [what, name, arg] = a._;
@@ -212,16 +213,24 @@ const COMMANDS = {
     }
     const doc = new SE.SubDoc(text, templates);
     if (what === 'check') { const p = doc.check(); console.log(p.length ? p.join('\n') : 'ok: no loader problems'); return; }
+    if (what === 'audit') { // sub audit <sub> [--base Camel]: loader checks, box size, loose items, items in walls, moved originals, >5 wires
+      const bf = a.base ? find(a.base) : null, base = bf ? new SE.SubDoc(readSub(bf)) : null;
+      const r = doc.audit(base); for (const x of r) console.log(`${x.level.toUpperCase().padEnd(5)} ${x.msg}`);
+      const e = r.filter(x => x.level === 'error').length, w = r.filter(x => x.level === 'warn').length;
+      console.log(`${e} errors, ${w} warnings, ${r.length - e - w} notes${base ? ' (compared with ' + path.basename(bf) + ')' : ' (add --base <original sub> to spot moved items)'}`); if (e) process.exitCode = 1; return;
+    }
     if (what === 'patch') {
       const ship0 = SF.parseSub(text), R = (ship0.items.find(i => i.comps.Reactor) || { comps: { Reactor: [{}] } }).comps.Reactor[0];
       const bs = ship0.items.filter(i => i.comps.PowerContainer && !/supercapacitor/.test(i.identifier)).map(i => i.comps.PowerContainer[0]), sum = k => bs.reduce((x, b) => x + Number(b[k]), 0);
       const vals = { MAX: Number(R.MaxPowerOutput) || 5000, BATT_N: bs.length, BATT_KW: sum('MaxRechargeSpeed'), BATT_OUT: sum('MaxOutPut'), BATT_CAP: sum('Capacity') };
-      const readCircuit = file => P.substitute(loadModel(resolve(file, CIRC_DIRS)), vals);
+      const readCircuit = (file, extra) => P.substitute(loadModel(resolve(file, CIRC_DIRS)), Object.assign({}, vals, extra));
       doc.apply(read(resolve(/\.\w+$/.test(arg) ? arg : arg + '.subpatch', ['.', 'ships/patches'])), { readCircuit });
       const probs = doc.check(); if (probs.length) throw new Error('loader checks failed:\n  ' + probs.join('\n  '));
       const out = a.o || a.out || path.join(ROOT, 'ships/custom', (doc.name() || 'edited').replace(/[^\w-]+/g, '_') + '.sub');
       fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, zlib.gzipSync(Buffer.from(doc.text(), 'utf8')));
       console.log(doc.log.join('\n')); console.log(`saved ${rel(out)} (${doc.items.size} items; loader checks ok)`);
+      const au = doc.audit(new SE.SubDoc(text)).filter(x => x.level !== 'info'); // compared with the sub we started from
+      if (au.length) console.log('AUDIT:\n' + au.map(x => `  ${x.level.toUpperCase()} ${x.msg}`).join('\n')); else console.log('audit: clean (nothing loose, nothing in walls, originals unmoved, boxes <= 64 parts)');
       const modDir = path.join(path.dirname(out), doc.name() || ''); // a ready mod folder next to it (ships/custom/<Sub Name>/) gets the new file too
       if (doc.name() && fs.existsSync(path.join(modDir, 'filelist.xml'))) { fs.copyFileSync(out, path.join(modDir, path.basename(out))); console.log(`updated mod folder ${rel(modDir)}`); }
       return;

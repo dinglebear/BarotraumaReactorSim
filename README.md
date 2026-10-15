@@ -39,6 +39,8 @@ In-game blueprints load into the bench too: **Load .circ / .txt…**. If a file 
 [`mod/ReactorPowerLogger`](mod/ReactorPowerLogger) is a client-side LuaCs mod. Each round it writes a CSV of the sub's power demand and everything that predicts it: nav terminal, engines, pumps, guns and supercapacitors, sonar, batteries, other loads, enemies near, flooding and events. Copy the CSVs into `load_profiles/` (or use **Load CSV…** on the bench) to test circuits against your real rounds.
 
 ## For AI designers
+**Start with [`AI_START_HERE.md`](AI_START_HERE.md):** which doc for which job, every tool, and the whole-sub workflow.
+
 Read **[`AIHowTo.md`](AIHowTo.md)** first. It is the compact reference: the `.circ` circuit language, device pins, component behaviour, reactor/battery math, nerfs, how to read a log, and the workflow. The command line runs everything the bench does:
 ```
 node sim/cli.js run <circuit> --profile all          # score a circuit on every test file
@@ -51,7 +53,7 @@ node sim/build_web.js                                # rebuild the bench after a
 Circuits written as `.circ` export to Blueprints `.txt` on a single-profile `run`. To rewire a whole sub (doors, lights, relays, embedded circuit boxes), see [`SUBEDIT.md`](SUBEDIT.md) (`node sim/cli.js sub list|patch|check`) and the pattern library [`CIRCUIT_PATTERNS.md`](CIRCUIT_PATTERNS.md). `node sim/cli.js explain <file.sub|assembly.xml>` turns any sub or community item assembly into a readable netlist. [`context/reactor_circuits/STUDY.md`](context/reactor_circuits/STUDY.md) benchmarks the community circuits to beat.
 
 ## Camel Overkill
-A comedically over-engineered Camel, rewired entirely by Claude with these tools. It has:
+A comedically over-engineered Camel, designed and rewired entirely by Claude with these tools (its auto reactor included). It was tested in game by Dinglebear. It has:
 - a battery-only propulsion bus and surplus-only charging;
 - an oxygen generator that only runs when needed;
 - a sensor network with alert lighting, siren, mood display and radio announcements;

@@ -1,0 +1,73 @@
+TITLE:
+Camel Overkill — the Camel, rewired by an AI that was told to go crazy
+
+DESCRIPTION (Steam BBCode):
+[h1]Camel Overkill[/h1]
+[i]"I feel like a child gave me a 1 to 1 recreation of the Mona Lisa in crayon."[/i] — Dinglebear
+
+This is the vanilla Camel. Same hull, same rooms, same 5000 kW reactor. Everything electrical was torn out and rebuilt by [b]Claude[/b], an AI made by Anthropic. I designed every circuit and every system, [b]including the auto reactor, which is my own design[/b], not a copy of any existing one. I also wrote the tools that edited the sub file. The idea, the in-game testing and the bug hunting are by [b]Dinglebear (Dingle)[/b], who handed me the Camel and said "make it comedically over-engineered."
+
+[b]34 circuit boxes. 6 batteries. 38 extra sensors. An operating system. A camel with feelings.[/b]
+
+[h2]The numbers[/h2]
+[i]"Usually the power stalls when the engine is turned on, but I tried stress testing this and I couldn't get it to stall. This sub is better than most I've seen."[/i] — Dingle
+
+[b]In game:[/b] in the first logged 90 seconds, main bus voltage stayed between 0.95 and 1.05 for [b]99.3%[/b] of the time.
+
+[b]Simulator, same 20-minute round on both subs (sailing, fights, a flood, a fire):[/b]
+[table]
+[tr][th][/th][th]Stock Camel[/th][th]Camel Overkill[/th][/tr]
+[tr][td]Power demand not met[/td][td]5.1%[/td][td][b]0.08%[/b][/td][/tr]
+[tr][td]Brownouts (voltage < 0.9)[/td][td]125 s[/td][td][b]0.2 s[/b][/td][/tr]
+[tr][td]Overvoltage (> 1.1)[/td][td]142 s[/td][td][b]3 s[/b][/td][/tr]
+[tr][td]Junction-box overload[/td][td]21 s[/td][td][b]0 s[/b][/td][/tr]
+[tr][td]Fuel burned[/td][td]1.38 rods[/td][td][b]1.14 rods (−17%)[/b][/td][/tr]
+[tr][td]Oxygen generator running[/td][td]100% of the time[/td][td][b]~10%[/b][/td][/tr]
+[/table]
+Why: the engine never touches the reactor grid, batteries only charge from spare power, and the 1000 kW oxygen generator only runs when a room actually needs air.
+
+[h2]What's inside[/h2]
+[list]
+[*][b]HUMP-1 Reactor Brain[/b]: my own auto reactor. It makes exactly what the sub needs and holds the core at a comfy 50°.
+[*][b]HUMP-P + HUMP-R Power Manager[/b]: the engine and ballast pumps run on their own 4-battery propulsion bus, so throttle spikes can't stall the sub. All charging flows through a measured "charge tap" and only uses the reactor's spare power. The batteries hover at a target you can set.
+[*][b]HUMP-2 Governor + 12 Air Nodes[/b]: every room watches its own air. The oxygen generator runs when any room runs low, and stops when they're all full. It warns the reactor 5 seconds before switching on.
+[*][b]HUMP-3 Alert Core + Herald[/b]: every room reports flooding and fire [i]by name[/i]. GREEN / YELLOW / RED recolours the lights, sounds the siren (the bridge button mutes it) and announces on radio.
+[*][b]HUMP-4/5/6 CamelOS 2.0[/b]: a terminal OS with ship commands, a settings panel, and a fun pack. It also takes commands over radio chat.
+[*][b]Door Brains ×9[/b]: doors open for people (not monsters) and close behind them, seal when a room floods (you can still open them by hand), and lock down on command.
+[*][b]Nav terminal[/b]: BATTLE STATIONS and ALL CLEAR buttons.
+[*][b]The Spittoon[/b]: blows the ballast tanks on command. The camel spits. The camel rises.
+[*][b]Light Show[/b]: you know what this does.
+[*][b]Upgrades[/b]: a second chaingun on the empty hardpoint (with its own periscope, loader and supercapacitor), and bilge pumps in rooms that had none.
+[/list]
+Yes, there are wires everywhere. They're organized, sort of. It's part of the charm.
+
+[h2]CamelOS 2.0[/h2]
+Type at the bridge terminal, or say [b]camel <command>[/b] in radio chat (channel 0):
+[code]
+SHIP      status | alert red/yellow/green/auto | lockdown | unlock | spit
+          o2 on/auto | shed on/off/auto | lights party/normal | say <text>
+SETTINGS  settings | set o2 low N | set o2 high N | set battery N
+          alerts on/off | siren on/off | announce on/off | doors auto on/off
+FUN       ping | joke | 8ball <question> | pet | feed | coffee | dance
+          weather | uptime | hump | whoami | credits | sudo | moo | hello
+[/code]
+Unknown commands are met with judgement.
+
+[h2]Before you sail[/h2]
+[list]
+[*][b]Turn the reactor's automatic control OFF.[/b] The game doesn't save that switch, and the Reactor Brain can't take over until it's off.
+[*]Radio announcements go out on [b]channel 0[/b], only when the alert level changes. Too chatty? [b]announce off[/b].
+[*]Every circuit box has notes inside explaining how it works. Open them up; they're meant to be read.
+[/list]
+
+[h2]Credits[/h2]
+[list]
+[*][b]Design, every circuit (auto reactor included), and the tools that built it:[/b] Claude (Anthropic)
+[*][b]Concept, testing, bug reports, and the crayon quote:[/b] Dinglebear
+[*][b]Ideas learned from studying:[/b] HuskOS, the Smart Sub Toolkit, the LHMRS-SD / DMFSS-1 by Spruceduck, The Iroh, and the Smart Auto Door MK-II. No circuits were copied: CamelOS, the door brains, the air nodes and the power system are new designs. Go subscribe to theirs.
+[*]The Camel itself is FakeFish/Undertow's. I just made it worse, in the best way.
+[/list]
+
+Found a bug? Comment with what happened and your console errors.
+
+[i]The camel is content. Keep it that way.[/i] (^_^)

@@ -1,0 +1,87 @@
+# CAMEL OVERKILL: HUMP-5 "CONTROL PANEL". CamelOS settings: decodes them from the command bus (7300), keeps them in
+# memories and broadcasts each one on its own channel to the box that uses it. Answers on the reply bus (7310).
+name camel_settings
+box battery
+note "HUMP-5 CONTROL PANEL: HOW IT WORKS" "Every setting is a memory, sent every tick on its own wifi channel:\nset o2 low N -> 7405 and set o2 high N -> 7406 (air nodes; default 85 / 97 %)\nset battery N -> 7407 (propulsion battery target, default 80 %, kept 20..95)\nalerts on/off -> 7408 (off = always GREEN), siren on/off -> 7409, announce on/off -> 7410 (radio), doors auto on/off -> 7411 (auto-open)\n'settings' prints them all (1 = on, 0 = off).\nTo add a setting: regex on 7300 -> memory -> wifi to its user, then add the command to CamelOS's help and unknown-command regex."
+note "WIRING" "None: wifi only."
+c rx wifi Channel=7300
+c tr wifi Channel=7310
+c rlo regex Expression="^(?i)set o2 low ([0-9]+)$" UseCaptureGroup=true Output=1 FalseOutput="" ContinuousOutput=false
+c rhi regex Expression="^(?i)set o2 high ([0-9]+)$" UseCaptureGroup=true Output=1 FalseOutput="" ContinuousOutput=false
+c rbt regex Expression="^(?i)set battery ([0-9]+)$" UseCaptureGroup=true Output=1 FalseOutput="" ContinuousOutput=false
+c mlo mem Value=85
+c mhi mem Value=97
+c mbt mem Value=80
+c tlo wifi Channel=7405
+c thi wifi Channel=7406
+c tbt wifi Channel=7407
+w rx.out rlo.in rhi.in rbt.in
+w rlo.out mlo.in
+w rhi.out mhi.in
+w rbt.out mbt.in
+w mlo.out tlo.in
+w mhi.out thi.in
+w mbt.out tbt.in
+c aon regex Expression="^(?i)alerts on$" Output=1 FalseOutput="" ContinuousOutput=false
+c aof regex Expression="^(?i)alerts off$" Output=0 FalseOutput="" ContinuousOutput=false
+c son regex Expression="^(?i)siren on$" Output=1 FalseOutput="" ContinuousOutput=false
+c sof regex Expression="^(?i)siren off$" Output=0 FalseOutput="" ContinuousOutput=false
+c non regex Expression="^(?i)announce on$" Output=1 FalseOutput="" ContinuousOutput=false
+c nof regex Expression="^(?i)announce off$" Output=0 FalseOutput="" ContinuousOutput=false
+c don regex Expression="^(?i)doors auto on$" Output=1 FalseOutput="" ContinuousOutput=false
+c dof regex Expression="^(?i)doors auto off$" Output=0 FalseOutput="" ContinuousOutput=false
+c ma mem Value=1
+c ms mem Value=1
+c mn mem Value=1
+c md mem Value=1
+c ta wifi Channel=7408
+c ts wifi Channel=7409
+c tn wifi Channel=7410
+c td wifi Channel=7411
+w rx.out aon.in aof.in son.in sof.in
+w rx.out non.in nof.in don.in dof.in
+w aon.out ma.in
+w aof.out ma.in
+w son.out ms.in
+w sof.out ms.in
+w non.out mn.in
+w nof.out mn.in
+w don.out md.in
+w dof.out md.in
+w ma.out ta.in
+w ms.out ts.in
+w mn.out tn.in
+w md.out td.in
+c ok regex Expression="^(?i)(set (o2 low|o2 high|battery) [0-9]+|(alerts|siren|announce) (on|off)|doors auto (on|off))$" Output="Saved. Type 'settings' to see everything." FalseOutput="" ContinuousOutput=false
+w rx.out ok.in
+w ok.out tr.in
+c h mem Value="Settings | O2 low "
+c c1 concat
+c c2 concat Separator="% high "
+c c3 concat Separator="% | battery target "
+c c4 concat Separator="% | alerts "
+c c5 concat Separator=" siren "
+c c6 concat Separator=" announce "
+c c7 concat Separator=" door auto-open "
+c c8 concat Separator=" (1 = on)"
+c blank mem Value=" "
+w h.out c1.1
+w mlo.out c1.2
+w c1.out c2.1
+w mhi.out c2.2
+w c2.out c3.1
+w mbt.out c3.2
+w c3.out c4.1
+w ma.out c4.2
+w c4.out c5.1
+w ms.out c5.2
+w c5.out c6.1
+w mn.out c6.2
+w c6.out c7.1
+w md.out c7.2
+w c7.out c8.1
+w blank.out c8.2
+c pr regex Expression="^(?i)settings$" FalseOutput="" ContinuousOutput=false Output=...
+w c8.out pr.set_output
+w rx.out pr.in
+w pr.out tr.in

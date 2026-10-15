@@ -23,7 +23,7 @@
     constructor(text, templates) {
       this.eol = /\r\n/.test(text.slice(0, 5000)) ? '\r\n' : '\n';
       this.root = X.parse(text);
-      this.sub = this.root.children.find(n => n.tag === 'Submarine');
+      this.sub = this.root.children.find(n => n.tag === 'Submarine' || n.tag === 'ItemAssembly'); // assemblies work as template sources
       if (!this.sub) throw new Error('not a submarine file');
       this.templates = templates || [];
       this.handles = {}; this.log = []; this.reindex();
@@ -53,9 +53,10 @@
       if (!c) throw new Error(`${X.get(n, 'identifier')} #${X.get(n, 'ID')} has no connection "${conn}" (has: ${p.children.filter(x => x.tag === 'input' || x.tag === 'output').map(x => X.get(x, 'name')).join(', ')})`);
       return c;
     }
-    template(identifier) {
-      for (const d of [this, ...this.templates]) for (const n of d.items.values()) if (X.get(n, 'identifier') === identifier) return n;
-      return null;
+    template(identifier) { // prefer a placed item (with its connection panel) over one stored inside a circuit box
+      let loose = null;
+      for (const d of [this, ...this.templates]) for (const n of d.items.values()) if (X.get(n, 'identifier') === identifier) { if (this.panel(n) || /wire$/.test(identifier)) return n; loose = loose || n; }
+      return loose;
     }
     wiresAt(n, conn) { return X.kids(this.connEl(n, conn), 'link').map(l => X.get(l, 'w')); }
 
@@ -117,7 +118,8 @@
       this.log.push(`remove ${X.get(n, 'identifier')} #${id}`);
     }
     move(r, x, y) { const n = this.ref(r), rc = rectOf(n); X.set(n, 'rect', `${Math.round(x - rc[2] / 2)},${Math.round(y + rc[3] / 2)},${rc[2]},${rc[3]}`); }
-    setProp(r, key, value) { // "Component.Attr" or an item attribute
+    setProp(r, key, value) { // "Component.Attr" or an item attribute; a value "@handle" becomes that item's ID (e.g. linked=@loader)
+      if (/^@\w+$/.test(String(value))) value = X.get(this.ref(value), 'ID');
       const n = this.ref(r), dot = key.indexOf('.');
       if (dot < 0) { X.set(n, key, value); return; }
       const cn = key.slice(0, dot), attr = key.slice(dot + 1);
@@ -199,7 +201,7 @@
       const lines = String(script).split(/\r?\n/);
       lines.forEach((raw, i) => {
         const line = raw.replace(/(^|\s)#.*$/, '').trim(); if (!line) return;
-        const t = line.match(/"[^"]*"|\S+/g).map(s => s.replace(/^"|"$/g, '')), cmd = t[0].toLowerCase();
+        const t = [...line.matchAll(/([^\s"=]+=)"([^"]*)"|"([^"]*)"|(\S+)/g)].map(m => m[1] !== undefined ? m[1] + m[2] : m[3] !== undefined ? m[3] : m[4]), cmd = t[0].toLowerCase(); // Key="a b" and "a b" keep spaces; Key="" is empty
         const ep = s => { const d = s.lastIndexOf('.'); if (d < 0) throw new Error(`"${s}": use <id or @handle>.<connection>`); return [s.slice(0, d), s.slice(d + 1)]; };
         const at = () => { const k = t.indexOf('at'); if (k < 0) throw new Error('missing "at x,y"'); const [x, y] = t[k + 1].split(',').map(Number); return [x, y, k]; };
         const kv = arr => { const o = {}; for (const s of arr) { const j = s.indexOf('='); if (j > 0) o[s.slice(0, j)] = s.slice(j + 1); } return o; };

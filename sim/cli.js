@@ -7,7 +7,7 @@ const ROOT = path.resolve(__dirname, '..');
 const rel = p => path.relative(ROOT, p) || '.';
 const read = p => fs.readFileSync(p, 'utf8');
 
-function args(argv) { const o = { _: [] }; for (let i = 0; i < argv.length; i++) { const a = argv[i]; if (a.startsWith('--')) { const k = a.slice(2); const v = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : true; o[k] = v; } else o._.push(a); } return o; }
+function args(argv) { const o = { _: [] }; for (let i = 0; i < argv.length; i++) { const a = argv[i]; if (a.startsWith('--')) { const k = a.slice(2); const v = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : true; o[k] = k in o ? [].concat(o[k], v) : v; } else o._.push(a); } return o; }
 // settings: sim.config.json (also exportable from the web bench), overridden by flags
 function loadConfig(a) {
   const file = path.join(ROOT, 'sim.config.json');
@@ -136,14 +136,24 @@ const COMMANDS = {
     if (a.summary) { console.log(SF.summary(ship)); return; }
     const cfg = loadConfig(a);
     const sim = new SH.ShipSim(ship, { duration: Number(a.duration) || 600, rods: cfg.rods, fuelType: cfg.fuelType, start: cfg.start, seed: cfg.seed,
-      scenario: { fights: !a['no-fights'], breachAt: a.breach != null ? Number(a.breach) : null } });
+      scenario: { fights: !a['no-fights'], breachAt: a.breach != null ? Number(a.breach) : null, breachHull: a['breach-hull'] != null ? String(a['breach-hull']) : null,
+        fireAt: a.fire != null ? Number(a.fire) : null, fireHull: a['fire-hull'] != null ? String(a['fire-hull']) : null, crew: a.crew != null ? Number(a.crew) : 4,
+        radio: [].concat(a.radio || []).map(s => { const m = /^(\d+(?:\.\d+)?):(.*)$/.exec(String(s)); return m ? { t: Number(m[1]), text: m[2] } : { t: 1, text: String(s) }; }),
+        type: [].concat(a.type || []).map(s => { const m = /^(\d+(?:\.\d+)?):(.*)$/.exec(String(s)); return m ? { t: Number(m[1]), text: m[2] } : { t: 1, text: String(s) }; }) } });
     let model = null;
     if (a.circuit) model = loadModel(resolve(a.circuit, CIRC_DIRS), a['battery-circuit'] && resolve(a['battery-circuit'], CIRC_DIRS));
     if (model) { const sum = k => sim.batteries.reduce((x, b) => x + b[k], 0); sim.attachCircuit(P.substitute(model, { MAX: sim.reactor.maxPower, BATT_N: sim.batteries.length, BATT_KW: sum('maxRecharge'), BATT_OUT: sum('maxOut'), BATT_CAP: sum('capacity') })); }
-    sim.cfg.circuitName = model ? model.name : 'crew_autotemp';
+    sim.cfg.circuitName = model ? model.name : sim.reactor.autoTemp ? 'crew_autotemp' : 'own_circuits';
     const r = sim.runToEnd(); r.profile = ship.name + '_practice'; r.warnings = sim.warnings;
     const out = path.join(ROOT, 'logs', `${r.circuit}__${r.profile}.log`); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, P.fmtReport(r));
-    process.stdout.write(P.fmtReport(r)); console.log('log: ' + rel(out));
+    process.stdout.write(P.fmtReport(r));
+    console.log(`oxygen_min_pct=${sim.o2Min.toFixed(1)}\noxygen_generator_on_pct=${(sim.o2GenOnS / sim.time * 100).toFixed(1)}`);
+    if (a.transcript) { // what the crew would see: radio chat from wifi LinkToChat, terminal lines, text displays
+      for (const c of sim.chat) console.log(`CHAT [${c.t.toFixed(1)}s ch${c.ch}] ${c.crew ? '(crew) ' : ''}${c.text}`);
+      for (const l of sim.termLog) console.log(`TERM#${l.id} [${l.t.toFixed(1)}s] ${l.dir} ${l.text}`);
+      for (const d of sim.devs) if (d.kind === 'display') console.log(`DISPLAY#${d.it.id}: ${d.state.text}`);
+    }
+    console.log('log: ' + rel(out));
   },
   // export <circuit> --sub Dugong,Humpback,... : Blueprints files with that sub's values (from its .sub) -> exports/<Sub>/
   export(a) {
@@ -168,8 +178,8 @@ const COMMANDS = {
     const [what, name, arg] = a._;
     const find = nm => [nm, `ships/custom/${nm}.sub`, `ships/vanilla/${nm}.sub`].map(x => path.isAbsolute(x) ? x : path.join(ROOT, x)).find(x => fs.existsSync(x) && fs.statSync(x).isFile());
     const readSub = f => { const b = fs.readFileSync(f); return (b[0] === 0x1f && b[1] === 0x8b ? zlib.gunzipSync(b) : b).toString('utf8'); };
-    const f = find(name || ''); if (!f) throw new Error(`no sub "${name}" (ships/custom, ships/vanilla or a path)`);
-    const text = readSub(f);
+    const f = what === 'templates' ? null : find(name || ''); if (!f && what !== 'templates') throw new Error(`no sub "${name}" (ships/custom, ships/vanilla or a path)`);
+    const text = f ? readSub(f) : '';
     if (what === 'list') {
       const sh = SF.parseSub(text), by = new Map(sh.items.map(i => [i.id, i])), re = arg ? new RegExp(arg, 'i') : null;
       const room = it => { const cx = it.rect[0] + it.rect[2] / 2, cy = it.rect[1] - it.rect[3] / 2, h = sh.hulls.find(h => cx >= h.rect[0] && cx <= h.rect[0] + h.rect[2] && cy <= h.rect[1] && cy >= h.rect[1] - h.rect[3]); return h ? (h.name || 'hull' + h.id) : 'outside'; };
@@ -181,7 +191,24 @@ const COMMANDS = {
       }
       return;
     }
-    const templates = ['Dugong', 'Humpback', 'Typhon2'].map(n => find(n)).filter(Boolean).filter(x => x !== f).map(x => new SE.SubDoc(readSub(x)));
+    // item templates: the vanilla subs, then ships/templates/*.xml (vanilla items saved from other subs: sim/cli.js sub templates)
+    const tdir = path.join(ROOT, 'ships/templates');
+    const templates = ['Camel', 'Dugong', 'Humpback', 'Typhon2'].map(n => find(n)).filter(Boolean).filter(x => x !== f).map(x => new SE.SubDoc(readSub(x)))
+      .concat(fs.existsSync(tdir) ? fs.readdirSync(tdir).filter(x => x.endsWith('.xml')).map(x => new SE.SubDoc(readSub(path.join(tdir, x)).replace(/^\uFEFF/, ''))) : []);
+    if (what === 'templates') { // sub templates <out.xml> <ident,ident,...> <source files...>: one cleaned item per identifier, first source wins
+      const X = require('./subxml'), [out, list, ...srcs] = a._.slice(1), want = new Set(list.split(','));
+      const items = [];
+      for (const src of srcs) { const d = new SE.SubDoc(readSub(src).replace(/^\uFEFF/, '')); for (const n of d.items.values()) { const idf = X.get(n, 'identifier'); if (!want.has(idf)) continue; if (!n.children.some(k => k.tag === 'ConnectionPanel') && !/wire$/.test(idf)) continue; want.delete(idf);
+        const c = X.clone(n); X.set(c, 'ID', String(items.length + 1)); const r = (X.get(c, 'rect') || '0,0,16,16').split(','); X.set(c, 'rect', `0,0,${r[2]},${r[3]}`); X.del(c, 'linked');
+        const p = c.children.find(k => k.tag === 'ConnectionPanel'); if (p) for (const k of p.children) k.children = k.children.filter(l => l.tag !== 'link');
+        for (const k of c.children) if (k.tag === 'ItemContainer') X.set(k, 'contained', '');
+        const def = require('./components').byItem(idf), dc = def && c.children.find(k => k.tag === def.cls); if (dc) for (const [k, v] of Object.entries(def.defaults)) X.set(dc, k, v); // back to the prefab's settings
+        for (const k of c.children) { if (k.tag === 'ItemLabel') X.set(k, 'Text', ''); if (k.tag === 'Terminal') X.set(k, 'WelcomeMessage', ''); }
+        items.push(c); console.log(`${idf} <- ${path.basename(src)}`); } }
+      if (want.size) console.log('not found: ' + [...want].join(', '));
+      const root = { tag: '#root', attrs: [], children: [X.el('ItemAssembly', { name: 'vanilla item templates', description: 'One saved instance of each vanilla item the sub editor can add (connection order as saved by the game).' }, items)] };
+      fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, '<?xml version="1.0" encoding="utf-8"?>\n' + X.serialize(root)); console.log(`wrote ${items.length} templates to ${out}`); return;
+    }
     const doc = new SE.SubDoc(text, templates);
     if (what === 'check') { const p = doc.check(); console.log(p.length ? p.join('\n') : 'ok: no loader problems'); return; }
     if (what === 'patch') {
@@ -197,6 +224,12 @@ const COMMANDS = {
       return;
     }
     throw new Error('sub list|patch|check');
+  },
+  // explain <file.sub|assembly.xml> [filter] [--all]: readable netlist of a sub's or item assembly's circuits (settings, wiring, box insides)
+  explain(a) {
+    const zlib = require('zlib'), f = path.resolve(a._[0] || ''); if (!fs.existsSync(f)) throw new Error('no file ' + a._[0]);
+    const b = fs.readFileSync(f), text = (b[0] === 0x1f && b[1] === 0x8b ? zlib.gunzipSync(b) : b).toString('utf8').replace(/^\uFEFF/, '');
+    console.log(require('./explain').explain(text, { filter: a._[1], all: !!a.all }));
   },
   // verify <trace.csv>: replay a ReactorTrace recorded in game and show where the simulator differs
   verify(a) { const f = resolve(a._[0], ['traces', 'load_profiles']); process.stdout.write(require('./verify').verify(read(f), { from: a.from != null ? Number(a.from) : null, mode: a.physics ? 'physics' : a.autotemp ? 'autotemp' : null, debug: a.debug ? String(a.debug).split('-').map(Number) : null })); },

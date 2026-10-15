@@ -15,7 +15,7 @@
     'OxygenDetector', 'Terminal', 'ButtonTerminal', 'TextDisplay', 'CircuitBox', 'WifiComponent', 'Vent', 'Powered', 'StatusMonitor', 'ItemLabel']);
 
   function parseSub(xml) {
-    const doc = F.parseXml(xml), sub = doc.children.find(n => n.tag === 'Submarine');
+    const doc = F.parseXml(xml), sub = doc.children.find(n => n.tag === 'Submarine' || n.tag === 'ItemAssembly'); // assemblies hold items the same way
     if (!sub) throw new Error('not a submarine file (no <Submarine>)');
     const a = sub.attrs;
     const ship = { name: a.name || 'sub', description: a.description || '', class: a.class || '', tier: num(a.tier), dimensions: a.dimensions || '', hulls: [], items: [], wires: [], warnings: [] };

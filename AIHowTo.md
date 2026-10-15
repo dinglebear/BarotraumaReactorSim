@@ -255,4 +255,4 @@ How the round plays:
 Each sub sets its own reactor fire/meltdown delays, junction-box overload voltage (1.7) and battery sizes. Test-file headers carry them too (`reactor_fire_delay`, `junction_overload_voltage`, `ship_batteries`).
 
 ## 12. Editing a sub's wiring
-[`SUBEDIT.md`](SUBEDIT.md) covers rewiring a real `.sub` (doors, lights, relays, whole circuit boxes). Write a `.subpatch` script, apply it with `node sim/cli.js sub patch <in.sub> <patch>`, check it with `node sim/cli.js sub check`, then run it in the mock with `ship`.
+[`SUBEDIT.md`](SUBEDIT.md) covers rewiring a real `.sub` (doors, lights, relays, whole circuit boxes). [`CIRCUIT_PATTERNS.md`](CIRCUIT_PATTERNS.md) has the signal rules and pattern library for sub-wide systems (terminal OS, wifi buses, chat, sensor networks, door brains, battery buses). `node sim/cli.js explain <file>` reads any sub or item assembly as a netlist. The worked example is [`ships/CAMEL_OVERKILL.md`](ships/CAMEL_OVERKILL.md). Write a `.subpatch` script, apply it with `node sim/cli.js sub patch <in.sub> <patch>`, check it with `node sim/cli.js sub check`, then run it in the mock with `ship`.

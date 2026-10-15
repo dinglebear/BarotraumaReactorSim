@@ -1,0 +1,41 @@
+# CAMEL OVERKILL: HUMP-1 "REACTOR BRAIN". Feed-forward reactor control for the MAIN bus, plus telemetry for CamelOS.
+# The engine and ballast pumps are NOT on this bus (they run on the propulsion batteries), so the load it follows is smooth.
+name camel_reactor
+box reactor
+note "HUMP-1 REACTOR BRAIN: HOW IT WORKS" "Turbine = setpoint (from HUMP-P, in8) / max output x 100: main bus demand + what the propulsion batteries should take.\nFission = (actual turbine + 100 - temperature) x 50 / fuel: the heat the turbine needs, pulling the temperature back to 50.\nThe engine and ballast pumps run on the PROPULSION batteries; their recharge soaks up the reactor's lag, so the voltage stays flat.\nTelemetry out on wifi: 7206 reactor kW, 7207 main bus load kW, 7208 temperature.\nReactor automatic control must be OFF."
+note "WIRING" "From the reactor: in1 load_value_out, in2 power_value_out, in3 temperature_out, in4 fuel_out\nout1 -> set_fissionrate, out2 -> set_turbineoutput\nin8 <- HUMP-P out2 (setpoint kW)"
+c tdiv div
+c tmax mem Value=$MAX
+c tpct mul
+c k100 mem Value=100
+c pdiv div
+c ppct mul
+c tdeg div
+c terr sub
+c fadd add
+c k50 mem Value=50
+c fmul mul
+c fdiv div ClampMin=0 ClampMax=100
+c txp wifi Channel=7206
+c txl wifi Channel=7207
+c txt wifi Channel=7208
+w in8 tdiv.1
+w in1 txl.in
+w tmax.out tdiv.2
+w tdiv.out tpct.1
+w k100.out tpct.2
+w tpct.out out2
+w in2 pdiv.1 txp.in
+w tmax.out pdiv.2
+w pdiv.out ppct.1
+w k100.out ppct.2
+w ppct.out fadd.1
+w in3 tdeg.1
+w k100.out tdeg.2 terr.1
+w tdeg.out terr.2 txt.in
+w terr.out fadd.2
+w k50.out fmul.2
+w fadd.out fmul.1
+w fmul.out fdiv.1
+w in4 fdiv.2
+w fdiv.out out1

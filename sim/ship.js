@@ -15,6 +15,7 @@
   const POWER = new Set(['power', 'power_in', 'power_out']);
   const first = (it, k) => (it.comps[k] || [])[0];
   const parse = v => { const r = C.parseF(v); return r.ok ? r.v : NaN; };
+  const O2_GEN = 0.6, O2_CREW = 0.015; // %/s from one oxygen generator at full power (GeneratedAmount 400); %/s per crew member
   const center = it => [it.rect[0] + it.rect[2] / 2, it.rect[1] - it.rect[3] / 2];
 
   class ShipSim extends E.Sim {
@@ -27,7 +28,8 @@
         profile, reactorMaxKW: n(R0.MaxPowerOutput, 5000), batteries: { enabled: false }, start: 'cold',
         meltdownDelay: n(R0.MeltdownDelay, 120), fireDelay: n(R0.FireDelay, 20), fuelConsumptionRate: n(R0.FuelConsumptionRate, 0.2),
       }));
-      this.ship = ship; this.devs = []; this.byId = new Map(); this.caps = []; this.jbs = []; this.relays = []; this.hullWater = {};
+      this.ship = ship; this.devs = []; this.byId = new Map(); this.caps = []; this.jbs = []; this.relays = []; this.hullWater = {}; this.hullSmoke = {}; this.hullCrew = {};
+      this.o2 = n(cfg.o2Start, 100); this.o2Min = this.o2; this.o2GenOnS = 0; this.chat = []; this.termLog = [];
       this.scenario = new Scenario(this, cfg.scenario || {});
       if (ri) this.byId.set(ri.id, { it: ri, sim: this.reactor, kind: 'reactor', cpc: 0 });
       for (const it of ship.items) if (it !== ri) this.addDevice(it);
@@ -84,7 +86,10 @@
           else if (pin === 'set_state') s.on = sig.v !== '0';
           else if (s.on && pin === 'signal_in1') this.send(d.sim, 'signal_out1', sig.v); else if (s.on && pin === 'signal_in2') this.send(d.sim, 'signal_out2', sig.v);
         };
-        d.update = () => { this.send(d.sim, 'state_out', d.state.on ? '1' : '0'); };
+        d.update = () => { // RelayComponent: state_out, and load_value_out = round(load of the grid on power_out) every tick
+          this.send(d.sim, 'state_out', d.state.on ? '1' : '0');
+          const g = this.connGrid && this.connGrid.get(d.it.id + '|power_out'); if (g) this.send(d.sim, 'load_value_out', String(Math.round(g.load || 0)));
+        };
         return;
       }
       DEVICE(this, d);
@@ -100,7 +105,6 @@
       const parent = new Map(), find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
       const node = (id, c) => { const k = id + '|' + c; if (!parent.has(k)) parent.set(k, k); return k; }, join = (a, b) => parent.set(find(a), find(b));
       for (const w of this.ship.wires) if (POWER.has(w.from.conn) && POWER.has(w.to.conn)) join(node(w.from.item, w.from.conn), node(w.to.item, w.to.conn));
-      for (const d of this.relays) if (d.state.on) join(node(d.it.id, 'power_in'), node(d.it.id, 'power_out')); // a closed relay passes power through
       for (const d of this.jbs) { const cs = d.it.conns.filter(c => POWER.has(c.name)).map(c => node(d.it.id, c.name)); for (let i = 1; i < cs.length; i++) join(cs[0], cs[i]); }
       const grids = new Map(), grid = k => { const r = find(k); if (!grids.has(r)) grids.set(r, { id: r, load: 0, power: 0, voltage: 0, consumers: [], batteries: [], sources: [], reactor: false, jbs: [] }); return grids.get(r); };
       const has = (it, c) => parent.has(it.id + '|' + c);
@@ -112,6 +116,13 @@
         if (d.kind === 'relay') continue;
         const pc = ['power_in', 'power'].find(c => has(d.it, c));
         d.grid = pc ? grid(id + '|' + pc) : null; if (d.grid) d.grid.consumers.push(d);
+      }
+      // relays keep two grids apart and pass power from the input grid to the output grid while on (RelayComponent,
+      // a PowerTransfer: the input grid sees the output grid's load, up to MaxPower)
+      this.links = [];
+      for (const d of this.relays) if (has(d.it, 'power_in') && has(d.it, 'power_out')) {
+        const gi = grid(d.it.id + '|power_in'), go = grid(d.it.id + '|power_out');
+        if (gi !== go) this.links.push({ d, gi, go });
       }
       this.connGrid = new Map(); for (const k of parent.keys()) this.connGrid.set(k, grid(k)); // for the viewer: which grid each power pin is on
       this.grids = [...grids.values()];
@@ -152,14 +163,24 @@
     }
     get reactorItem() { return this.ship.items.find(i => i.comps.Reactor); }
     updatePower() {
-      const key = this.relays.map(d => d.state.on ? 1 : 0).join('');
-      if (key !== this.gridsKey || !this.grids.length) { this.buildGrids(); this.gridsKey = key; }
+      if (!this.grids.length) this.buildGrids();
       const R = this.reactor, all = [...this.batteries, ...this.caps];
       for (const b of all) { b.cpc = b.inGrid ? this.batteryConsumption(b) : 0; b.out = 0; b.isSrc = b.charge > 0; }
       for (const g of this.grids) {
-        g.load = 0; g.power = 0;
-        for (const d of g.consumers) g.load = f(g.load + d.cpc);
-        for (const b of g.batteries) g.load = f(g.load + b.cpc);
+        g.ownLoad = 0; g.power = 0; g.fed = null;
+        for (const d of g.consumers) g.ownLoad = f(g.ownLoad + d.cpc);
+        for (const b of g.batteries) g.ownLoad = f(g.ownLoad + b.cpc);
+      }
+      // total load: own load + what closed relays pass on to their output grids (capped at MaxPower), deepest first
+      const live = this.links.filter(l => l.d.state.on), tot = new Map();
+      const total = (g, seen) => { if (tot.has(g)) return tot.get(g); if (seen.has(g)) return g.ownLoad; seen.add(g); let L = g.ownLoad; for (const l of live) if (l.gi === g) { l.pass = Math.min(total(l.go, seen), l.d.maxPower); L = f(L + l.pass); } tot.set(g, L); return L; };
+      for (const g of this.grids) g.load = total(g, new Set());
+      for (const l of live) if (!l.go.fed) l.go.fed = l;
+      // solve feeding grids before the grids they feed
+      const order = [], done = new Set(), visit = g => { if (done.has(g)) return; done.add(g); if (g.fed) visit(g.fed.gi); order.push(g); };
+      for (const g of this.grids) visit(g);
+      for (const g of order) {
+        if (g.fed) g.power = f(g.fed.pass * Math.min(g.fed.gi.voltage || 0, 1)); // what the relay delivers
         if (g.reactor && R.cond > 0) { const mm = this.reactorMinMax(); g.power = f(g.power + this.reactorPowerOut(g.power, mm, g.load)); } else if (g.reactor) R.cpc = 0;
         const bs = g.sources.filter(b => b.isSrc);
         if (bs.length) {
@@ -169,7 +190,7 @@
           g.power = f(g.power + added);
         }
         let v = Math.min(f(g.power / Math.max(g.load, 1e-10)), 1000); if (!(v > 0)) v = 0;
-        g.voltage = g.load <= 0 ? (g.power > 0 || g.reactor || bs.length ? 1 : 0) : f(v);
+        g.voltage = g.load <= 0 ? (g.power > 0 || g.reactor || bs.length || (g.fed && g.fed.gi.voltage > 0) ? 1 : 0) : f(v);
         for (const d of g.consumers) d.voltage = g.voltage;
       }
       for (const b of all) {
@@ -198,6 +219,11 @@
     }
     step() {
       this.scenario.update(this.time);
+      // oxygen (one number for the whole sub; an approximation, no per-room air): the crew breathe it down,
+      // oxygen generators running at >= MinVoltage push it up (scaled by voltage up to 1)
+      let gen = 0;
+      for (const d of this.devs) if (d.kind === 'oxygen' && d.state.active && d.voltage >= 0.5) { gen += Math.min(d.voltage, 1) * O2_GEN * (d.genAmount / 400); this.o2GenOnS += STEP; }
+      this.o2 = cl(this.o2 + (gen - O2_CREW * (this.scenario.o.crew || 0)) * STEP, 0, 100); this.o2Min = Math.min(this.o2Min, this.o2);
       for (const d of this.devs) if (d.update) d.update(STEP);
       for (const b of this.caps) this.updateBattery(b);
       super.step();
@@ -270,18 +296,19 @@
     } else if (k.OxygenGenerator || k.Fabricator || k.Deconstructor || k.MiniMap || k.Powered || k.Door || k.Vent) {
       const comp = first(it, 'OxygenGenerator') || first(it, 'Fabricator') || first(it, 'Deconstructor') || first(it, 'MiniMap') || first(it, 'Powered') || first(it, 'Door') || {};
       d.kind = k.OxygenGenerator ? 'oxygen' : k.Fabricator || k.Deconstructor ? 'fabricator' : k.Door ? 'door' : 'powered';
-      const kw = n(comp.PowerConsumption, 0); s.active = d.kind === 'fabricator' ? false : bool(comp.IsActive, true);
+      const kw = n(comp.PowerConsumption, 0); s.active = d.kind === 'fabricator' ? false : bool(comp.IsActive, true); d.genAmount = n(comp.GeneratedAmount, 400);
       if (k.Door) recvs.push((pin, sig) => { if (pin === 'set_state') { s.open = sig.v !== '0'; send('state_out', s.open ? '1' : '0'); } else if (pin === 'toggle') { if (sig.v !== '0') s.open = !s.open; send('state_out', s.open ? '1' : '0'); } });
       recvs.push((pin, sig) => { if (pin === 'set_active') s.active = sig.v !== '0'; });
       d.update = () => { d.cpc = f((s.active ? kw : 0) + lightKW()); };
     } else if (k.WaterDetector || k.MotionSensor || k.SmokeDetector || k.OxygenDetector) {
-      d.kind = 'detector'; const det = Object.keys(k).find(x => /Detector|Sensor/.test(x));
-      const out = k.WaterDetector ? 'signal_out' : k.MotionSensor ? 'state_out' : 'signal_out';
+      d.kind = 'detector'; const det = Object.keys(k).find(x => /Detector|Sensor/.test(x)), dc = first(it, det) || {};
+      const onV = dc.Output !== undefined ? dc.Output : '1', offV = dc.FalseOutput !== undefined ? dc.FalseOutput : '0';
+      const out = k.MotionSensor ? 'state_out' : 'signal_out', emit = on => { const v = on ? onV : offV; if (v !== '') send(out, v); };
       d.update = () => {
-        const w = sim.hullWater[d.hull] || 0;
-        if (det === 'WaterDetector') { send('signal_out', w > 0 ? '1' : '0'); send('water_%', String(Math.round(w))); }
-        else if (det === 'MotionSensor') { if (s.motion) send(out, '1'); }
-        else if (det === 'SmokeDetector') { if (s.smoke) send(out, '1'); }
+        if (det === 'WaterDetector') { const w = sim.hullWater[d.hull] || 0; emit(w > 0); send('water_%', String(Math.round(w))); }
+        else if (det === 'MotionSensor') emit(s.motion || (sim.hullCrew[d.hull] || 0) > 0);
+        else if (det === 'SmokeDetector') emit(s.smoke || !!sim.hullSmoke[d.hull]);
+        else if (det === 'OxygenDetector') send('signal_out', String(Math.round(sim.o2)));
         d.cpc = lightKW();
       };
     } else if (k.Controller) {
@@ -289,9 +316,10 @@
       d.press = () => { send(d.kind === 'button' ? 'signal_out' : 'trigger_out', '1'); };
       d.update = () => { d.cpc = lightKW(); };
     } else if (k.Terminal) {
-      d.kind = 'terminal'; d.type = text => send('signal_out', text); d.update = () => { d.cpc = 0; };
+      d.kind = 'terminal'; s.lines = []; d.type = text => { sim.termLog.push({ t: sim.time, id: it.id, dir: '>', text }); send('signal_out', text); }; d.update = () => { d.cpc = 0; };
+      recvs.push((pin, sig) => { if (pin === 'signal_in' && sig.v !== '') { s.lines.push(sig.v); if (s.lines.length > 60) s.lines.shift(); sim.termLog.push({ t: sim.time, id: it.id, dir: '<', text: sig.v }); } else if (pin === 'clear_text' && sig.v !== '0') s.lines = []; });
     } else if (k.ItemLabel) {
-      d.kind = 'display'; recvs.push((pin, sig) => { if (pin === 'set_text') s.text = sig.v; }); d.update = () => { d.cpc = lightKW(); };
+      d.kind = 'display'; s.text = (first(it, 'ItemLabel') || {}).Text || ''; recvs.push((pin, sig) => { if (pin === 'set_text') s.text = sig.v; }); d.update = () => { d.cpc = lightKW(); };
     } else if (k.LightComponent) {
       d.kind = 'light'; d.update = () => { d.cpc = lightKW(); };
     } else { d.update = () => { d.cpc = base(); }; }
@@ -306,7 +334,8 @@
   // discharge coil, sonar active), and optional hull breaches (water detectors in that room read 100 %).
   class Scenario {
     constructor(sim, o) {
-      this.sim = sim; this.o = Object.assign({ fights: true, fightEvery: 240, firstFight: 90, breachAt: null, breachHull: null, pilot: true }, o);
+      this.sim = sim; this.o = Object.assign({ fights: true, fightEvery: 240, firstFight: 90, breachAt: null, breachHull: null, pilot: true, crew: 4, fireAt: null, fireHull: null, fireLen: 60, type: [], radio: [] }, o);
+      this.crew = []; this.nextMove = 0; this.typed = 0; this.said = 0;
       let a = (o.seed || 7) >>> 0; this.r = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
       this.nextX = 0; this.nextY = 0; this.fightEnd = -1; this.nextFight = this.o.firstFight; this.nextShot = 0; this.events = [];
     }
@@ -322,6 +351,24 @@
       if (fighting) { // gunners: bursts of fire (trigger held while the burst lasts); the discharge coil now and then
         if (t >= this.nextShot) { this.burstEnd = t + 1 + r() * 4; this.nextShot = this.burstEnd + 1 + r() * 6; this.coil = r() < 0.2; }
         if (t < this.burstEnd) for (const d of sim.devs) if (d.kind === 'turret' || (d.kind === 'discharger' && this.coil)) d.sim.recv('trigger_in', { v: '1', steps: 0, src: null });
+      }
+      // crew walking between rooms (motion detectors see them in the room they're in)
+      if (this.o.crew && t >= this.nextMove && sim.ship.hulls.length) {
+        const hs = sim.ship.hulls; while (this.crew.length < this.o.crew) this.crew.push(hs[Math.floor(r() * hs.length)].id);
+        const i = Math.floor(r() * this.crew.length); this.crew[i] = hs[Math.floor(r() * hs.length)].id; this.nextMove = t + 2 + r() * 8;
+        sim.hullCrew = {}; for (const h of this.crew) sim.hullCrew[h] = (sim.hullCrew[h] || 0) + 1;
+      }
+      if (this.o.fireAt !== null && !this.fire && t >= this.o.fireAt) { const hs = sim.ship.hulls; this.fire = hs.find(x => x.id === this.o.fireHull) || hs[Math.floor(r() * hs.length)]; sim.hullSmoke[this.fire.id] = true; sim.metrics.ev(`fire in ${this.fire.name || 'hull ' + this.fire.id}`); }
+      if (this.fire && sim.hullSmoke[this.fire.id] && t >= this.o.fireAt + this.o.fireLen) { sim.hullSmoke[this.fire.id] = false; sim.metrics.ev('fire out'); }
+      // someone typing at a terminal: [{ t, text, terminal? }]
+      while (this.typed < this.o.type.length && t >= this.o.type[this.typed].t) {
+        const c = this.o.type[this.typed++], term = sim.devs.find(d => d.kind === 'terminal' && (!c.terminal || d.it.id === String(c.terminal)));
+        if (term) term.type(c.text);
+      }
+      // someone talking on the headset radio: [{ t, text, ch }] -> every wifi with LinkToChat on that channel outputs it
+      while (this.said < this.o.radio.length && t >= this.o.radio[this.said].t) {
+        const c = this.o.radio[this.said++], ch = String(c.ch || 0); sim.chat.push({ t, ch, text: c.text, crew: true });
+        for (const w of sim.wifis) if (w.p.Channel === ch && String(w.p.LinkToChat).toLowerCase() === 'true' && w.isWired('signal_out')) sim.itemSend(w.item, { v: c.text, steps: 0, src: null }, sim.conn(w.item, 'signal_out'));
       }
       if (this.o.breachAt !== null && t >= this.o.breachAt && !this.breached) {
         this.breached = true; const hs = sim.ship.hulls; const h = hs.find(x => x.id === this.o.breachHull) || hs[Math.floor(r() * hs.length)];

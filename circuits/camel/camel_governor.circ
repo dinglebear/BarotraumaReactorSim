@@ -1,0 +1,85 @@
+# CAMEL OVERKILL: HUMP-2 "LIFE SUPPORT & LOAD GOVERNOR".
+# The outpost oxygen generator eats 1000 kW, nearly half the Camel's idle load, and it runs even when the air is already full.
+# The governor switches it with a relay: ON below 85 % oxygen, OFF above 97 % (hysteresis), always ON if forced.
+# It also sheds non-essential loads (fabricator + deconstructor, suit lockers / tank shelves) when the propulsion batteries are low.
+name camel_governor
+box battery
+note "HUMP-2 GOVERNOR: HOW IT WORKS" "OXYGEN: o2 = lower of the two oxygen detectors. Below 85 % -> generator relay ON; above 97 % -> OFF; in between it keeps its last state (a latch in a memory). Starts ON. The relay follows 5 s after the decision; during those 5 s it broadcasts 1 on 7212 so the reactor ramps up BEFORE the 1000 kW load arrives; the relay command itself goes out on 7213 so HUMP-P knows the instant it switches.\nCommands on the CamelOS bus (wifi 7300): 'o2 on' forces it on, 'o2 auto' goes back to automatic.\nSHEDDING: propulsion batteries below 20 % -> shed (fabricators and suit lockers off); back on above 50 %. 'shed on' / 'shed off' / 'shed auto' on 7300.\nTelemetry: 7201 oxygen %, 7203 generator state, 7204 shed state."
+note "WIRING" "in1, in2 <- oxygen detectors (signal_out)\nin3 <- propulsion battery charge_%\nout1 -> oxygen relay set_state\nout2 -> relays for fabricators and suit lockers (set_state)"
+c txo wifi Channel=7201
+c txg wifi Channel=7203
+c txs wifi Channel=7204
+# --- oxygen: min of two detectors = (a + b - |a - b|) / 2
+c dd sub
+c da abs
+c ds add
+c dm sub
+c k2 mem Value=2
+c o2 div
+w in1 dd.1 ds.1
+w in2 dd.2 ds.2
+w dd.out da.in
+w ds.out dm.1
+w da.out dm.2
+w dm.out o2.1
+w k2.out o2.2
+c k85 mem Value=85
+c k97 mem Value=97
+c lo greater FalseOutput=""             # 85 > o2 -> "1"
+c hi greater Output=0 FalseOutput=""    # o2 > 97 -> "0"
+c latch mem Value=1                     # generator wanted (1/0); starts ON
+w k85.out lo.1
+w o2.out lo.2 hi.1
+w k97.out hi.2
+w lo.out latch.in
+w hi.out latch.in
+# --- commands (wifi 7100)
+c rx wifi Channel=7300
+c cOn regex Expression="^(?i)o2 on$" Output=1 FalseOutput="" ContinuousOutput=false
+c cAuto regex Expression="^(?i)o2 auto$" Output=0 FalseOutput="" ContinuousOutput=false
+c force mem Value=0
+w rx.out cOn.in cAuto.in
+w cOn.out force.in
+w cAuto.out force.in
+c want or                               # latch OR forced
+w latch.out want.1
+w force.out want.2
+c dly delay Delay=5                   # the relay follows 5 s later...
+c ndl not
+c pre and                              # ...and meanwhile 'pre' warns the reactor (7212)
+c txpre wifi Channel=7212
+w want.out dly.in pre.1 txg.in
+c txrel wifi Channel=7213
+w dly.out out1 ndl.in txrel.in
+w ndl.out pre.2
+w pre.out txpre.in
+# --- shedding: propulsion charge < 20 -> shed ; > 50 -> restore
+c k20 mem Value=20
+c k50 mem Value=50
+c slo greater FalseOutput=""            # 20 > charge -> "1"
+c shi greater Output=0 FalseOutput=""   # charge > 50 -> "0"
+c slatch mem Value=0
+w k20.out slo.1
+w in3 slo.2 shi.1
+w k50.out shi.2
+w slo.out slatch.in
+w shi.out slatch.in
+c sOn regex Expression="^(?i)shed on$" Output=1 FalseOutput="" ContinuousOutput=false
+c sOff regex Expression="^(?i)shed off$" Output=2 FalseOutput="" ContinuousOutput=false
+c sAuto regex Expression="^(?i)shed auto$" Output=0 FalseOutput="" ContinuousOutput=false
+w rx.out sOn.in sOff.in sAuto.in
+c smode mem Value=0                     # 0 auto, 1 forced shed, 2 forced no-shed
+w sOn.out smode.in
+w sOff.out smode.in
+w sAuto.out smode.in
+c mux1 mux                              # pick: auto latch / 1 / 0
+c one mem Value=1
+c zero mem Value=0
+w smode.out mux1.set_input
+w slatch.out mux1.signal_in0
+w one.out mux1.signal_in1
+w zero.out mux1.signal_in2
+c inv not                               # relays ON when NOT shedding
+w mux1.out inv.in txs.in
+w inv.out out2
+w o2.out txo.in

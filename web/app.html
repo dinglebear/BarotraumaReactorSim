@@ -800,11 +800,13 @@ function buildShip(cfg) {
   const sh = ships[$('subSel').value]; if (!sh) throw new Error('pick a submarine');
   const s = new SH.ShipSim(sh, { duration: Number($('subDur').value) || 600, rods: cfg.rods, fuelType: cfg.fuelType, start: cfg.start, seed: 12345,
     scenario: { fights: $('subFights').checked, breachAt: $('subBreach').value === '' ? null : Number($('subBreach').value) } });
-  if (model.boxes.length) {
+  const own = !s.reactor.autoTemp; // the sub's own circuit already drives the reactor (e.g. Camel Overkill): don't plug a second one in
+  if (own) s.warnings.push("this sub's own circuit runs the reactor: the reactor circuit picked on the left is not used");
+  if (model.boxes.length && !own) {
     const sum = k => s.batteries.reduce((a, b) => a + b[k], 0);
     s.attachCircuit(P.substitute(model, { MAX: s.reactor.maxPower, BATT_N: s.batteries.length, BATT_KW: sum('maxRecharge'), BATT_OUT: sum('maxOut'), BATT_CAP: sum('capacity') }));
   }
-  s.cfg.circuitName = model.name; SV.sel = null; SV.view = null;
+  s.cfg.circuitName = own ? sh.name + ' (own circuits)' : model.name; SV.sel = null; SV.view = null;
   return s;
 }
 // geometry: world (x right, y up) -> screen (y down)
@@ -867,13 +869,17 @@ function svInspector() {
       + `<label>Main grid<div class="val">${Math.round(rg.power || 0)} / ${Math.round(rg.load || 0)} kW · ${(rg.voltage || 0).toFixed(2)} V · ${(rg.consumers || []).length} devices</div></label>`
       + `<label>Reactor<div class="val">${Math.round(-R.cpc)} kW of ${R.maxPower} · ${R.temp.toFixed(1)} ° · ${R.autoTemp ? 'crew automatic control' : 'run by the circuit'} · fire after ${R.fireDelay} s > 60°, meltdown after ${R.meltdownDelay} s > 70°</div></label>`
       + `<label>Power grids<div class="val">${sim.grids.filter(g => g.consumers.length || g.sources.length || g.reactor).map((g, i) => `<span style="color:${svGridCol(g)}">■</span> ${g.reactor ? 'reactor grid' : g.sources.length ? 'battery/capacitor grid' : 'grid'}: ${Math.round(g.load)} kW, ${g.voltage.toFixed(2)} V`).join('<br>')}</div></label>`
-      + `<p class="hint">Click a device or room. Relays, lights, pumps and buttons can be switched; a room can be breached.</p>`;
+      + `<label>Oxygen (whole sub, approximate)<div class="val">${sim.o2.toFixed(1)} % · generator ran ${sim.time ? Math.round(sim.o2GenOnS / sim.time * 100) : 0} % of the time</div></label>`
+      + (sim.chat.length ? `<label>Radio chat (wifi LinkToChat)<div class="val">${sim.chat.slice(-8).map(c => `[${c.t.toFixed(0)}s ch${esc(c.ch)}] ${esc(c.text)}`).join('<br>')}</div></label>` : '')
+      + `<p class="hint">Click a device or room. Relays, lights, pumps and buttons can be switched, a room can be breached or set on fire, and terminals can be typed into.</p>`;
     return;
   }
   if (s.hull) {
     const h = sim.ship.hulls.find(x => x.id === s.hull), w = sim.hullWater[s.hull] || 0;
-    el.innerHTML = `<h3>${esc(h.name || 'Room ' + h.id)}</h3><label>Water<div class="val">${w ? 'flooding (water detectors read ' + w + ' %)' : 'dry'}</div></label><button id="svAct">${w ? 'Pump it dry' : 'Hull breach here'}</button>`;
+    const smoke = !!sim.hullSmoke[s.hull], crew = sim.hullCrew[s.hull] || 0;
+    el.innerHTML = `<h3>${esc(h.name || 'Room ' + h.id)}</h3><label>Water<div class="val">${w ? 'flooding (water detectors read ' + w + ' %)' : 'dry'}</div></label><label>Smoke<div class="val">${smoke ? 'FIRE (smoke detectors fire)' : 'clear'}</div></label><label>Crew here<div class="val">${crew} (motion detectors see them)</div></label><button id="svAct">${w ? 'Pump it dry' : 'Hull breach here'}</button> <button id="svFire">${smoke ? 'Put the fire out' : 'Start a fire here'}</button>`;
     $('svAct').onclick = () => { if (w) delete sim.hullWater[s.hull]; else { sim.hullWater[s.hull] = 100; sim.metrics.ev('hull breach in ' + (h.name || 'room ' + h.id) + ' (by hand)'); } svRender(); };
+    $('svFire').onclick = () => { if (smoke) delete sim.hullSmoke[s.hull]; else { sim.hullSmoke[s.hull] = true; sim.metrics.ev('fire in ' + (h.name || 'room ' + h.id) + ' (by hand)'); } svRender(); };
     return;
   }
   const d = svDev(s.id); if (!d) { SV.sel = null; return svInspector(); }
@@ -895,6 +901,7 @@ function svInspector() {
   if (d.kind === 'display' && st.text !== undefined) facts.push('shows "' + st.text + '"');
   if (d.kind === 'circuitbox') facts.push(`${d.box.components.length} components, ${d.box.wires.length} wires`);
   if (facts.length) h += `<label>State<div class="val">${facts.map(esc).join('<br>')}</div></label>`;
+  if (d.kind === 'terminal') h += `<label>Screen<div class="val term">${(st.lines || []).slice(-12).map(esc).join('<br>') || '(empty)'}</div></label><label>Type a line<input id="svType" type="text" placeholder="e.g. help" autocomplete="off"></label>`;
   const acts = [];
   if (d.kind === 'relay') acts.push(['Toggle relay', () => { st.on = !st.on; }]);
   if (d.kind === 'pump') acts.push([st.active ? 'Turn pump off' : 'Turn pump on', () => { st.active = !st.active; }]);
@@ -908,6 +915,7 @@ function svInspector() {
   if (conns.length) h += `<label>Wires<div class="val">${conns.join('<br>')}</div></label>`;
   el.innerHTML = h;
   el.querySelectorAll('[data-act]').forEach(b => b.onclick = () => { acts[+b.dataset.act][1](); svRender(); });
+  const ti = $('svType'); if (ti) { if (SV.typing) { ti.value = SV.typing.v; ti.focus(); } ti.oninput = () => { SV.typing = { v: ti.value }; }; ti.onkeydown = e => { if (e.key === 'Enter' && ti.value.trim()) { d.type(ti.value.trim()); SV.typing = { v: '' }; svRender(); } }; ti.onblur = () => { if (SV.typing && !SV.typing.v) SV.typing = null; }; }
 }
 function svLive() { if (mode === 'sub' && !$('svSvg').closest('[hidden]') && performance.now() - SV.at > 250) { SV.at = performance.now(); svRender(); } }
 (() => {

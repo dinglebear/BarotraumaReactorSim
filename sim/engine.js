@@ -194,7 +194,7 @@
       }
       return box;
     }
-    cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; return sig => ci.recv(ep.pin, sig); }
+    cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; const c = this.conn(ci, ep.pin); return sig => this.deliver(c, sig); } // via deliver(): records the pin's last value (and lets the sandbox see same-tick conflicts)
     wifiTx(srcItem, srcComp, sig) {
       for (const w of this.wifis) {
         if (w === srcComp || w.p.Channel !== srcComp.p.Channel || !w.isWired('signal_out')) continue;

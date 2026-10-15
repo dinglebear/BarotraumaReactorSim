@@ -1,0 +1,57 @@
+# Two boxes talking: a set/reset latch (box "latch") drives a door brain (box "door"), plus a loose part and a wifi.
+name latch + door brain demo
+dev on button
+dev off button Output=0
+dev pir motion
+dev wet water
+dev dr door
+dev lamp light
+dev scr display
+box latch
+note "LATCH" "button 1 sets, button 0 resets: a memory remembers"
+c m mem Value=0
+w in1 m.in
+w m.out out1
+box door
+note "DOOR" "open while someone was seen in the last 3 s AND nothing blocks it (latch or water held 5 s). An AND, not a relay: a relay switched off passes nothing, so the door would keep its last state."
+c held or TimeFrame=3
+c open and
+c nb not
+c wetor or TimeFrame=5
+c block or
+w in1 held.1
+w in2 wetor.1
+w in3 block.2
+w wetor.out block.1
+w block.out nb.in
+w nb.out open.2
+w held.out open.1
+w open.out out1
+part show concat Separator=": "
+part label mem Value="LOCK"
+part tx wifi Channel=42
+part rx wifi Channel=42
+wire on.out latch.in1
+wire off.out latch.in1
+wire latch.out1 door.in3 show.2 lamp.set_state
+wire label.out show.1
+wire show.out tx.in
+wire rx.out scr.set_text
+wire pir.state_out door.in1
+wire wet.signal_out door.in2
+wire door.out1 dr.set_state
+watch latch.out1 door.out1
+at 1 set pir 1
+at 2 set pir 0
+at 6 press on
+at 7 set pir 1
+at 9 press off
+at 12 set wet 50
+at 14 set wet 0
+expect 1.5 dr = on
+expect 5.5 dr = off
+expect 8 dr = off
+expect 8 scr = "LOCK: 1"
+expect 10 dr = on
+expect 13 dr = off
+run 22

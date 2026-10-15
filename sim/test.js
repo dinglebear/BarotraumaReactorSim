@@ -164,3 +164,16 @@ console.log('real-game checks passed');
   assert(r.unmet_pct < 2, 'capsule power: unmet ' + r.unmet_pct);
   console.log('scratch build passed');
 }
+
+// circuit sandbox (sim/sandbox.js): every demo in sandbox/ passes, and the border/size limits are errors
+{
+  const S = require('./sandbox');
+  for (const f of fs.readdirSync(path.join(ROOT, 'sandbox')).filter(f => f.endsWith('.sbx'))) {
+    const { sb, report } = S.run(fs.readFileSync(path.join(ROOT, 'sandbox', f), 'utf8'), { readFile: q => fs.readFileSync(path.join(ROOT, q), 'utf8') });
+    assert(sb.unexpectedErrors.length === 0 && sb.results.every(r => r.ok), `sandbox ${f}:\n${report}`);
+  }
+  const big = ['box big', ...Array.from({ length: 70 }, (_, i) => `c n${i} not`), 'w in1 n0.in', ...Array.from({ length: 69 }, (_, i) => `w n${i}.out n${i + 1}.in`), 'w n69.out out1', 'run 1'].join('\n');
+  const r = S.run(big).sb;
+  assert(r.errors.some(e => /70 components/.test(e)), 'sandbox: a 70-part box is an error');
+  console.log('sandbox passed');
+}

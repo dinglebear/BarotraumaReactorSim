@@ -121,7 +121,7 @@ body.noscroll { overflow: hidden }
   <header class="top">
     <div class="brand">
       <h1>Reactor Circuit Bench</h1>
-      <p>Barotrauma reactor, grid and circuit boxes at 60 ticks/s. Automatic control is off: the circuit runs the reactor.</p>
+      <p>Barotrauma reactor, grid and circuit boxes at 60 ticks/s. Automatic control is off: the circuit runs the reactor. <a href="sandbox.html" style="color:var(--accent)">Circuit sandbox</a></p>
     </div>
     <div class="controls" role="group" aria-label="Simulation controls">
       <button id="btnRun" class="primary">Start</button>
@@ -1115,7 +1115,7 @@ body.noscroll { overflow: hidden }
       }
       return box;
     }
-    cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; return sig => ci.recv(ep.pin, sig); }
+    cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; const c = this.conn(ci, ep.pin); return sig => this.deliver(c, sig); } // via deliver(): records the pin's last value (and lets the sandbox see same-tick conflicts)
     wifiTx(srcItem, srcComp, sig) {
       for (const w of this.wifis) {
         if (w === srcComp || w.p.Channel !== srcComp.p.Channel || !w.isWired('signal_out')) continue;

@@ -48,4 +48,15 @@ if (fs.existsSync(path.join(ROOT, 'circuits/catalog.json'))) lib.catalog = JSON.
 const json = JSON.stringify(lib).replace(/</g, '\\u003c');
 const html = read('web/app.html').replace('/*__SIM__*/', () => sim.replace(/<\/script/gi, '<\\/script')).replace('/*__LIB__*/', () => json);
 fs.writeFileSync(path.join(ROOT, 'web/index.html'), html);
+// the circuit sandbox page: engine + sandbox, the example scripts, and every .circ under circuits/ (for box file=)
+{
+  const sbxSim = ['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/sandbox.js'].map(read).join('\n;\n');
+  const files = {}, walk = d => { for (const f of list(d)) { const p = d + '/' + f; if (fs.statSync(path.join(ROOT, p)).isDirectory()) walk(p); else if (/\.(circ|txt)$/.test(f)) files[p] = read(p); } };
+  walk('circuits');
+  const examples = {}; for (const f of list('sandbox')) if (f.endsWith('.sbx')) examples[f.replace(/\.sbx$/, '')] = read('sandbox/' + f);
+  const sj = JSON.stringify({ examples, files }).replace(/</g, '\\u003c');
+  const page = read('web/sandbox_app.html').replace('/*__SIM__*/', () => sbxSim.replace(/<\/script/gi, '<\\/script')).replace('/*__LIB__*/', () => sj);
+  fs.writeFileSync(path.join(ROOT, 'web/sandbox.html'), page);
+  console.log(`web/sandbox.html: ${(page.length / 1024).toFixed(0)} KB, ${Object.keys(examples).length} examples, ${Object.keys(files).length} circuit files`);
+}
 console.log(`web/index.html: ${(html.length / 1024).toFixed(0)} KB, ${Object.keys(lib.circuits).length} circuits, ${Object.keys(lib.profiles).length} profiles`);

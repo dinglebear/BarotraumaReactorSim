@@ -29,7 +29,7 @@ function loadConfig(a) {
 }
 function resolve(p, dirs) {
   if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
-  for (const d of dirs) for (const ext of ['', '.circ', '.txt', '.csv', '_reactor.txt']) { const q = path.join(ROOT, d, p + ext); if (fs.existsSync(q)) return q; }
+  for (const d of dirs) for (const ext of ['', '.circ', '.sbx', '.txt', '.csv', '_reactor.txt']) { const q = path.join(ROOT, d, p + ext); if (fs.existsSync(q)) return q; }
   throw new Error('file not found: ' + p);
 }
 const CIRC_DIRS = ['circuits', 'context/community_circuits', 'context/reactor_circuits'];
@@ -253,6 +253,11 @@ const COMMANDS = {
     const zlib = require('zlib'), f = path.resolve(a._[0] || ''); if (!fs.existsSync(f)) throw new Error('no file ' + a._[0]);
     const b = fs.readFileSync(f), text = (b[0] === 0x1f && b[1] === 0x8b ? zlib.gunzipSync(b) : b).toString('utf8').replace(/^\uFEFF/, '');
     console.log(require('./explain').explain(text, { filter: a._[1], all: !!a.all }));
+  },
+  // sandbox <file.sbx>: circuit sandbox (sim/sandbox.js): boxes, loose parts, virtual devices, scripted inputs, errors
+  sandbox(a) {
+    const f = resolve(a._[0], ['.', 'sandbox']), S = require('./sandbox'), { sb, report } = S.run(read(f), { readFile: q => read(path.isAbsolute(q) ? q : path.join(ROOT, q)) });
+    console.log(report); if (sb.unexpectedErrors.length || sb.results.some(r => !r.ok)) process.exitCode = 1;
   },
   // verify <trace.csv>: replay a ReactorTrace recorded in game and show where the simulator differs
   verify(a) { const f = resolve(a._[0], ['traces', 'load_profiles']); process.stdout.write(require('./verify').verify(read(f), { from: a.from != null ? Number(a.from) : null, mode: a.physics ? 'physics' : a.autotemp ? 'autotemp' : null, debug: a.debug ? String(a.debug).split('-').map(Number) : null })); },

@@ -177,3 +177,19 @@ console.log('real-game checks passed');
   assert(r.errors.some(e => /70 components/.test(e)), 'sandbox: a 70-part box is an error');
   console.log('sandbox passed');
 }
+
+// component details checked against the game's C# (float timers, delay ticks, HSV, optional regex groups, mux in a box)
+{
+  const mk = (alias, props) => { const d = C.byAlias(alias), outs = []; const c = { p: Object.assign({}, d.defaults, props), send: (p, v) => outs.push([p, v]), fwd: (s, p, v) => outs.push([p, v]), isWired: () => true }; d.make(c); return { c, outs }; };
+  // TimeFrame 0.05 on an OR: the game's float timer keeps it true for 3 frames after the signal (4 with double maths)
+  { const { c, outs } = mk('or', { TimeFrame: '0.05', FalseOutput: '' }); c.recv('signal_in1', { v: '1' }); for (let i = 0; i < 10; i++) c.update(1 / 60); assert.strictEqual(outs.length, 3, 'or TimeFrame 0.05 -> 3 frames, got ' + outs.length); }
+  // delay 1 s = (int)(1f / (1/60.0)) = 60 ticks
+  { const { c } = mk('delay', { Delay: '1' }); assert.strictEqual(c.ticks, 60, 'delay ticks ' + c.ticks); }
+  // HSV 0,1,0.5 -> R 127 (Color truncates)
+  { const { c, outs } = mk('color', { UseHSV: 'true' }); c.recv('signal_g', { v: '1' }); c.recv('signal_b', { v: '0.5' }); c.update(1 / 60); assert.strictEqual(outs.pop()[1], '127,0,0,0'); }
+  // an optional group that didn't take part: "" (not FalseOutput), sent only with OutputEmptyCaptureGroup
+  { const { c, outs } = mk('regex', { Expression: 'a(b)?', UseCaptureGroup: 'true', Output: '1', FalseOutput: 'F' }); c.recv('signal_in', { v: 'a' }); c.update(1 / 60); assert.strictEqual(outs.length, 0, 'regex empty group sends nothing'); }
+  // atan starts from 0,0 like the game's float arrays: "0" for the first 0.1 s
+  { const { c, outs } = mk('atan', {}); c.update(1 / 60); assert.deepStrictEqual(outs[0], ['signal_out', '0']); }
+  console.log('component details passed');
+}

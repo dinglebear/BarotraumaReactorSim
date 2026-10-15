@@ -172,7 +172,7 @@
         const comp = { p: Object.assign({}, d.defaults, cm.props), item: ci };
         comp.send = (pin, v) => sim.itemSend(ci, { v: String(v), steps: 0, src: null }, sim.conn(ci, pin));
         comp.fwd = (sig, pin, v) => sim.itemSend(ci, { v: String(v), steps: sig.steps, src: sig.src }, sim.conn(ci, pin));
-        comp.isWired = (pin) => { const c = ci.conns[pin]; return !!c && (c.wires.length > 0 || c.cb.length > 0); };
+        comp.isWired = (pin) => { const c = ci.conns[pin]; return !!c && (c.wires.length > 0 || c.cb.length > 0 || !!c.wiredIn); }; // wiredIn: fed by a wire inside the box
         comp.wifiTx = (sig) => sim.wifiTx(ci, comp, sig);
         d.make(comp);
         ci.recv = (pin, sig) => comp.recv && comp.recv(pin, sig);
@@ -194,7 +194,7 @@
       }
       return box;
     }
-    cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; const c = this.conn(ci, ep.pin); return sig => this.deliver(c, sig); } // via deliver(): records the pin's last value (and lets the sandbox see same-tick conflicts)
+    cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; const c = this.conn(ci, ep.pin); c.wiredIn = true; return sig => this.deliver(c, sig); } // via deliver(): records the pin's last value (and lets the sandbox see same-tick conflicts)
     wifiTx(srcItem, srcComp, sig) {
       for (const w of this.wifis) {
         if (w === srcComp || w.p.Channel !== srcComp.p.Channel || !w.isWired('signal_out')) continue;

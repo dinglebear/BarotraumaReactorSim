@@ -238,13 +238,14 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   }
   const fmtF = x => fmtG(f32(x), true), fmtD = x => fmtG(x, false);
   const roundEven = x => { const r = Math.round(x); return (Math.abs(x % 1) === 0.5 && r % 2 !== 0) ? r - 1 : r; };
-  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+  const clamp = (v, a, b) => { v = v > b ? b : v; return v < a ? a : v; }; // MathHelper.Clamp order: min wins when min > max
   const nearlyEq = (a, b, eps = 1e-4) => { // MathUtils.NearlyEqual
     if (a === b) return true; const d = Math.abs(a - b), s = Math.abs(a) + Math.abs(b);
     if (a === 0 || b === 0 || s < eps) return d < eps; return d / s < eps;
   };
   const bool = v => String(v).toLowerCase() === 'true';
   const STEP = 1 / 60;
+  const F01 = Math.fround(0.1), TWO_PI_F = Math.fround(Math.PI * 2); // 0.1f, MathHelper.TwoPi
 
   // ---- catalog ----
   // alias: what you type in .circ; item: in-game identifier; cls: Class attr; defaults: InGameEditable props saved in .txt
@@ -258,14 +259,14 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   function makeBool(test) {
     return (c) => {
       const tf = () => Math.max(0, parseF(c.p.TimeFrame).v);
-      const init = Math.max(tf() * 2, 0.1); c.t = [init, init];
+      const init = Math.max(f32(tf() * 2), F01); c.t = [init, init];
       c.recv = (pin, s) => {
         if (pin === 'signal_in1' || pin === 'signal_in2') { if (s.v === '0') return; c.t[pin === 'signal_in1' ? 0 : 1] = 0; }
         else if (pin === 'set_output') c.p.Output = s.v;
       };
       c.update = (dt) => {
         let n = 0; const T = tf();
-        for (let i = 0; i < 2; i++) { if (c.t[i] <= T) n++; c.t[i] += dt; }
+        dt = f32(dt); for (let i = 0; i < 2; i++) { if (c.t[i] <= T) n++; c.t[i] = f32(c.t[i] + dt); }
         const out = test(n) ? c.p.Output : c.p.FalseOutput;
         if (out == null || out === '') return;
         c.send('signal_out', out);
@@ -280,14 +281,14 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   function makeArith(calc) {
     return (c) => {
       const tf = () => Math.max(0, parseF(c.p.TimeFrame).v);
-      const init = Math.max(tf() * 2, 0.1); c.t = [init, init]; c.r = [0, 0];
+      const init = Math.max(f32(tf() * 2), F01); c.t = [init, init]; c.r = [0, 0];
       c.recv = (pin, s) => {
         if (pin === 'signal_in1') { c.r[0] = parseF(s.v).v; c.t[0] = 0; }
         else if (pin === 'signal_in2') { c.r[1] = parseF(s.v).v; c.t[1] = 0; }
       };
       c.update = (dt) => {
         let early = false; const T = tf();
-        for (let i = 0; i < 2; i++) { if (c.t[i] > T) early = true; c.t[i] += dt; }
+        dt = f32(dt); for (let i = 0; i < 2; i++) { if (c.t[i] > T) early = true; c.t[i] = f32(c.t[i] + dt); }
         if (early) return;
         const o = calc(c.r[0], c.r[1]);
         if (!Number.isFinite(o)) return; // MathUtils.IsValid
@@ -327,7 +328,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   const D2R = Math.PI / 180;
   for (const [a, item] of [['sin', 'sincomponent'], ['cos', 'coscomponent'], ['tan', 'tancomponent'], ['asin', 'asincomponent'], ['acos', 'acoscomponent'], ['atan', 'atancomponent']])
     def(a, item, 'TrigonometricFunctionComponent', { UseRadians: 'false' }, a === 'atan' ? ['signal_in', 'signal_in_x', 'signal_in_y'] : ['signal_in'], OUT, (c) => {
-      const rad = () => bool(c.p.UseRadians); c.r = [NaN, NaN]; c.t = [0, 0];
+      const rad = () => bool(c.p.UseRadians); c.r = [0, 0]; c.t = [0, 0]; // float[] fields start at 0
       c.recv = (pin, s) => {
         let v = parseF(s.v).v;
         if (a === 'sin') v = f32(Math.sin(rad() ? v : f32(v * D2R)));
@@ -342,7 +343,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
         c.fwd(s, 'signal_out', fmtF(v));
       };
       if (a === 'atan') c.update = (dt) => {
-        for (let i = 0; i < 2; i++) { c.t[i] += dt; if (c.t[i] > 0.1) c.r[i] = NaN; }
+        dt = f32(dt); for (let i = 0; i < 2; i++) { c.t[i] = f32(c.t[i] + dt); if (c.t[i] > F01) c.r[i] = NaN; }
         if (!Number.isNaN(c.r[0]) && !Number.isNaN(c.r[1])) { let g = f32(Math.atan2(c.r[1], c.r[0])); if (!rad()) g = f32(g / D2R); c.send('signal_out', fmtF(g)); }
       };
     });
@@ -358,14 +359,14 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   function makeCmp(isGreater) {
     return (c) => {
       const tf = () => Math.max(0, parseF(c.p.TimeFrame).v);
-      const init = Math.max(tf() * 2, 0.1); c.t = [init, init]; c.r = isGreater ? [0, 0] : [undefined, undefined];
+      const init = Math.max(f32(tf() * 2), F01); c.t = [init, init]; c.r = isGreater ? [0, 0] : [undefined, undefined];
       c.recv = (pin, s) => {
         if (pin === 'signal_in1' || pin === 'signal_in2') { const i = pin === 'signal_in1' ? 0 : 1; c.r[i] = isGreater ? parseF(s.v).v : s.v; c.t[i] = 0; }
         else if (pin === 'set_output') c.p.Output = s.v;
       };
       c.update = (dt) => {
         let send = false; const T = tf();
-        for (let i = 0; i < 2; i++) { if (c.t[i] <= T) send = true; c.t[i] += dt; }
+        dt = f32(dt); for (let i = 0; i < 2; i++) { if (c.t[i] <= T) send = true; c.t[i] = f32(c.t[i] + dt); }
         if (!send) return;
         const out = (isGreater ? c.r[0] > c.r[1] : c.r[0] === c.r[1]) ? c.p.Output : c.p.FalseOutput;
         if (out == null || out === '') return;
@@ -397,7 +398,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   // Delay: tick based queue (delayTicks = (int)(Delay / (1/60))). Note: Delay 0 never outputs (queue size 0 quirk).
   def('delay', 'delaycomponent', 'DelayComponent', { Delay: '1', ResetWhenSignalReceived: 'false', ResetWhenDifferentSignalReceived: 'false' }, ['signal_in', 'set_delay'], OUT, (c) => {
     c.q = []; c.prev = null; c.delay = 0; c.ticks = 0; c.qsize = 0;
-    const setDelay = (v) => { if (v === c.delay) return; c.delay = v; c.ticks = Math.trunc(f32(v) / f32(STEP)); c.qsize = Math.max(c.ticks, 1) * 2; c.q = []; };
+    const setDelay = (v) => { if (v === c.delay) return; c.delay = v; c.ticks = Math.trunc(f32(v) / STEP); c.qsize = Math.max(c.ticks, 1) * 2; c.q = []; };
     setDelay(parseF(c.p.Delay).v);
     c.recv = (pin, s) => {
       if (pin === 'signal_in') {
@@ -429,18 +430,18 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       if (pin === 'set_frequency' || pin === 'frequency_in') { const r = parseF(s.v); if (r.ok) { c.f = clamp(r.v, 0, 240); c.p.Frequency = fmtF(c.f); } }
       else if (pin === 'set_outputtype' || pin === 'set_wavetype') { if (/^(Pulse|Sawtooth|Sine|Square|Triangle|[0-4])$/.test(s.v)) c.p.OutputType = /^\d$/.test(s.v) ? ['Pulse', 'Sawtooth', 'Sine', 'Square', 'Triangle'][+s.v] : s.v; }
     };
-    c.update = (dt) => {
-      const t = c.p.OutputType;
+    c.update = (dt) => { // all float, like OscillatorComponent.Update
+      const t = c.p.OutputType; dt = f32(dt);
       if (t === 'Pulse') { if (c.f <= 0) return; c.ph = f32(c.ph + dt); const iv = f32(1 / c.f); while (c.ph >= iv) { c.send('signal_out', '1'); c.ph = f32(c.ph - iv); } return; }
-      c.ph = f32((c.ph + f32(dt * c.f)) % 1);
+      c.ph = f32(f32(c.ph + f32(dt * c.f)) % 1);
       if (t === 'Sawtooth') c.send('signal_out', fmtF(c.ph));
       else if (t === 'Square') c.send('signal_out', c.ph < 0.5 ? '0' : '1');
-      else if (t === 'Sine') c.send('signal_out', fmtD(Math.sin(c.ph * f32(Math.PI * 2))));
-      else if (t === 'Triangle') { const pm = ((c.ph - 0.25) % 1 + 1) % 1; c.send('signal_out', fmtF(f32(4 * Math.abs(pm - 0.5) - 1))); }
+      else if (t === 'Sine') c.send('signal_out', fmtD(Math.sin(f32(c.ph * TWO_PI_F))));
+      else if (t === 'Triangle') { const a = f32(c.ph - 0.25), pm = f32(f32(f32(a % 1) + 1) % 1); c.send('signal_out', fmtF(f32(f32(4 * Math.abs(f32(pm - 0.5))) - 1))); }
     };
   });
 
-  def('relay', 'relaycomponent', 'RelayComponent', { IsOn: 'true' }, ['signal_in1', 'signal_in2', 'toggle', 'set_state'], ['signal_out1', 'signal_out2', 'state_out'], (c) => {
+  def('relay', 'relaycomponent', 'RelayComponent', { IsOn: 'true' }, ['signal_in1', 'signal_in2', 'toggle', 'set_state'], ['signal_out1', 'signal_out2', 'state_out', 'load_value_out', 'power_value_out'], (c) => {
     c.on = bool(c.p.IsOn);
     c.recv = (pin, s) => {
       const m = /^signal_in(\d?)$/.exec(pin);
@@ -448,16 +449,16 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       else if (pin === 'toggle') { if (s.v !== '0') c.on = !c.on; }
       else if (pin === 'set_state') c.on = s.v !== '0';
     };
-    c.update = () => c.send('state_out', c.on ? '1' : '0');
+    c.update = () => { c.send('state_out', c.on ? '1' : '0'); c.send('power_value_out', '0'); c.send('load_value_out', '0'); }; // no power grid on a signal relay
   });
 
   def('concat', 'concatcomponent', 'ConcatComponent', { Separator: '', TimeFrame: '0' }, IN12, OUT, (c) => {
     const tf = () => Math.max(0, parseF(c.p.TimeFrame).v);
-    const init = Math.max(tf() * 2, 0.1); c.t = [init, init]; c.r = ['', ''];
+    const init = Math.max(f32(tf() * 2), F01); c.t = [init, init]; c.r = ['', ''];
     c.recv = (pin, s) => { if (pin === 'signal_in1') { c.r[0] = s.v; c.t[0] = 0; } else if (pin === 'signal_in2') { c.r[1] = s.v; c.t[1] = 0; } };
     c.update = (dt) => {
       let early = false; const T = tf();
-      for (let i = 0; i < 2; i++) { if (c.t[i] > T) early = true; c.t[i] += dt; }
+      dt = f32(dt); for (let i = 0; i < 2; i++) { if (c.t[i] > T) early = true; c.t[i] = f32(c.t[i] + dt); }
       if (early) return;
       const o = c.p.Separator ? c.r[0] + c.p.Separator + c.r[1] : c.r[0] + c.r[1];
       c.send('signal_out', o.slice(0, 256));
@@ -468,9 +469,13 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
     c.r = [0, 0, 0, 0]; c.out = '0,0,0,0';
     c.recv = (pin, s) => {
       const i = ['signal_r', 'signal_g', 'signal_b', 'signal_a'].indexOf(pin); if (i < 0) return; c.r[i] = parseF(s.v).v;
-      if (bool(c.p.UseHSV)) { // hue 0-360, saturation and value 0-1 -> R,G,B 0-255; alpha passed through (approximation of ToolBox.HSVToRGB)
-        const h = ((c.r[0] % 360) + 360) % 360 / 60, sat = clamp(c.r[1], 0, 1), val = clamp(c.r[2], 0, 1), k = n => (n + h) % 6, ch = n => val - val * sat * Math.max(0, Math.min(k(n), 4 - k(n), 1));
-        c.out = [ch(5), ch(3), ch(1)].map(x => String(Math.round(x * 255))).concat(fmtF(c.r[3])).join(',');
+      if (bool(c.p.UseHSV)) { // ToolBoxCore.HSVToRGB in float: hue clamped (not wrapped) to 0-360, s and v not clamped; Color() truncates to 0-255
+        const v = c.r[2], ch = f32(v * c.r[1]), h = f32(clamp(c.r[0], 0, 360) / 60), x = f32(ch * f32(1 - Math.abs(f32(f32(h % 2) - 1))));
+        let rgb = [0, 0, 0];
+        if (0 <= h && h <= 1) rgb = [ch, x, 0]; else if (1 < h && h <= 2) rgb = [x, ch, 0]; else if (2 < h && h <= 3) rgb = [0, ch, x];
+        else if (3 < h && h <= 4) rgb = [0, x, ch]; else if (4 < h && h <= 5) rgb = [x, 0, ch]; else if (5 < h && h <= 6) rgb = [ch, 0, x];
+        const m = f32(v - ch), byte = q => { const n = Math.trunc(f32(f32(q + m) * 255)); return Number.isNaN(n) ? 0 : Math.max(0, Math.min(255, n)); };
+        c.out = rgb.map(q => String(byte(q))).concat(fmtF(c.r[3])).join(',');
       } else c.out = c.r.map(fmtF).join(',');
     };
     c.update = () => c.send('signal_out', c.out);
@@ -480,14 +485,16 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
     c.sent = true; c.prevIn = ''; c.res = false; c.groups = null; c.rx = null; c.rxSrc = null;
     c.recv = (pin, s) => { if (pin === 'signal_in') { c.inp = s.v; c.sent = false; } else if (pin === 'set_output') c.p.Output = s.v; };
     c.update = () => {
-      if (c.rxSrc !== c.p.Expression) { c.rxSrc = c.p.Expression; c.prevIn = ''; try { const src = c.p.Expression.replace(/\(\?<(\w+)>/g, '(?<$1>'), ci = /\(\?i\)/.test(src); c.rx = new RegExp(ci ? src.replace(/\(\?i\)/g, '') : src, ci ? 'i' : ''); } catch (e) { c.rx = null; } } // .NET inline (?i) -> the i flag
+      if (c.rxSrc !== c.p.Expression) { c.rxSrc = c.p.Expression; c.prevIn = ''; try { let fl = ''; const src = c.p.Expression.replace(/\(\?([ims]+)\)/g, (a, f) => { for (const ch of f) if (!fl.includes(ch)) fl += ch; return ''; }); c.rx = new RegExp(src, fl); } catch (e) { c.rx = null; } } // .NET inline (?i) (?m) (?s) -> JS flags
       if (!c.p.Expression || !c.p.Expression.trim() || !c.rx) return;
       const cont = bool(c.p.ContinuousOutput);
       if (!cont && c.sent) return;
       if (c.inp !== c.prevIn && c.inp != null) { const m = c.rx.exec(c.inp); c.res = !!m; c.groups = bool(c.p.UseCaptureGroup) && m ? m : null; c.prevIn = c.inp; }
       let out, allowEmpty = false;
       if (c.res) {
-        if (bool(c.p.UseCaptureGroup)) { const g = c.groups && (c.groups.groups && c.groups.groups[c.p.Output] !== undefined ? c.groups.groups[c.p.Output] : c.groups[c.p.Output]); if (g !== undefined && g !== null) { out = g; allowEmpty = bool(c.p.OutputEmptyCaptureGroup); } else out = c.p.FalseOutput; }
+        if (bool(c.p.UseCaptureGroup)) { // Groups.TryGetValue: a group that exists but didn't take part gives "" (sent only with OutputEmptyCaptureGroup)
+          const m = c.groups, k = c.p.Output, has = m && ((/^\d+$/.test(k) && Number(k) < m.length) || (m.groups && Object.prototype.hasOwnProperty.call(m.groups, k)));
+          if (has) { const g = /^\d+$/.test(k) && Number(k) < m.length ? m[Number(k)] : m.groups[k]; out = g == null ? '' : g; allowEmpty = bool(c.p.OutputEmptyCaptureGroup); } else out = c.p.FalseOutput; }
         else out = c.p.Output;
       } else out = c.p.FalseOutput;
       if ((out != null && out !== '') || (allowEmpty && out === '')) c.send('signal_out', out);
@@ -520,7 +527,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   def('demux', 'demultiplexercomponent', 'DemultiplexerComponent', selDefs, ['signal_in', 'set_output', 'move_output'], ['signal_out0', 'signal_out1', 'signal_out2', 'signal_out3', 'signal_out4', 'signal_out5', 'signal_out6', 'signal_out7', 'signal_out8', 'signal_out9', 'selected_output_out'], makeSel(false));
 
   // Wifi: forwards signal_in instantly to every other wifi on the same channel whose signal_out is wired (stepsTaken+1).
-  def('wifi', 'wificomponent', 'WifiComponent', { Channel: '1', LinkToChat: 'false', MinChatMessageInterval: '1', DiscardDuplicateChatMessages: 'false' }, ['signal_in', 'set_channel'], OUT, (c) => {
+  def('wifi', 'wificomponent', 'WifiComponent', { Channel: '0', LinkToChat: 'false', MinChatMessageInterval: '1', DiscardDuplicateChatMessages: 'true' }, ['signal_in', 'set_channel'], OUT, (c) => {
     c.recv = (pin, s) => {
       if (pin === 'signal_in') c.wifiTx(s);
       else if (pin === 'set_channel') { const r = parseI(s.v); if (r.ok) c.p.Channel = String(clamp(r.v, 0, 10000)); }
@@ -1008,7 +1015,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
         const comp = { p: Object.assign({}, d.defaults, cm.props), item: ci };
         comp.send = (pin, v) => sim.itemSend(ci, { v: String(v), steps: 0, src: null }, sim.conn(ci, pin));
         comp.fwd = (sig, pin, v) => sim.itemSend(ci, { v: String(v), steps: sig.steps, src: sig.src }, sim.conn(ci, pin));
-        comp.isWired = (pin) => { const c = ci.conns[pin]; return !!c && (c.wires.length > 0 || c.cb.length > 0); };
+        comp.isWired = (pin) => { const c = ci.conns[pin]; return !!c && (c.wires.length > 0 || c.cb.length > 0 || !!c.wiredIn); }; // wiredIn: fed by a wire inside the box
         comp.wifiTx = (sig) => sim.wifiTx(ci, comp, sig);
         d.make(comp);
         ci.recv = (pin, sig) => comp.recv && comp.recv(pin, sig);
@@ -1030,7 +1037,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       }
       return box;
     }
-    cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; const c = this.conn(ci, ep.pin); return sig => this.deliver(c, sig); } // via deliver(): records the pin's last value (and lets the sandbox see same-tick conflicts)
+    cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; const c = this.conn(ci, ep.pin); c.wiredIn = true; return sig => this.deliver(c, sig); } // via deliver(): records the pin's last value (and lets the sandbox see same-tick conflicts)
     wifiTx(srcItem, srcComp, sig) {
       for (const w of this.wifis) {
         if (w === srcComp || w.p.Channel !== srcComp.p.Channel || !w.isWired('signal_out')) continue;

@@ -1,0 +1,48 @@
+# CAMEL OVERKILL: HUMP-3b "HERALD". Radio announcements for the alert core (split out: a circuit box holds 64 parts).
+name camel_herald
+box battery
+note "HERALD: HOW IT WORKS" "Builds '[CamelOS] ALERT RED | flood: Medbay | fire: none' from the alert name (7205) and the sensor network's room names (7400 flood / 7401 fire, held 10 s).\nIt is sent ONLY when the alert level changes: an Equals of the level against a 0.1 s delayed copy opens a relay for a few ticks. Every channel-0 wifi hears every other one, so a per-tick announcement would drown the crew's radio commands. The chat wifi also waits 20 s between messages.\n'announce off' in CamelOS (7410) silences it."
+note "WIRING" "out1 -> chat wifi (channel 0, LinkToChat) signal_in"
+c rxn wifi Channel=7205
+c rxf wifi Channel=7400
+c rxx wifi Channel=7401
+c rxa wifi Channel=7410
+c flood or TimeFrame=10
+c fire or TimeFrame=10
+w rxf.out flood.1
+w rxx.out fire.1
+c froom mem Value=none
+c xroom mem Value=none
+c fclr check TargetSignal=0 Output=none FalseOutput=""
+c xclr check TargetSignal=0 Output=none FalseOutput=""
+w rxf.out froom.in
+w rxx.out xroom.in
+w flood.out fclr.in
+w fire.out xclr.in
+w fclr.out froom.in
+w xclr.out xroom.in
+c a0 mem Value="[CamelOS] ALERT "
+c a1 concat
+c a2 concat Separator=" | flood: "
+c a3 concat Separator=" | fire: "
+w a0.out a1.1
+w rxn.out a1.2
+w a1.out a2.1
+w froom.out a2.2
+w a2.out a3.1
+w xroom.out a3.2
+c adl delay Delay=0.1
+c aeq equals Output=1 FalseOutput=0
+c chg not
+c men mem Value=1
+c open and
+c agate relay IsOn=false
+w rxa.out men.in
+w rxn.out adl.in aeq.1
+w adl.out aeq.2
+w aeq.out chg.in
+w chg.out open.1
+w men.out open.2
+w open.out agate.set_state
+w a3.out agate.1
+w agate.signal_out1 out1

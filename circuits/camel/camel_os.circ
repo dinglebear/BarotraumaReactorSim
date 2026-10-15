@@ -1,15 +1,15 @@
-# CAMEL OVERKILL: HUMP-4 "CamelOS". A terminal operating system. Every line typed is broadcast on the COMMAND BUS
-# (wifi 7300); each subsystem decodes the commands it owns (alert core, governor, doors, ballast). CamelOS itself
-# answers on the terminal and builds the live status line from the telemetry channels.
+# CAMEL OVERKILL: HUMP-4 "CamelOS 2.0" core. Every line typed (terminal or 'camel ...' on radio) goes onto the COMMAND BUS
+# (wifi 7300). Each subsystem decodes the commands it owns and answers on the REPLY BUS (7310); the core prints the
+# replies on the terminal (and on radio for radio commands). Commands live in this box, the SETTINGS box and the FUN box.
 name camel_os
 box battery
-note "HUMP-4 CamelOS: HOW IT WORKS" "Terminal line -> wifi 7300 (command bus) AND a set of regex answerers.\nCommands: help, status, alert red|yellow|green|auto, lockdown, unlock, o2 on|auto, shed on|off|auto, spit, lights party|normal, say <text>, hump, whoami.\nThe subsystems act on the bus themselves; CamelOS only replies. An unknown line gets 'Unknown command'.\nStatus line = concat chain of the telemetry latches: 7206 reactor kW, 7207 main bus load, 7202 propulsion charge %, 7201 oxygen %, 7203 O2 generator, 7204 shedding, 7205 alert. It is broadcast on 7210 for the status displays and loaded into the status answer with set_output.\nsay <text> -> out2 -> a chat wifi (LinkToChat): it appears in radio chat.\nRADIO: a chat wifi (channel 0, LinkToChat) feeds in2. A radio line 'camel <command>' runs the command; for 1 s the answers also go to radio chat."
+note "HUMP-4 CamelOS 2.0: HOW IT WORKS" "Terminal line (in1) or radio line 'camel <command>' (in2) -> command bus 7300. Every box listens to the bus and acts on its own commands; answers come back on the reply bus 7310 and are printed here.\nThis box answers: help, status, alert ..., lockdown, unlock, o2 ..., shed ..., spit, lights ..., say <text>, and 'Unknown command' (one regex lists every command of every box: add new commands there too).\nStatus line = a concat chain of telemetry latches (7206 reactor kW, 7207 load, 7202 propulsion %, 7201 oxygen %, 7203 generator, 7204 shedding, 7205 alert), broadcast on 7210 for the displays.\nRadio: for 1 s after a radio command, answers also go to radio chat (out2)."
 note "WIRING" "in1 <- terminal signal_out\nin2 <- radio wifi (channel 0, LinkToChat) signal_out\nout1 -> terminal signal_in\nout2 -> chat wifi (LinkToChat) signal_in"
 c txc wifi Channel=7300
 c txs wifi Channel=7210
+c rxr wifi Channel=7310
 w in1 txc.in
-# --- radio interface: lines typed in headset chat (channel 0) that start with "camel " are run as commands,
-#     and for 1 s afterwards the answers also go back out to radio chat
+# --- radio interface
 c rcap regex Expression="^(?i)camel (.+)$" UseCaptureGroup=true Output=1 FalseOutput="" ContinuousOutput=false
 c rwin or TimeFrame=1
 c rgate relay IsOn=false
@@ -21,7 +21,8 @@ w rwin.out rgate.set_state
 w rgate.signal_out1 rcat.2
 w rpre.out rcat.1
 w rcat.out out2
-# --- telemetry latches
+w rxr.out out1 rgate.1
+# --- telemetry latches -> status line
 c rp wifi Channel=7206
 c rl wifi Channel=7207
 c rb wifi Channel=7202
@@ -65,9 +66,10 @@ w s5.out s6.1
 w vs.out s6.2
 w s6.out s7.1
 w va.out s7.2
-# --- answers (ContinuousOutput=false: one answer per typed line)
+# --- answers
 c st regex Expression="^(?i)status$" FalseOutput="" ContinuousOutput=false Output=booting...
-c hp regex Expression="^(?i)help$" FalseOutput="" ContinuousOutput=false Output="CamelOS 1.0 commands: status | alert red/yellow/green/auto | lockdown | unlock | o2 on/auto | shed on/off/auto | spit | lights party/normal | say <text> | hump | whoami"
+c hp regex Expression="^(?i)help$" FalseOutput="" ContinuousOutput=false Output="CamelOS 2.0 | ship: status, alert red/yellow/green/auto, lockdown, unlock, spit, o2 on/auto, shed on/off/auto, lights party/normal, say <text>"
+c hp2 regex Expression="^(?i)help$" FalseOutput="" ContinuousOutput=false Output="settings: settings, set o2 low N, set o2 high N, set battery N, alerts on/off, siren on/off, announce on/off, doors auto on/off | fun: help fun"
 c al regex Expression="^(?i)alert (red|yellow|green|auto)$" FalseOutput="" ContinuousOutput=false Output="Alert level set. The camel has been informed."
 c lk regex Expression="^(?i)lockdown$" FalseOutput="" ContinuousOutput=false Output="LOCKDOWN: every door sealed. Nobody leaves the camel."
 c ul regex Expression="^(?i)unlock$" FalseOutput="" ContinuousOutput=false Output="Doors released. Mind the gap."
@@ -75,19 +77,18 @@ c ox regex Expression="^(?i)o2 (on|auto)$" FalseOutput="" ContinuousOutput=false
 c sh regex Expression="^(?i)shed (on|off|auto)$" FalseOutput="" ContinuousOutput=false Output="Load shedding mode changed."
 c sp regex Expression="^(?i)spit$" FalseOutput="" ContinuousOutput=false Output="PTOOEY! Ballast tanks blown for 10 s. The camel rises."
 c li regex Expression="^(?i)lights (party|normal)$" FalseOutput="" ContinuousOutput=false Output="Lighting updated."
-c hu regex Expression="^(?i)hump$" FalseOutput="" ContinuousOutput=false Output="Two humps, zero regrets. HUMP-1 makes power, HUMP-2 makes air, HUMP-3 panics, HUMP-4 is me."
-c wh regex Expression="^(?i)whoami$" FalseOutput="" ContinuousOutput=false Output="You are cargo. Precious, precious cargo."
 c sy regex Expression="^(?i)say (.+)$" UseCaptureGroup=true FalseOutput="" ContinuousOutput=false Output=1
-c un regex Expression="^(?i)(help|status|alert .*|lockdown|unlock|o2 .*|shed .*|spit|lights .*|say .+|hump|whoami)$" Output="" FalseOutput="Unknown command. Type help. (The camel is judging you.)" ContinuousOutput=false
+c un regex Expression="^(?i)(help|help fun|status|alert (red|yellow|green|auto)|lockdown|unlock|o2 (on|auto)|shed (on|off|auto)|spit|lights (party|normal)|say .+|settings|set (o2 low|o2 high|battery) [0-9]+|(alerts|siren|announce) (on|off)|doors auto (on|off)|ping|joke|8ball.*|pet|feed|coffee|dance|weather|uptime|hump|whoami|credits|sudo.*|rm .*|moo|hello|hi)$" Output="" FalseOutput="Unknown command. Type help. (The camel is judging you.)" ContinuousOutput=false
 w s7.out txs.in st.set_output
-w in1 st.in hp.in al.in lk.in ul.in
-w in1 ox.in sh.in sp.in li.in hu.in
-w in1 wh.in sy.in un.in
-w rcap.out st.in hp.in al.in lk.in ul.in
-w rcap.out ox.in sh.in sp.in li.in hu.in
-w rcap.out wh.in sy.in un.in
+w in1 st.in hp.in hp2.in al.in lk.in
+w in1 ul.in ox.in sh.in sp.in li.in
+w in1 sy.in un.in
+w rcap.out st.in hp.in hp2.in al.in lk.in
+w rcap.out ul.in ox.in sh.in sp.in li.in
+w rcap.out sy.in un.in
 w st.out out1 rgate.1
 w hp.out out1 rgate.1
+w hp2.out out1 rgate.1
 w al.out out1 rgate.1
 w lk.out out1 rgate.1
 w ul.out out1 rgate.1
@@ -95,8 +96,6 @@ w ox.out out1 rgate.1
 w sh.out out1 rgate.1
 w sp.out out1 rgate.1
 w li.out out1 rgate.1
-w hu.out out1 rgate.1
-w wh.out out1 rgate.1
 w un.out out1 rgate.1
 c sayh mem Value="[CamelOS] "
 c sayc concat

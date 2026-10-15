@@ -67,11 +67,11 @@ wire @humpP.signal_out2 @hump1.signal_in8
 # === 3. HUMP-2 GOVERNOR: oxygen generator on a relay (85 %..97 % hysteresis) + load shedding ===
 add @o2a oxygendetector at 760,240      # bridge
 add @o2b oxygendetector at 0,-240       # crew quarters
-add @rO2 relaycomponent at 820,20
+add @rO2 relaycomponent at 820,20 RelayComponent.MaxPower=2000   # headroom: the generator alone draws exactly the stock 1000 kW limit
 unwire 54.power 1040.power_in
 wire 54.power @rO2.power_in
 wire @rO2.power_out 1040.power_in
-add @rFab relaycomponent at -380,-290
+add @rFab relaycomponent at -380,-290 RelayComponent.MaxPower=2000
 unwire 53.power 36.power_in
 unwire 53.power 35.power_in
 wire 53.power @rFab.power_in
@@ -93,72 +93,108 @@ wire @wWorkshop.signal_out @wtWorkshop.signal_in
 add @sWorkshop smokedetector at 67,264 SmokeDetector.Output=Workshop SmokeDetector.FalseOutput=""
 add @stWorkshop wificomponent at 93,264 WifiComponent.Channel=7401
 wire @sWorkshop.signal_out @stWorkshop.signal_in
+add @oxWorkshop oxygendetector at 27,160
+box @airWorkshop at -13,160 from camel/camel_airnode ROOM=Workshop
+wire @oxWorkshop.signal_out @airWorkshop.signal_in1
 add @wEngineRoom waterdetector at -1103,48 WaterDetector.Output=EngineRoom WaterDetector.FalseOutput=""
 add @wtEngineRoom wificomponent at -1077,48 WifiComponent.Channel=7400
 wire @wEngineRoom.signal_out @wtEngineRoom.signal_in
 add @sEngineRoom smokedetector at -1103,264 SmokeDetector.Output=EngineRoom SmokeDetector.FalseOutput=""
 add @stEngineRoom wificomponent at -1077,264 WifiComponent.Channel=7401
 wire @sEngineRoom.signal_out @stEngineRoom.signal_in
+add @oxEngineRoom oxygendetector at -1143,160
+box @airEngineRoom at -1183,160 from camel/camel_airnode ROOM=EngineRoom
+wire @oxEngineRoom.signal_out @airEngineRoom.signal_in1
 add @wReactor waterdetector at -1013,-208 WaterDetector.Output=Reactor WaterDetector.FalseOutput=""
 add @wtReactor wificomponent at -987,-208 WifiComponent.Channel=7400
 wire @wReactor.signal_out @wtReactor.signal_in
 add @sReactor smokedetector at -1013,24 SmokeDetector.Output=Reactor SmokeDetector.FalseOutput=""
 add @stReactor wificomponent at -987,24 WifiComponent.Channel=7401
 wire @sReactor.signal_out @stReactor.signal_in
+add @oxReactor oxygendetector at -1053,-88
+box @airReactor at -1093,-88 from camel/camel_airnode ROOM=Reactor
+wire @oxReactor.signal_out @airReactor.signal_in1
 add @wLowerDeck waterdetector at -521,-464 WaterDetector.Output=LowerDeck WaterDetector.FalseOutput=""
 add @wtLowerDeck wificomponent at -495,-464 WifiComponent.Channel=7400
 wire @wLowerDeck.signal_out @wtLowerDeck.signal_in
 add @sLowerDeck smokedetector at -521,-232 SmokeDetector.Output=LowerDeck SmokeDetector.FalseOutput=""
 add @stLowerDeck wificomponent at -495,-232 WifiComponent.Channel=7401
 wire @sLowerDeck.signal_out @stLowerDeck.signal_in
+add @oxLowerDeck oxygendetector at -561,-344
+box @airLowerDeck at -601,-344 from camel/camel_airnode ROOM=LowerDeck
+wire @oxLowerDeck.signal_out @airLowerDeck.signal_in1
 add @wQuarters waterdetector at 164,-464 WaterDetector.Output=Quarters WaterDetector.FalseOutput=""
 add @wtQuarters wificomponent at 190,-464 WifiComponent.Channel=7400
 wire @wQuarters.signal_out @wtQuarters.signal_in
 add @sQuarters smokedetector at 164,-232 SmokeDetector.Output=Quarters SmokeDetector.FalseOutput=""
 add @stQuarters wificomponent at 190,-232 WifiComponent.Channel=7401
 wire @sQuarters.signal_out @stQuarters.signal_in
+add @oxQuarters oxygendetector at 124,-344
+box @airQuarters at 84,-344 from camel/camel_airnode ROOM=Quarters
+wire @oxQuarters.signal_out @airQuarters.signal_in1
 add @wMedbay waterdetector at 31,-208 WaterDetector.Output=Medbay WaterDetector.FalseOutput=""
 add @wtMedbay wificomponent at 57,-208 WifiComponent.Channel=7400
 wire @wMedbay.signal_out @wtMedbay.signal_in
 add @sMedbay smokedetector at 31,24 SmokeDetector.Output=Medbay SmokeDetector.FalseOutput=""
 add @stMedbay wificomponent at 57,24 WifiComponent.Channel=7401
 wire @sMedbay.signal_out @stMedbay.signal_in
+add @oxMedbay oxygendetector at -9,-88
+box @airMedbay at -49,-88 from camel/camel_airnode ROOM=Medbay
+wire @oxMedbay.signal_out @airMedbay.signal_in1
 add @wPowerRoom waterdetector at 779,-208 WaterDetector.Output=PowerRoom WaterDetector.FalseOutput=""
 add @wtPowerRoom wificomponent at 805,-208 WifiComponent.Channel=7400
 wire @wPowerRoom.signal_out @wtPowerRoom.signal_in
 add @sPowerRoom smokedetector at 779,24 SmokeDetector.Output=PowerRoom SmokeDetector.FalseOutput=""
 add @stPowerRoom wificomponent at 805,24 WifiComponent.Channel=7401
 wire @sPowerRoom.signal_out @stPowerRoom.signal_in
+add @oxPowerRoom oxygendetector at 739,-88
+box @airPowerRoom at 699,-88 from camel/camel_airnode ROOM=PowerRoom
+wire @oxPowerRoom.signal_out @airPowerRoom.signal_in1
 add @wBridge waterdetector at 1308,48 WaterDetector.Output=Bridge WaterDetector.FalseOutput=""
 add @wtBridge wificomponent at 1334,48 WifiComponent.Channel=7400
 wire @wBridge.signal_out @wtBridge.signal_in
 add @sBridge smokedetector at 1308,264 SmokeDetector.Output=Bridge SmokeDetector.FalseOutput=""
 add @stBridge wificomponent at 1334,264 WifiComponent.Channel=7401
 wire @sBridge.signal_out @stBridge.signal_in
+add @oxBridge oxygendetector at 1268,160
+box @airBridge at 1228,160 from camel/camel_airnode ROOM=Bridge
+wire @oxBridge.signal_out @airBridge.signal_in1
 add @wDivingBay waterdetector at 968,-464 WaterDetector.Output=DivingBay WaterDetector.FalseOutput=""
 add @wtDivingBay wificomponent at 994,-464 WifiComponent.Channel=7400
 wire @wDivingBay.signal_out @wtDivingBay.signal_in
 add @sDivingBay smokedetector at 968,-232 SmokeDetector.Output=DivingBay SmokeDetector.FalseOutput=""
 add @stDivingBay wificomponent at 994,-232 WifiComponent.Channel=7401
 wire @sDivingBay.signal_out @stDivingBay.signal_in
+add @oxDivingBay oxygendetector at 928,-344
+box @airDivingBay at 888,-344 from camel/camel_airnode ROOM=DivingBay
+wire @oxDivingBay.signal_out @airDivingBay.signal_in1
 add @wForeHall waterdetector at 1180,-208 WaterDetector.Output=ForeHall WaterDetector.FalseOutput=""
 add @wtForeHall wificomponent at 1206,-208 WifiComponent.Channel=7400
 wire @wForeHall.signal_out @wtForeHall.signal_in
 add @sForeHall smokedetector at 1180,24 SmokeDetector.Output=ForeHall SmokeDetector.FalseOutput=""
 add @stForeHall wificomponent at 1206,24 WifiComponent.Channel=7401
 wire @sForeHall.signal_out @stForeHall.signal_in
+add @oxForeHall oxygendetector at 1140,-88
+box @airForeHall at 1100,-88 from camel/camel_airnode ROOM=ForeHall
+wire @oxForeHall.signal_out @airForeHall.signal_in1
 add @wFwdHump waterdetector at 597,400 WaterDetector.Output=FwdHump WaterDetector.FalseOutput=""
 add @wtFwdHump wificomponent at 623,400 WifiComponent.Channel=7400
 wire @wFwdHump.signal_out @wtFwdHump.signal_in
 add @sFwdHump smokedetector at 597,696 SmokeDetector.Output=FwdHump SmokeDetector.FalseOutput=""
 add @stFwdHump wificomponent at 623,696 WifiComponent.Channel=7401
 wire @sFwdHump.signal_out @stFwdHump.signal_in
+add @oxFwdHump oxygendetector at 557,552
+box @airFwdHump at 517,552 from camel/camel_airnode ROOM=FwdHump
+wire @oxFwdHump.signal_out @airFwdHump.signal_in1
 add @wAftHump waterdetector at -555,400 WaterDetector.Output=AftHump WaterDetector.FalseOutput=""
 add @wtAftHump wificomponent at -529,400 WifiComponent.Channel=7400
 wire @wAftHump.signal_out @wtAftHump.signal_in
 add @sAftHump smokedetector at -555,696 SmokeDetector.Output=AftHump SmokeDetector.FalseOutput=""
 add @stAftHump wificomponent at -529,696 WifiComponent.Channel=7401
 wire @sAftHump.signal_out @stAftHump.signal_in
+add @oxAftHump oxygendetector at -595,552
+box @airAftHump at -635,552 from camel/camel_airnode ROOM=AftHump
+wire @oxAftHump.signal_out @airAftHump.signal_in1
 
 # === 5. HUMP-3 ALERT CORE and HUMP-4 CamelOS (bridge) ===
 box @hump3 at 680,110 from camel/camel_alert
@@ -167,7 +203,8 @@ unwire 693.signal_out 692.toggle      # the siren button becomes the ALERT ACK (
 wire 693.signal_out @hump3.signal_in1
 wire @hump3.signal_out1 692.set_state
 add @chatA wificomponent at 660,70 WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=true WifiComponent.MinChatMessageInterval=20
-wire @hump3.signal_out2 @chatA.signal_in
+box @herald at 700,70 from camel/camel_herald   # radio announcements (split from the alert core)
+wire @herald.signal_out1 @chatA.signal_in
 add @mood textdisplay at 740,250 ItemLabel.Text="(^_^) content camel"
 wire @hump3.signal_out3 @mood.set_text
 wire @hump3.signal_out4 @mood.set_text_color
@@ -175,6 +212,12 @@ add @term terminal at 720,150 "Terminal.WelcomeMessage=CamelOS 1.0 (Cargo And Me
 box @hump4 at 680,150 from camel/camel_os
 wire @term.signal_out @hump4.signal_in1
 wire @hump4.signal_out1 @term.signal_in
+box @hump5 at 600,150 from camel/camel_settings   # CamelOS settings (wifi only)
+box @hump6 at 600,110 from camel/camel_fun        # CamelOS fun pack (wifi only)
+set 24 "CustomInterface.Labels=label.reactorshutdown,BATTLE STATIONS,ALL CLEAR" "CustomInterface.Signals=1;alert red;alert auto"
+add @navtx wificomponent at 800,120 WifiComponent.Channel=7300
+wire 24.signal_out2 @navtx.signal_in
+wire 24.signal_out3 @navtx.signal_in
 add @chatB wificomponent at 660,190 WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=false WifiComponent.MinChatMessageInterval=1
 wire @hump4.signal_out2 @chatB.signal_in
 add @chatRx wificomponent at 640,190 WifiComponent.Channel=0 WifiComponent.LinkToChat=true   # radio chat in: "camel status"

@@ -3,7 +3,7 @@
 # ALL battery charging comes out of the reactor's surplus, so a battery suddenly charging can never brown out the main bus.
 name camel_propulsion
 box battery
-note "HUMP-P POWER MANAGER: HOW IT WORKS" "Main bus demand = reactor load - battery charging, low-pass filtered (0.9 old + 0.1 new per tick; the two readings can arrive a tick apart). All charging flows through the CHARGE TAP relay, whose load_value_out is exactly what the batteries draw.\nWanted charge: propulsion = its bus load + (80 - charge %) x 40 kW (0..2000), so it hovers at 80 %; critical = (100 - charge %) x 40 kW (0..1000), kept full.\nReactor setpoint (out2 -> HUMP-1) = main demand + both wants + 1000 kW while the governor is about to switch the oxygen generator on (7212).\nSurplus = reactor output - main demand. Critical bank takes min(surplus, its want), propulsion takes the rest. HUMP-R (second box) turns the two shares into battery rates. So when the reactor lags behind a step the charging gives way instead of the voltage, and a sudden drop in load is soaked up.\nPropulsion below 25 % -> 1 on 7209 (alert YELLOW). Telemetry: 7202 propulsion charge %, 7211 propulsion kW."
+note "HUMP-P POWER MANAGER: HOW IT WORKS" "Main bus demand = reactor load - battery charging, low-pass filtered (0.9 old + 0.1 new per tick; the two readings can arrive a tick apart). All charging flows through the CHARGE TAP relay, whose load_value_out is exactly what the batteries draw.\nWanted charge: propulsion = its bus load + (80 - charge %) x 40 kW (0..2000), so it hovers at the target (80 % unless CamelOS 'set battery N', wifi 7407); critical = (100 - charge %) x 40 kW (0..1000), kept full.\nReactor setpoint (out2 -> HUMP-1) = main demand + both wants + 1000 kW while the governor is about to switch the oxygen generator on (7212).\nSurplus = reactor output - main demand. Critical bank takes min(surplus, its want), propulsion takes the rest. HUMP-R (second box) turns the two shares into battery rates. So when the reactor lags behind a step the charging gives way instead of the voltage, and a sudden drop in load is soaked up.\nPropulsion below 25 % -> 1 on 7209 (alert YELLOW). Telemetry: 7202 propulsion charge %, 7211 propulsion kW."
 note "WIRING" "in1 charge_%, in2 load_value_out from ONE propulsion battery\nin4 <- CHARGE TAP relay load_value_out\nin5 charge_% from ONE critical (vanilla) battery\nin3 reactor load_value_out, in6 reactor power_value_out\nout1 -> HUMP-R in1 (critical share kW), out5 -> HUMP-R in2 (propulsion share kW)\nout3 -> disable_output of every propulsion battery (held 0)\nout2 -> HUMP-1 in8 (setpoint kW)"
 c txc wifi Channel=7202
 c txl wifi Channel=7211
@@ -44,13 +44,19 @@ c basef add
 w base.out basef.1
 w gkw.out basef.2
 # --- wants
+c zero0 mem Value=0
+c rxt wifi Channel=7407          # battery target from CamelOS 'set battery N'
 c k80 mem Value=80
+c tgt add ClampMin=20 ClampMax=95   # target, kept to 20..95 %
+w rxt.out k80.in
 c k100 mem Value=100
 c kg mem Value=40
 c errp sub
 c biasp mul
 c wantp add ClampMin=0 ClampMax=2000
-w k80.out errp.1
+w k80.out tgt.1
+w zero0.out tgt.2
+w tgt.out errp.1
 w in1 errp.2 low.2 txc.in
 w errp.out biasp.1
 w kg.out biasp.2

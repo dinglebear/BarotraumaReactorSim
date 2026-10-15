@@ -1,0 +1,21 @@
+# CAMEL OVERKILL: AIR NODE (one tiny box per room). Its oxygen detector feeds in1; it tells the governor when THIS room
+# needs air, by room name, so the generator runs when ANY room runs low (not just the two the governor can see).
+name camel_airnode
+box battery
+note "AIR NODE: HOW IT WORKS" "in1 <- this room's oxygen detector.\nBelow the LOW threshold (default 85 %, CamelOS 'set o2 low N', wifi 7405) it transmits this room's name on 7402 (needs air now).\nBelow the HIGH threshold (default 97 %, 'set o2 high N', 7406) it transmits the name on 7403 (not full yet).\nThe governor runs the generator while any room is on 7402, and stops it only when no room has been on 7403 for 10 s.\nThe room name is the Output of the two Greater components: edit it if you move this box."
+note "WIRING" "in1 <- oxygen detector signal_out. Everything else is wifi."
+c rxl wifi Channel=7405
+c rxh wifi Channel=7406
+c lo mem Value=85
+c hi mem Value=97
+c low greater Output=$ROOM FalseOutput=""
+c mid greater Output=$ROOM FalseOutput=""
+c txl wifi Channel=7402
+c txm wifi Channel=7403
+w rxl.out lo.in
+w rxh.out hi.in
+w lo.out low.1
+w hi.out mid.1
+w in1 low.2 mid.2
+w low.out txl.in
+w mid.out txm.in

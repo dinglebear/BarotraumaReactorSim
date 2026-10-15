@@ -235,6 +235,34 @@
       return problems;
     }
 
+    // ---------- audit: everything that went wrong in game so far, checked before a human has to find it ----------
+    // base: the original SubDoc (e.g. the vanilla sub) to spot items that moved. Returns [{ level: 'error'|'warn'|'info', msg }].
+    audit(base) {
+      const out = [], add = (level, msg) => out.push({ level, msg });
+      for (const p of this.check()) add('error', p);
+      const inBox = new Set();
+      for (const n of this.items.values()) if (n.children.some(c => c.tag === 'CircuitBox')) for (const c of X.kids(n, 'ItemContainer')) for (const id of (X.get(c, 'contained') || '').split(/[,;]/)) if (id) inBox.add(id);
+      const inCont = new Set(); // items stored in cabinets/lockers etc. are loose on purpose
+      for (const n of this.items.values()) if (!n.children.some(c => c.tag === 'CircuitBox')) for (const c of X.kids(n, 'ItemContainer')) for (const id of (X.get(c, 'contained') || '').split(/[,;]/)) if (id) inCont.add(id);
+      const baseIds = base ? new Set(base.items.keys()) : new Set();
+      const tag = n => `${X.get(n, 'identifier')} #${X.get(n, 'ID')}`;
+      for (const n of this.items.values()) {
+        const id = X.get(n, 'ID'), idf = X.get(n, 'identifier');
+        if (inBox.has(id) || inCont.has(id) || this.comp(n, 'Wire')) continue;
+        const h = this.comp(n, 'Holdable');
+        if (h && X.get(h, 'Attached') !== 'True' && !baseIds.has(id)) add('error', `${tag(n)} is not attached: it will fall to the floor`);
+        if (!baseIds.has(id) && this.freeSpot(n) && !/gun|periscope|loader|hardpoint|turret|coil|laser|cannon|depthcharge|engine|reactor|door|hatch/i.test(idf)) add('warn', `${tag(n)} sits inside a floor or wall`);
+        const r = rectOf(n), cx = r[0] + r[2] / 2, cy = r[1] - r[3] / 2;
+        if (!baseIds.has(id) && !this.hulls().some(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1) && !/gun|turret|coil|laser|cannon|depthcharge|light/i.test(idf)) add('warn', `${tag(n)} is outside every room`);
+        const p = this.panel(n); if (p) for (const c of p.children) { const k = X.kids(c, 'link').length; if (k > 5) add('info', `${tag(n)}.${X.get(c, 'name')} has ${k} wires (more than 5: loads fine, can't add more by hand)`); }
+      }
+      if (base) for (const [id, b] of base.items) {
+        const n = this.items.get(id); if (!n || X.get(n, 'identifier') !== X.get(b, 'identifier')) continue;
+        for (const k of ['rect', 'flippedx', 'flippedy', 'Rotation', 'Scale']) if (X.get(n, k) !== X.get(b, k)) add('warn', `${tag(n)} changed ${k}: ${X.get(b, k)} -> ${X.get(n, k)}`);
+      }
+      return out;
+    }
+
     // ---------- patch language ----------
     apply(script, opts) {
       opts = opts || {};
@@ -256,7 +284,8 @@
           else if (cmd === 'box') {
             const h = t[1].startsWith('@') ? t[1].slice(1) : null, [x, y, k] = at(), fi = t.indexOf('from'), file = t[fi + 1], which = t.indexOf('box', 1) > 0 ? t[t.indexOf('box', 1) + 1] : null;
             if (!opts.readCircuit) throw new Error('box needs a circuit reader');
-            const model = opts.readCircuit(file), bm = which ? model.boxes.find(b => b.name === which) : model.boxes[0];
+            const extra = {}; for (const kv of t.slice(fi + 2)) { const m = /^([A-Z_][A-Z0-9_]*)=(.*)$/.exec(kv); if (m) extra[m[1]] = m[2]; } // box ... from file ROOM=Medbay -> $ROOM
+            const model = opts.readCircuit(file, extra), bm = which ? model.boxes.find(b => b.name === which) : model.boxes[0];
             if (!bm) throw new Error(`no box "${which}" in ${file}`);
             this.box(h, x, y, JSON.parse(JSON.stringify(bm)));
           }

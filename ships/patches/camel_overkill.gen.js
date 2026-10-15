@@ -71,11 +71,11 @@ say('wire @humpP.signal_out2 @hump1.signal_in8');
 say('\n# === 3. HUMP-2 GOVERNOR: oxygen generator on a relay (85 %..97 % hysteresis) + load shedding ===');
 say('add @o2a oxygendetector at 760,240      # bridge');
 say('add @o2b oxygendetector at 0,-240       # crew quarters');
-say('add @rO2 relaycomponent at 820,20');
+say('add @rO2 relaycomponent at 820,20 RelayComponent.MaxPower=2000   # headroom: the generator alone draws exactly the stock 1000 kW limit');
 say('unwire 54.power 1040.power_in');
 say('wire 54.power @rO2.power_in');
 say('wire @rO2.power_out 1040.power_in');
-say('add @rFab relaycomponent at -380,-290');
+say('add @rFab relaycomponent at -380,-290 RelayComponent.MaxPower=2000');
 say('unwire 53.power 36.power_in');
 say('unwire 53.power 35.power_in');
 say('wire 53.power @rFab.power_in');
@@ -103,6 +103,10 @@ for (const [hid, name] of ROOMS) {
   say(`add @st${name} wificomponent at ${x + 26},${b.top - 16} WifiComponent.Channel=7401`);
   say(`wire @s${name}.signal_out @st${name}.signal_in`);
   sensorOf[hid] = name;
+  // air node: this room's own oxygen detector and a tiny box that reports the room by name when its air runs low
+  say(`add @ox${name} oxygendetector at ${x - 40},${Math.round((b.floor + b.top) / 2)}`);
+  say(`box @air${name} at ${x - 80},${Math.round((b.floor + b.top) / 2)} from camel/camel_airnode ROOM=${name}`);
+  say(`wire @ox${name}.signal_out @air${name}.signal_in1`);
 }
 
 // ---------------------------------------------------------------- 5. ALERT CORE + CamelOS (bridge)
@@ -113,7 +117,8 @@ say('unwire 693.signal_out 692.toggle      # the siren button becomes the ALERT 
 say('wire 693.signal_out @hump3.signal_in1');
 say('wire @hump3.signal_out1 692.set_state');
 say('add @chatA wificomponent at 660,70 WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=true WifiComponent.MinChatMessageInterval=20');
-say('wire @hump3.signal_out2 @chatA.signal_in');
+say('box @herald at 700,70 from camel/camel_herald   # radio announcements (split from the alert core)');
+say('wire @herald.signal_out1 @chatA.signal_in');
 say('add @mood textdisplay at 740,250 ItemLabel.Text="(^_^) content camel"');
 say('wire @hump3.signal_out3 @mood.set_text');
 say('wire @hump3.signal_out4 @mood.set_text_color');
@@ -121,6 +126,13 @@ say('add @term terminal at 720,150 "Terminal.WelcomeMessage=CamelOS 1.0 (Cargo A
 say('box @hump4 at 680,150 from camel/camel_os');
 say('wire @term.signal_out @hump4.signal_in1');
 say('wire @hump4.signal_out1 @term.signal_in');
+say('box @hump5 at 600,150 from camel/camel_settings   # CamelOS settings (wifi only)');
+say('box @hump6 at 600,110 from camel/camel_fun        # CamelOS fun pack (wifi only)');
+// nav terminal: its two spare buttons become BATTLE STATIONS / ALL CLEAR on the CamelOS bus
+say('set 24 "CustomInterface.Labels=label.reactorshutdown,BATTLE STATIONS,ALL CLEAR" "CustomInterface.Signals=1;alert red;alert auto"');
+say('add @navtx wificomponent at 800,120 WifiComponent.Channel=7300');
+say('wire 24.signal_out2 @navtx.signal_in');
+say('wire 24.signal_out3 @navtx.signal_in');
 say('add @chatB wificomponent at 660,190 WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=false WifiComponent.MinChatMessageInterval=1');
 say('wire @hump4.signal_out2 @chatB.signal_in');
 say('add @chatRx wificomponent at 640,190 WifiComponent.Channel=0 WifiComponent.LinkToChat=true   # radio chat in: "camel status"');

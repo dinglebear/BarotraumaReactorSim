@@ -4,7 +4,7 @@
 # It also sheds non-essential loads (fabricator + deconstructor, suit lockers / tank shelves) when the propulsion batteries are low.
 name camel_governor
 box battery
-note "HUMP-2 GOVERNOR: HOW IT WORKS" "OXYGEN: o2 = lower of the two oxygen detectors. Below 85 % -> generator relay ON; above 97 % -> OFF; in between it keeps its last state (a latch in a memory). Starts ON. The relay follows 5 s after the decision; during those 5 s it broadcasts 1 on 7212 so the reactor ramps up BEFORE the 1000 kW load arrives; the relay command itself goes out on 7213 so HUMP-P knows the instant it switches.\nCommands on the CamelOS bus (wifi 7300): 'o2 on' forces it on, 'o2 auto' goes back to automatic.\nSHEDDING: propulsion batteries below 20 % -> shed (fabricators and suit lockers off); back on above 50 %. 'shed on' / 'shed off' / 'shed auto' on 7300.\nTelemetry: 7201 oxygen %, 7203 generator state, 7204 shed state."
+note "HUMP-2 GOVERNOR: HOW IT WORKS" "OXYGEN: every room has an AIR NODE box. Any room below its low threshold (7402) -> generator relay ON; no room below the high threshold for 10 s (7403) -> OFF; in between it keeps its last state (a latch in a memory). The two oxygen detectors (in1/in2) only feed the oxygen % telemetry (7201). Starts ON. The relay follows 5 s after the decision; during those 5 s it broadcasts 1 on 7212 so the reactor ramps up BEFORE the 1000 kW load arrives; the relay command itself goes out on 7213 so HUMP-P knows the instant it switches.\nCommands on the CamelOS bus (wifi 7300): 'o2 on' forces it on, 'o2 auto' goes back to automatic.\nSHEDDING: propulsion batteries below 20 % -> shed (fabricators and suit lockers off); back on above 50 %. 'shed on' / 'shed off' / 'shed auto' on 7300.\nTelemetry: 7201 oxygen %, 7203 generator state, 7204 shed state."
 note "WIRING" "in1, in2 <- oxygen detectors (signal_out)\nin3 <- propulsion battery charge_%\nout1 -> oxygen relay set_state\nout2 -> relays for fabricators and suit lockers (set_state)"
 c txo wifi Channel=7201
 c txg wifi Channel=7203
@@ -23,16 +23,17 @@ w ds.out dm.1
 w da.out dm.2
 w dm.out o2.1
 w k2.out o2.2
-c k85 mem Value=85
-c k97 mem Value=97
-c lo greater FalseOutput=""             # 85 > o2 -> "1"
-c hi greater Output=0 FalseOutput=""    # o2 > 97 -> "0"
-c latch mem Value=1                     # generator wanted (1/0); starts ON
-w k85.out lo.1
-w o2.out lo.2 hi.1
-w k97.out hi.2
-w lo.out latch.in
-w hi.out latch.in
+# every room's AIR NODE box transmits its name on 7402 while below the low threshold and on 7403 while below the
+# high one: ON when any room needs air, OFF only after 10 s with every room full
+c rxneed wifi Channel=7402
+c rxfill wifi Channel=7403
+c need or TimeFrame=2 FalseOutput=""          # a room needs air -> "1"
+c full or TimeFrame=10 Output="" FalseOutput=0 # no room below high for 10 s -> "0"
+c latch mem Value=1                           # generator wanted (1/0); starts ON
+w rxneed.out need.1
+w rxfill.out full.1
+w need.out latch.in
+w full.out latch.in
 # --- commands (wifi 7100)
 c rx wifi Channel=7300
 c cOn regex Expression="^(?i)o2 on$" Output=1 FalseOutput="" ContinuousOutput=false

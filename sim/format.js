@@ -187,7 +187,7 @@
     return out;
   }
   function parseCirc(text) {
-    const model = { name: 'circuit', boxes: [], links: [], meta: {} };
+    const model = { name: 'circuit', boxes: [], links: [], meta: {} }, pend = [];
     let box = null;
     const getBox = () => { if (!box) { box = newBox('reactor'); model.boxes.push(box); } return box; };
     const ep = (s, b, lineNo) => {
@@ -215,15 +215,16 @@
         }
         b.components.push({ id: t[1], item: def.item, cls: def.cls, props, pos });
       }
-      else if (k === 'w') {
-        const b = getBox(); const from = ep(t[1], b, ln); let col = 'redwire';
-        for (const s of t.slice(2)) { if (s.startsWith('color=')) { col = s.slice(6); continue; } b.wires.push({ from, to: ep(s, b, ln), prefab: col }); }
+      else if (k === 'w') { // resolved after the whole file is read, so a wire may name a component defined further down
+        const b = getBox(); pend.push(() => { const from = ep(t[1], b, ln); let col = 'redwire';
+          for (const s of t.slice(2)) { if (s.startsWith('color=')) { col = s.slice(6); continue; } b.wires.push({ from, to: ep(s, b, ln), prefab: col }); } });
       }
       else if (k === 'note') getBox().labels.push({ header: t[1] || '', body: t[2] || '', color: t[3] || '#7ED3E0' });
       else if (k === 'label') { const b = getBox(); const p = longPin(t[1], null); (p.includes('_in') ? b.inLabels : b.outLabels)[p] = t.slice(2).join(' '); }
       else if (k === 'link') model.links.push({ from: t[1], to: t[2] });
       else throw new Error(`line ${ln}: unknown statement "${t[0]}"`);
     });
+    for (const f of pend) f();
     return model;
   }
   function newBox(name) { return { name, pins: null, components: [], wires: [], labels: [], inLabels: {}, outLabels: {}, inPos: null, outPos: null }; }

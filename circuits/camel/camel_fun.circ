@@ -1,0 +1,106 @@
+# CAMEL OVERKILL: HUMP-6 "FUN PACK". The silly side of CamelOS. Listens on the command bus (7300), answers on the
+# reply bus (7310). 'joke' and '8ball' pick from 8 answers with a counter driven by a fast oscillator (random enough).
+name camel_fun
+box battery
+note "HUMP-6 FUN PACK: HOW IT WORKS" "Commands: help fun, ping, joke, 8ball <question>, pet, feed, coffee, dance, weather, uptime, hump, whoami, credits, sudo ..., rm ..., moo, hello.\nRandom picks: a 7.3 Hz oscillator counts 0..7 (memory + adder + modulo 8) and drives two multiplexers (8 jokes, 8 answers). Each command's regex prints whatever the multiplexer shows at that moment (live-value printer: mux -> regex set_output).\nUptime: a 1 Hz oscillator counts seconds.\nTo add a joke: change a memory. To add a command: a regex on 7300 -> 7310, plus the word in CamelOS's unknown-command regex."
+note "WIRING" "None: wifi only."
+c rx wifi Channel=7300
+c tr wifi Channel=7310
+c osc osc OutputType=Pulse Frequency=7.3
+c cnt mem Value=0
+c inc add
+c m8 mod Modulus=8
+w cnt.out inc.1
+w osc.out inc.2
+w inc.out m8.in
+w m8.out cnt.in
+c j0 mem Value="Why did the camel cross the trench? It didn't. Hull integrity is important."
+c j1 mem Value="Knock knock. Who's there? Water. Water who? Water you doing, close the hatch!"
+c j2 mem Value="My reactor runs at 50 degrees. Yours runs at whatever AutoTemp feels like."
+c j3 mem Value="A mudraptor walks into a bar. The coilgun walks into the mudraptor."
+c j4 mem Value="I tried to tell a joke about husks. It spread to the rest of the crew."
+c j5 mem Value="How many engineers to fix a junction box? Five: one fixes it, four stand in the water."
+c j6 mem Value="What's a camel's favourite instrument? The hump-et."
+c j7 mem Value="I have 25 circuit boxes and still can't find who left the airlock open."
+c jm mux
+w cnt.out jm.set_input bm.set_input
+w j0.out jm.signal_in0
+w j1.out jm.signal_in1
+w j2.out jm.signal_in2
+w j3.out jm.signal_in3
+w j4.out jm.signal_in4
+w j5.out jm.signal_in5
+w j6.out jm.signal_in6
+w j7.out jm.signal_in7
+c b0 mem Value="It is certain."
+c b1 mem Value="Ask the captain. Then ignore the captain."
+c b2 mem Value="Outlook wet."
+c b3 mem Value="The reactor says no."
+c b4 mem Value="Signs point to Europa."
+c b5 mem Value="Reply hazy, try again after decompression."
+c b6 mem Value="Absolutely. Bring a diving suit."
+c b7 mem Value="My sensors say: probably a crawler."
+c bm mux
+w b0.out bm.signal_in0
+w b1.out bm.signal_in1
+w b2.out bm.signal_in2
+w b3.out bm.signal_in3
+w b4.out bm.signal_in4
+w b5.out bm.signal_in5
+w b6.out bm.signal_in6
+w b7.out bm.signal_in7
+c jk regex Expression="^(?i)joke$" FalseOutput="" ContinuousOutput=false Output=...
+c eb regex Expression="^(?i)8ball.*" FalseOutput="" ContinuousOutput=false Output=...
+w jm.out jk.set_output
+w bm.out eb.set_output
+c up osc OutputType=Pulse Frequency=1
+c us mem Value=0
+c ua add
+w us.out ua.1
+w up.out ua.2
+w ua.out us.in
+c upre mem Value="Uptime: "
+c uc1 concat
+c uc2 concat Separator=" s. The camel never sleeps."
+c usp mem Value=" "
+w upre.out uc1.1
+w us.out uc1.2
+w uc1.out uc2.1
+w usp.out uc2.2
+c ut regex Expression="^(?i)uptime$" FalseOutput="" ContinuousOutput=false Output=...
+w uc2.out ut.set_output
+c hf regex Expression="^(?i)help fun$" FalseOutput="" ContinuousOutput=false Output="fun: ping, joke, 8ball <question>, pet, feed, coffee, dance, weather, uptime, hump, whoami, credits, sudo, moo, hello"
+c pg regex Expression="^(?i)ping$" FalseOutput="" ContinuousOutput=false Output="pong (1 tick. I'm fast.)"
+c pt regex Expression="^(?i)pet$" FalseOutput="" ContinuousOutput=false Output="You pet the camel. It hums contentedly. All systems nominal."
+c fd regex Expression="^(?i)feed$" FalseOutput="" ContinuousOutput=false Output="You feed the camel a fuel rod. Nom. Please put the next one in the reactor."
+c cf regex Expression="^(?i)coffee$" FalseOutput="" ContinuousOutput=false Output="Error 418: I am a submarine, not a teapot."
+c dn regex Expression="^(?i)dance$" FalseOutput="" ContinuousOutput=false Output="~(^_^)~  ~(^_^)~  ~(^_^)~  the camel dances. The ballast sloshes."
+c wt regex Expression="^(?i)weather$" FalseOutput="" ContinuousOutput=false Output="Outside: dark, wet, 3 km of ocean on top of you. Inside: hopefully dry."
+c hu regex Expression="^(?i)hump$" FalseOutput="" ContinuousOutput=false Output="Two humps, zero regrets. HUMP-1 makes power, HUMP-2 makes air, HUMP-3 panics, HUMP-4 talks, HUMP-5 remembers, HUMP-6 jokes."
+c wh regex Expression="^(?i)whoami$" FalseOutput="" ContinuousOutput=false Output="You are cargo. Precious, precious cargo."
+c cr regex Expression="^(?i)credits$" FalseOutput="" ContinuousOutput=false Output="Camel Overkill: designed and built by Claude (Anthropic). Tested and abused by Dinglebear."
+c su regex Expression="^(?i)sudo.*" FalseOutput="" ContinuousOutput=false Output="Nice try. You are not root. You are cargo."
+c rm regex Expression="^(?i)rm .*" FalseOutput="" ContinuousOutput=false Output="Deleting the camel... 3%... 47%... just kidding. Please don't."
+c mo regex Expression="^(?i)moo$" FalseOutput="" ContinuousOutput=false Output="Wrong animal. This is a camel."
+c hl regex Expression="^(?i)(hello|hi)$" FalseOutput="" ContinuousOutput=false Output="Hello! The camel sees you. The camel is always watching."
+w rx.out jk.in eb.in ut.in hf.in pg.in
+w rx.out pt.in fd.in cf.in dn.in wt.in
+w rx.out hu.in wh.in cr.in su.in rm.in
+w rx.out mo.in hl.in
+w jk.out tr.in
+w eb.out tr.in
+w ut.out tr.in
+w hf.out tr.in
+w pg.out tr.in
+w pt.out tr.in
+w fd.out tr.in
+w cf.out tr.in
+w dn.out tr.in
+w wt.out tr.in
+w hu.out tr.in
+w wh.out tr.in
+w cr.out tr.in
+w su.out tr.in
+w rm.out tr.in
+w mo.out tr.in
+w hl.out tr.in

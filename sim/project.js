@@ -38,7 +38,7 @@
     const bc = (cfg && cfg.batteries) || {}, spec = E.batterySpec(cfg, cfg && cfg.profile), n = bc.enabled ? spec.count : 0, t = spec.type; // settings, or the ship's own
     return { MAX: (cfg && cfg.reactorMaxKW) || 5000, BATT_N: n, BATT_KW: n * t.maxRecharge, BATT_OUT: n * t.maxOut, BATT_CAP: n * t.capacity };
   }
-  const PH = /\$(BATT_KW|BATT_OUT|BATT_CAP|BATT_N|MAX)/g;
+  const PH = /\$([A-Z_][A-Z0-9_]*)/g; // $MAX, $BATT_*, or any name given per box (e.g. $ROOM)
   function substitute(model, vals) {
     if (typeof vals !== 'object') vals = { MAX: vals };
     const m = JSON.parse(JSON.stringify(model));

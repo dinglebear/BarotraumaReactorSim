@@ -126,7 +126,7 @@ console.log('real-game checks passed');
   const text = zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/custom/Camel_Overkill.sub'))).toString('utf8');
   assert(new SE.SubDoc(text).check().length === 0, 'Camel Overkill loader checks');
   const ship = SF.parseSub(text);
-  const sim = new SH.ShipSim(ship, { duration: 240, scenario: { breachAt: 150, breachHull: '133', type: [{ t: 30, text: 'status' }, { t: 60, text: 'lockdown' }, { t: 90, text: 'unlock' }], radio: [{ t: 40, text: 'camel whoami' }] } });
+  const sim = new SH.ShipSim(ship, { duration: 240, scenario: { breachAt: 150, breachHull: '133', type: [{ t: 30, text: 'status' }, { t: 60, text: 'lockdown' }, { t: 90, text: 'unlock' }, { t: 100, text: 'set battery 70' }, { t: 105, text: 'joke' }], radio: [{ t: 40, text: 'camel whoami' }] } });
   const doors = [870, 1097, 1103, 1109, 1115, 816, 851, 905, 914].map(i => sim.byId.get(String(i)));
   let lockedOpen = 0;
   while (!sim.done) { sim.step(); if (sim.time > 61 && sim.time < 89) lockedOpen += doors.filter(d => d.state.open).length; }
@@ -137,10 +137,14 @@ console.log('real-game checks passed');
   assert(sim.chat.some(c => /ALERT RED \| flood: Medbay/.test(c.text)), 'flood announcement');
   assert(lockedOpen === 0, 'lockdown keeps every door shut');
   assert(sim.o2Min > 80, 'oxygen stays above 80 %');
+  assert(sim.termLog.some(l => l.dir === '<' && /^Saved/.test(l.text)), 'CamelOS settings answer');
+  assert(sim.termLog.filter(l => l.dir === '<' && l.t > 104 && l.t < 106).length === 1, 'CamelOS fun pack answers once');
   // nothing new sits inside a floor or wall (turrets and their periscope/loader excepted: they replace vanilla parts)
   const doc = new SE.SubDoc(text), vanillaIds = new Set(new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8')).items.keys());
   const inBoxes = new Set(); for (const n of doc.items.values()) if (n.children.some(c => c.tag === 'CircuitBox')) for (const c of n.children) if (c.tag === 'ItemContainer') for (const id of (c.attrs.find(a => a[0] === 'contained') || [0, ''])[1].split(/[,;]/)) inBoxes.add(id);
   const stuck = [...doc.items.values()].filter(n => !vanillaIds.has(n.attrs.find(a => a[0] === 'ID')[1]) && !inBoxes.has(n.attrs.find(a => a[0] === 'ID')[1]) && !n.children.some(c => c.tag === 'Wire')).filter(n => !/gun|periscope|loader/.test(n.attrs.find(a => a[0] === 'identifier')[1]) && doc.freeSpot(n) !== null);
   assert(stuck.length === 0, 'items inside floors or walls: ' + stuck.map(n => n.attrs.find(a => a[0] === 'identifier')[1]).join(', '));
+  const au = doc.audit(new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8'))).filter(x => x.level !== 'info');
+  assert(au.length === 0, 'Camel Overkill audit: ' + au.map(x => x.msg).join('; '));
   console.log('camel overkill passed');
 }

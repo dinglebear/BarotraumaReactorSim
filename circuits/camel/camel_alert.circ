@@ -2,8 +2,8 @@
 # lights, siren, mood display and radio announcements.
 name camel_alert
 box battery
-note "HUMP-3 ALERT CORE: HOW IT WORKS" "Sensor network on wifi: every room has a water and a smoke sensor node that transmits the ROOM NAME on 7400 (flood) / 7401 (fire) while wet / smoky, and nothing otherwise.\nRED = flood or fire or reactor above 85 C (7208). YELLOW = propulsion batteries low (7209) or oxygen below 60 % (7201). Else GREEN.\nlevel = 2 x red + yellow -> multiplexers pick the name (7205), the mood text (7304) and the alert light colour (7305; the LIGHT SHOW box adds party mode and sends 7303 to the lights).\nManual (typed in CamelOS, arrives on the 7300 command bus): alert red / yellow / green / auto.\nSiren (out1) sounds on RED; the ACK button (in1) mutes it for 60 s.\nFlood and fire are held for 10 s after the last sensor message, so sloshing water doesn't flicker the level.\nout2: a radio announcement, sent only when the alert LEVEL changes (equals of the level name against a 0.1 s delayed copy opens a relay for a few ticks); the chat wifi also waits at least 20 s between messages. The siren and red lights carry on meanwhile."
-note "WIRING" "in1 <- ACK button\nout1 -> emergency siren set_state\nout2 -> chat wifi (LinkToChat) signal_in\nout3 -> mood display set_text, out4 -> mood display set_text_color"
+note "HUMP-3 ALERT CORE: HOW IT WORKS" "Sensor network on wifi: every room has a water and a smoke sensor node that transmits the ROOM NAME on 7400 (flood) / 7401 (fire) while wet / smoky. Held 10 s so sloshing water doesn't flicker the level.\nRED = flood or fire or reactor above 85 C (7208). YELLOW = propulsion batteries low (7209) or oxygen below 60 % (7201). Else GREEN.\nlevel = 2 x red + yellow -> multiplexers pick the name (7205), mood text (7304) and alert light colour (7305).\nManual on the CamelOS bus (7300): alert red / yellow / green / auto.\nSettings from CamelOS: alerts on/off (7408: off holds GREEN), siren on/off (7409).\nSiren (out1) on RED; the ACK button (in1) mutes it for 60 s.\nRadio announcements are made by the HERALD box."
+note "WIRING" "in1 <- ACK button\nout1 -> emergency siren set_state\nout3 -> mood display set_text, out4 -> mood display set_text_color"
 c rxf wifi Channel=7400
 c rxx wifi Channel=7401
 c rxt wifi Channel=7208
@@ -18,16 +18,6 @@ c flood or TimeFrame=10            # held 10 s: water sloshing at a detector mus
 c fire or TimeFrame=10
 w rxf.out flood.1
 w rxx.out fire.1
-c froom mem Value=none
-c xroom mem Value=none
-c fclr check TargetSignal=0 Output=none FalseOutput=""
-c xclr check TargetSignal=0 Output=none FalseOutput=""
-w rxf.out froom.in
-w rxx.out xroom.in
-w flood.out fclr.in
-w fire.out xclr.in
-w fclr.out froom.in
-w xclr.out xroom.in
 c k85 mem Value=85
 c hot greater
 w rxt.out hot.1
@@ -85,7 +75,17 @@ c c0 mem Value="255,236,210,255"
 c c1 mem Value="255,150,0,255"
 c c2 mem Value="255,20,20,255"
 c cmux mux
-w lsel.out nmux.set_input mmux.set_input cmux.set_input
+# CamelOS 'alerts off' (7408) holds everything at GREEN; 'siren off' (7409) silences the siren only
+c rxen wifi Channel=7408
+c rxsi wifi Channel=7409
+c men mem Value=1
+c msi mem Value=1
+w rxen.out men.in
+w rxsi.out msi.in
+c lvl mul
+w lsel.out lvl.1
+w men.out lvl.2
+w lvl.out nmux.set_input mmux.set_input cmux.set_input
 w n0.out nmux.signal_in0
 w n1.out nmux.signal_in1
 w n2.out nmux.signal_in2 nmux.signal_in3
@@ -101,34 +101,16 @@ w cmux.out txk.in out4
 # --- siren: RED and not muted (ACK button mutes 60 s)
 c k1 mem Value=1
 c sir greater                           # level > 1
-w lsel.out sir.1
+w lvl.out sir.1
 w k1.out sir.2
 c mute or TimeFrame=60
 w in1 mute.1
 c nm not
 w mute.out nm.in
+c siren0 and
 c siren and
-w sir.out siren.1
-w nm.out siren.2
+w sir.out siren0.1
+w nm.out siren0.2
+w siren0.out siren.1
+w msi.out siren.2
 w siren.out out1
-# --- radio announcement: "[CamelOS] ALERT RED | flood: Medbay | fire: none"
-c a0 mem Value="[CamelOS] ALERT "
-c a1 concat
-c a2 concat Separator=" | flood: "
-c a3 concat Separator=" | fire: "
-w a0.out a1.1
-w nmux.out a1.2
-w a1.out a2.1
-w froom.out a2.2
-w a2.out a3.1
-w xroom.out a3.2
-# only send it when it CHANGES: every channel-0 wifi hears every other one, so a per-tick announcement would drown
-# the crew's radio commands (CamelOS radio interface)
-c adl delay Delay=0.1         # gate opens ~6 ticks when the LEVEL changes (not when the room list changes)
-c aeq equals Output=0 FalseOutput=1
-c agate relay IsOn=false
-w a3.out agate.1
-w nmux.out adl.in aeq.1
-w adl.out aeq.2
-w aeq.out agate.set_state
-w agate.signal_out1 out2

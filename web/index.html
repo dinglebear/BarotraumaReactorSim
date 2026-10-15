@@ -3039,6 +3039,11 @@ function svInspector() {
       + `<label>Oxygen (whole sub, approximate)<div class="val">${sim.o2.toFixed(1)} % · generator ran ${sim.time ? Math.round(sim.o2GenOnS / sim.time * 100) : 0} % of the time</div></label>`
       + (sim.chat.length ? `<label>Radio chat (wifi LinkToChat)<div class="val">${sim.chat.slice(-8).map(c => `[${c.t.toFixed(0)}s ch${esc(c.ch)}] ${esc(c.text)}`).join('<br>')}</div></label>` : '')
       + `<p class="hint">Click a device or room. Relays, lights, pumps and buttons can be switched, a room can be breached or set on fire, and terminals can be typed into.</p>`;
+    // parts list: every item type with its count (electrical first); click one to find it
+    const cnt = new Map(); for (const it of [...sim.ship.items, ...(sim.ship.props || [])]) cnt.set(it.identifier, (cnt.get(it.identifier) || 0) + 1);
+    const elec = new Set(sim.ship.items.map(i => i.identifier)), rows = [...cnt.entries()].sort((a, b) => (elec.has(b[0]) - elec.has(a[0])) || b[1] - a[1] || a[0].localeCompare(b[0]));
+    el.innerHTML += `<label>Parts list (${rows.length} kinds; click to find)<div class="val" style="max-height:260px;overflow:auto">${rows.map(([id, n]) => `<a href="#" data-find="${esc(id)}" style="color:${elec.has(id) ? 'var(--ink)' : 'var(--muted)'}">${esc(id)}</a> ×${n}`).join('<br>')}</div></label>`;
+    el.querySelectorAll('[data-find]').forEach(a => a.onclick = e => { e.preventDefault(); $('svFind').value = '^' + a.dataset.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'; SV.find = $('svFind').value; svZoomTo(svFindHits()); });
     return;
   }
   if (s.struct || s.prop) {

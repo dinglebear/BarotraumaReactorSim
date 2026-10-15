@@ -107,19 +107,22 @@ body { background: #111; display: flex; flex-direction: column; gap: 40px; paddi
 
 <!-- ============ G4: DON'T GO IN CLAUDE'S ROOM ============ -->
 <div class="card wide grain vignette" id="g4-claudes-room">
-  <!-- zoom on the aft (left) hump: image 2000 wide scaled 3x, nook near x 450, y 215 -->
-  <img src="sub_cut.png" class="abs" style="width:6000px;left:-1000px;top:-420px;filter:contrast(1.1)">
-  <div class="abs" style="inset:0;background:linear-gradient(90deg, rgba(0,0,0,.85) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,0) 70%)"></div>
-  <div class="ring" style="left:265px;top:150px;width:360px;height:360px"></div>
+  <!-- zoom on the aft (left) hump, 4x. Claude's room = the narrow hull at sub x -1040..-976, y 392..584, which is
+       pixels 444-473 x 141-230 of the screenshot (fitted on the hump slopes: x_px = 410 + (x + 1113) * 0.4633,
+       y_px = 60 + (759 - y) * 0.4633). Its centre (459, 185) lands at (480, 330) on this card. -->
+  <img src="sub.webp" class="abs" style="width:8000px;left:-1356px;top:-410px;filter:contrast(1.1)">
+  <div class="abs" style="inset:0;background:linear-gradient(0deg, rgba(0,0,0,.9) 0%, rgba(0,0,0,.55) 35%, rgba(0,0,0,0) 60%)"></div>
+  <div class="ring" style="left:280px;top:110px;width:400px;height:440px"></div>
+  <div class="arrow" style="left:860px;top:300px;width:120px;transform:rotate(180deg)"></div>
   <div class="abs stripes" style="left:-40px;right:-40px;top:610px;height:56px;transform:rotate(-3deg)"></div>
   <div class="abs big" style="left:70px;top:690px;font-size:150px;color:#fff">Do not enter</div>
   <div class="abs big" style="left:70px;top:830px;font-size:150px;color:var(--red)">Claude's room</div>
-  <div class="abs chat" style="right:70px;top:120px;width:860px;font-size:34px">
+  <div class="abs chat" style="right:70px;top:360px;width:860px;font-size:30px">
     <div><span class="who">[CamelOS]</span> HEY. This is Claude's room. Get out.</div>
     <div style="margin-top:12px"><span class="who">[CamelOS]</span> Intruder in Claude's room! Releasing the bees. (There are no bees.)</div>
     <div style="margin-top:12px"><span class="who">[CamelOS]</span> Occupancy limit: one camel. You are not a camel.</div>
   </div>
-  <div class="abs tag" style="right:90px;top:520px;font-size:54px;transform:rotate(-4deg)">Where is it? Find it.</div>
+  <div class="abs tag" style="left:980px;top:262px;font-size:60px;transform:rotate(-3deg)">It's in here. Don't.</div>
 </div>
 
 <!-- ============ G5: MONA LISA IN CRAYON ============ -->

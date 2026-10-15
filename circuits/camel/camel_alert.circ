@@ -2,7 +2,7 @@
 # lights, siren, mood display and radio announcements.
 name camel_alert
 box battery
-note "HUMP-3 ALERT CORE: HOW IT WORKS" "Sensor network on wifi: every room has a water and a smoke sensor node that transmits the ROOM NAME on 7400 (flood) / 7401 (fire) while wet / smoky, and nothing otherwise.\nRED = flood or fire or reactor above 85 C (7208). YELLOW = propulsion batteries low (7209) or oxygen below 60 % (7201). Else GREEN.\nlevel = 2 x red + yellow -> multiplexers pick the name (7205), the mood text (7304) and the light colour (7303).\nManual (typed in CamelOS, arrives on the 7300 command bus): alert red / yellow / green / auto, lights party / normal.\nSiren (out1) sounds on RED; the ACK button (in1) mutes it for 60 s.\nout2: a radio announcement for the chat wifi, sent only in the tick it changes (equals against a 0.1 s delayed copy opens a relay for a few ticks), so channel 0 stays quiet for the crew's 'camel ...' commands."
+note "HUMP-3 ALERT CORE: HOW IT WORKS" "Sensor network on wifi: every room has a water and a smoke sensor node that transmits the ROOM NAME on 7400 (flood) / 7401 (fire) while wet / smoky, and nothing otherwise.\nRED = flood or fire or reactor above 85 C (7208). YELLOW = propulsion batteries low (7209) or oxygen below 60 % (7201). Else GREEN.\nlevel = 2 x red + yellow -> multiplexers pick the name (7205), the mood text (7304) and the alert light colour (7305; the LIGHT SHOW box adds party mode and sends 7303 to the lights).\nManual (typed in CamelOS, arrives on the 7300 command bus): alert red / yellow / green / auto.\nSiren (out1) sounds on RED; the ACK button (in1) mutes it for 60 s.\nFlood and fire are held for 10 s after the last sensor message, so sloshing water doesn't flicker the level.\nout2: a radio announcement, sent only when the alert LEVEL changes (equals of the level name against a 0.1 s delayed copy opens a relay for a few ticks); the chat wifi also waits at least 20 s between messages. The siren and red lights carry on meanwhile."
 note "WIRING" "in1 <- ACK button\nout1 -> emergency siren set_state\nout2 -> chat wifi (LinkToChat) signal_in\nout3 -> mood display set_text, out4 -> mood display set_text_color"
 c rxf wifi Channel=7400
 c rxx wifi Channel=7401
@@ -12,10 +12,10 @@ c rxo wifi Channel=7201
 c rxc wifi Channel=7300
 c txn wifi Channel=7205
 c txm wifi Channel=7304
-c txk wifi Channel=7303
+c txk wifi Channel=7305
 # --- hazards
-c flood or TimeFrame=1.5
-c fire or TimeFrame=1.5
+c flood or TimeFrame=10            # held 10 s: water sloshing at a detector must not flicker the alert
+c fire or TimeFrame=10
 w rxf.out flood.1
 w rxx.out fire.1
 c froom mem Value=none
@@ -61,19 +61,13 @@ c mGrn regex Expression="^(?i)alert green$" Output=0 FalseOutput="" ContinuousOu
 c mOn regex Expression="^(?i)alert (red|yellow|green)$" Output=1 FalseOutput="" ContinuousOutput=false
 c mOff regex Expression="^(?i)alert auto$" Output=0 FalseOutput="" ContinuousOutput=false
 w rxc.out mRed.in mYel.in mGrn.in mOn.in mOff.in
-c pOn regex Expression="^(?i)lights party$" Output=1 FalseOutput="" ContinuousOutput=false
-c pOff regex Expression="^(?i)lights normal$" Output=0 FalseOutput="" ContinuousOutput=false
-w rxc.out pOn.in pOff.in
 c mlvl mem Value=0
 c mflag mem Value=0
-c party mem Value=0
 w mRed.out mlvl.in
 w mYel.out mlvl.in
 w mGrn.out mlvl.in
 w mOn.out mflag.in
 w mOff.out mflag.in
-w pOn.out party.in
-w pOff.out party.in
 c lsel mux
 w mflag.out lsel.set_input
 w lvla.out lsel.signal_in0
@@ -103,23 +97,7 @@ w c1.out cmux.signal_in1
 w c2.out cmux.signal_in2 cmux.signal_in3
 w nmux.out txn.in
 w mmux.out txm.in out3
-# party: rainbow from an oscillator through an HSV colour
-c osc osc OutputType=Sawtooth Frequency=0.2
-c k360 mem Value=360
-c hue mul
-c one mem Value=1
-c k255 mem Value=255
-c hsv color UseHSV=true
-w osc.out hue.1
-w k360.out hue.2
-w hue.out hsv.signal_r
-w one.out hsv.signal_g hsv.signal_b
-w k255.out hsv.signal_a
-c psel mux
-w party.out psel.set_input
-w cmux.out psel.signal_in0 out4
-w hsv.out psel.signal_in1
-w psel.out txk.in
+w cmux.out txk.in out4
 # --- siren: RED and not muted (ACK button mutes 60 s)
 c k1 mem Value=1
 c sir greater                           # level > 1
@@ -146,10 +124,11 @@ w a2.out a3.1
 w xroom.out a3.2
 # only send it when it CHANGES: every channel-0 wifi hears every other one, so a per-tick announcement would drown
 # the crew's radio commands (CamelOS radio interface)
-c adl delay Delay=0.1         # the gate stays open ~6 ticks after a change (chat drops the repeats)
+c adl delay Delay=0.1         # gate opens ~6 ticks when the LEVEL changes (not when the room list changes)
 c aeq equals Output=0 FalseOutput=1
 c agate relay IsOn=false
-w a3.out adl.in aeq.1 agate.1
+w a3.out agate.1
+w nmux.out adl.in aeq.1
 w adl.out aeq.2
 w aeq.out agate.set_state
 w agate.signal_out1 out2

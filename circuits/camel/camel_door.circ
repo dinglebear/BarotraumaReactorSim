@@ -1,7 +1,7 @@
 # CAMEL OVERKILL: DOOR BRAIN (one circuit box per door, 9 of them). Replaces the vanilla "close 4 s after motion" OR gate.
 name camel_door
 box battery
-note "DOOR BRAIN: HOW IT WORKS" "Opens for PEOPLE (motion detector set to humans), closes 3 s after they leave.\nWater on either side (room water detectors in2/in3): auto-open is blocked and the door gets ONE close pulse when the water arrives (and when it leaves). Crew can still open it by hand to escape.\nLOCKDOWN (type 'lockdown' in CamelOS, bus 7300): auto-open blocked AND a close signal every tick: the door stays shut even if someone clicks it. 'unlock' releases it.\nHow: a relay passes the motion signal only while nothing blocks it; a signal check turns 'locked' into a steady 0; an XOR of the water signal and its 0.1 s delayed copy makes the edge pulse."
+note "DOOR BRAIN: HOW IT WORKS" "Opens for PEOPLE (motion detector set to humans), closes 3 s after they leave.\nWater on either side (room water detectors in2/in3): auto-open is blocked and the door gets ONE close pulse when the water arrives (and when it leaves). Crew can still open it by hand to escape. Water is held for 5 s after the last wet reading, so sloshing at a detector doesn't make the door flap.\nLOCKDOWN (type 'lockdown' in CamelOS, bus 7300): auto-open blocked AND a close signal every tick: the door stays shut even if someone clicks it. 'unlock' releases it.\nHow: a relay passes the motion signal only while nothing blocks it; a signal check turns 'locked' into a steady 0; an XOR of the water signal and its 0.1 s delayed copy makes the edge pulse."
 note "WIRING" "in1 <- motion detector state_out\nin2, in3 <- water detectors of the rooms on each side (signal_out)\nout1 -> door set_state"
 c rx wifi Channel=7300
 c lkon regex Expression="^(?i)lockdown$" Output=1 FalseOutput="" ContinuousOutput=false
@@ -12,7 +12,7 @@ w lkon.out lock.in
 w lkoff.out lock.in
 c held or TimeFrame=3
 w in1 held.1
-c wet or
+c wet or TimeFrame=5          # held 5 s: sloshing water must not unblock the door or re-pulse it
 w in2 wet.1
 w in3 wet.2
 c block or

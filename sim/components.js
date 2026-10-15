@@ -278,7 +278,13 @@
 
   def('color', 'colorcomponent', 'ColorComponent', { UseHSV: 'false' }, ['signal_r', 'signal_g', 'signal_b', 'signal_a'], OUT, (c) => {
     c.r = [0, 0, 0, 0]; c.out = '0,0,0,0';
-    c.recv = (pin, s) => { const i = ['signal_r', 'signal_g', 'signal_b', 'signal_a'].indexOf(pin); if (i < 0) return; c.r[i] = parseF(s.v).v; c.out = c.r.map(fmtF).join(','); };
+    c.recv = (pin, s) => {
+      const i = ['signal_r', 'signal_g', 'signal_b', 'signal_a'].indexOf(pin); if (i < 0) return; c.r[i] = parseF(s.v).v;
+      if (bool(c.p.UseHSV)) { // hue 0-360, saturation and value 0-1 -> R,G,B 0-255; alpha passed through (approximation of ToolBox.HSVToRGB)
+        const h = ((c.r[0] % 360) + 360) % 360 / 60, sat = clamp(c.r[1], 0, 1), val = clamp(c.r[2], 0, 1), k = n => (n + h) % 6, ch = n => val - val * sat * Math.max(0, Math.min(k(n), 4 - k(n), 1));
+        c.out = [ch(5), ch(3), ch(1)].map(x => String(Math.round(x * 255))).concat(fmtF(c.r[3])).join(',');
+      } else c.out = c.r.map(fmtF).join(',');
+    };
     c.update = () => c.send('signal_out', c.out);
   });
 

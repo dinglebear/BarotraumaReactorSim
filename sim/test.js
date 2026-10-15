@@ -137,5 +137,10 @@ console.log('real-game checks passed');
   assert(sim.chat.some(c => /ALERT RED \| flood: Medbay/.test(c.text)), 'flood announcement');
   assert(lockedOpen === 0, 'lockdown keeps every door shut');
   assert(sim.o2Min > 80, 'oxygen stays above 80 %');
+  // nothing new sits inside a floor or wall (turrets and their periscope/loader excepted: they replace vanilla parts)
+  const doc = new SE.SubDoc(text), vanillaIds = new Set(new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8')).items.keys());
+  const inBoxes = new Set(); for (const n of doc.items.values()) if (n.children.some(c => c.tag === 'CircuitBox')) for (const c of n.children) if (c.tag === 'ItemContainer') for (const id of (c.attrs.find(a => a[0] === 'contained') || [0, ''])[1].split(/[,;]/)) inBoxes.add(id);
+  const stuck = [...doc.items.values()].filter(n => !vanillaIds.has(n.attrs.find(a => a[0] === 'ID')[1]) && !inBoxes.has(n.attrs.find(a => a[0] === 'ID')[1]) && !n.children.some(c => c.tag === 'Wire')).filter(n => !/gun|periscope|loader/.test(n.attrs.find(a => a[0] === 'identifier')[1]) && doc.freeSpot(n) !== null);
+  assert(stuck.length === 0, 'items inside floors or walls: ' + stuck.map(n => n.attrs.find(a => a[0] === 'identifier')[1]).join(', '));
   console.log('camel overkill passed');
 }

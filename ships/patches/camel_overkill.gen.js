@@ -47,9 +47,12 @@ say('wire @pb1.charge_% @humpP.signal_in1');
 say('wire @pb1.load_value_out @humpP.signal_in2');
 say('wire @tap.load_value_out @humpP.signal_in4');
 say('wire 477.charge_% @humpP.signal_in5');
-say('wire @humpP.signal_out4 477.set_rate');
-say('wire @humpP.signal_out8 531.set_rate');
-pbX.forEach((x, i) => { say(`wire @humpP.signal_out${[1, 5, 6, 7][i]} @pb${i + 1}.set_rate`); say(`wire @humpP.signal_out3 @pb${i + 1}.disable_output`); });
+say('box @humpR at -1010,230 from camel/camel_rates   # HUMP-P part 2: a circuit box holds at most 64 parts');
+say('wire @humpP.signal_out1 @humpR.signal_in1');
+say('wire @humpP.signal_out5 @humpR.signal_in2');
+say('wire @humpR.signal_out4 477.set_rate');
+say('wire @humpR.signal_out8 531.set_rate');
+pbX.forEach((x, i) => { say(`wire @humpR.signal_out${[1, 5, 6, 7][i]} @pb${i + 1}.set_rate`); say(`wire @humpP.signal_out3 @pb${i + 1}.disable_output`); });
 
 // ---------------------------------------------------------------- 2. REACTOR BRAIN (reactor room)
 say('\n# === 2. HUMP-1 REACTOR BRAIN: feed-forward control of the main bus (turn the reactor\'s automatic control OFF in game) ===');
@@ -105,10 +108,11 @@ for (const [hid, name] of ROOMS) {
 // ---------------------------------------------------------------- 5. ALERT CORE + CamelOS (bridge)
 say('\n# === 5. HUMP-3 ALERT CORE and HUMP-4 CamelOS (bridge) ===');
 say('box @hump3 at 680,110 from camel/camel_alert');
+say('box @lightshow at 640,110 from camel/camel_lightshow   # wifi only: alert colour 7305 (or a rainbow) -> lights 7303');
 say('unwire 693.signal_out 692.toggle      # the siren button becomes the ALERT ACK (mute 60 s)');
 say('wire 693.signal_out @hump3.signal_in1');
 say('wire @hump3.signal_out1 692.set_state');
-say('add @chatA wificomponent at 660,70 WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=true WifiComponent.MinChatMessageInterval=5');
+say('add @chatA wificomponent at 660,70 WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=true WifiComponent.MinChatMessageInterval=20');
 say('wire @hump3.signal_out2 @chatA.signal_in');
 say('add @mood textdisplay at 740,250 ItemLabel.Text="(^_^) content camel"');
 say('wire @hump3.signal_out3 @mood.set_text');

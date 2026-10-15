@@ -222,6 +222,8 @@ const COMMANDS = {
       const out = a.o || a.out || path.join(ROOT, 'ships/custom', (doc.name() || 'edited').replace(/[^\w-]+/g, '_') + '.sub');
       fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, zlib.gzipSync(Buffer.from(doc.text(), 'utf8')));
       console.log(doc.log.join('\n')); console.log(`saved ${rel(out)} (${doc.items.size} items; loader checks ok)`);
+      const modDir = path.join(path.dirname(out), doc.name() || ''); // a ready mod folder next to it (ships/custom/<Sub Name>/) gets the new file too
+      if (doc.name() && fs.existsSync(path.join(modDir, 'filelist.xml'))) { fs.copyFileSync(out, path.join(modDir, path.basename(out))); console.log(`updated mod folder ${rel(modDir)}`); }
       return;
     }
     throw new Error('sub list|patch|check');

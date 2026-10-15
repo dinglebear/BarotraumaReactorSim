@@ -28,6 +28,7 @@ Exact code is in `reference/BAROTRAUMA_MECHANICS.md` §3–6.
   - Update-driven parts add 0–1 tick each: and/or/xor, arithmetic, concat, equals/greater, memory, regex, color, oscillator, delay.
   - A chain of 10 arithmetic parts is ~10 ticks of latency. **Feedback loops through many Update parts must have low gain, or they oscillate** (Camel lesson below).
   - Power changes show up 1 tick later.
+- **Box size:** a circuit box holds at most **64 components**.
 - **Wire limits:** a connection takes 5 wires when wiring by hand; loading accepts more. To fan a signal out to more than 5 places, use a **relay as a wire hub**: `IsOn=true`, the same source into `signal_in1` and `signal_in2`, giving 5 + 5 outputs. Inside circuit boxes the 5-wire limit does not seem to apply (HuskOS has 7).
 
 **Memory, timers, regex, signal check:**
@@ -174,6 +175,8 @@ Name: recipe. The source is in brackets: H = HuskOS, T = Toolkit, L = LHMRS, I =
   - Keep gains low, or compute open-loop from measured values.
 - **Rate rounding:** 10 % battery steps on a light bus cause ±10 % voltage ripple. Use thermometer coding.
 - **The 1000 kW relay limit:** the stock relay's MaxPower is exactly the oxygen generator's draw. Raise MaxPower on relays that carry big loads (the charge tap is set to 4000).
+- **Circuit boxes hold 64 components (found in game):** two Camel boxes had 68 and 84, and everything past 64 was lost, including the parts that set the battery rates, so the main bus browned out at 0.4 V. Plan boxes at 64 or fewer; the editor and `check` now enforce it.
+- **Placed items must be attached (found in game):** a wifi template saved loose made 42 wifi components fall to the floor. The editor now sets `Attached=True` on every placed item.
 - **Empty values in patch files:** `Key=""` must give an empty value, not a quote character. A stray `"` made every dry water sensor read as flooded. Fixed in the patch parser; tested.
 
 ## 5. Checklist before calling a sub design done

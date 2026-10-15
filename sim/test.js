@@ -116,3 +116,26 @@ console.log('real-game checks passed');
   assert(b, 'new button is not wired');
   console.log('sub editor passed');
 }
+
+// Camel Overkill (ships/custom): every Camel circuit parses; the patched sub passes the loader checks; in a practice
+// round the power manager keeps the main bus clean, CamelOS answers on the terminal and on radio chat, lockdown seals
+// the doors and a flood is announced.
+{
+  const zlib = require('zlib'), SF = require('./subfile'), SH = require('./ship'), F = require('./format'), SE = require('./subedit');
+  for (const f of fs.readdirSync(path.join(ROOT, 'circuits/camel'))) F.parseCirc(fs.readFileSync(path.join(ROOT, 'circuits/camel', f), 'utf8'));
+  const text = zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/custom/Camel_Overkill.sub'))).toString('utf8');
+  assert(new SE.SubDoc(text).check().length === 0, 'Camel Overkill loader checks');
+  const ship = SF.parseSub(text);
+  const sim = new SH.ShipSim(ship, { duration: 240, scenario: { breachAt: 150, breachHull: '133', type: [{ t: 30, text: 'status' }, { t: 60, text: 'lockdown' }, { t: 90, text: 'unlock' }], radio: [{ t: 40, text: 'camel whoami' }] } });
+  const doors = [870, 1097, 1103, 1109, 1115, 816, 851, 905, 914].map(i => sim.byId.get(String(i)));
+  let lockedOpen = 0;
+  while (!sim.done) { sim.step(); if (sim.time > 61 && sim.time < 89) lockedOpen += doors.filter(d => d.state.open).length; }
+  const r = sim.metrics.report ? sim.metrics.report() : null;
+  assert(!sim.reactor.autoTemp, 'Camel Overkill: its own circuit runs the reactor');
+  assert(sim.termLog.some(l => l.dir === '<' && /^PWR \d+kW LOAD/.test(l.text)), 'CamelOS status answer');
+  assert(sim.chat.some(c => /You are cargo/.test(c.text)), 'CamelOS radio answer');
+  assert(sim.chat.some(c => /ALERT RED \| flood: Medbay/.test(c.text)), 'flood announcement');
+  assert(lockedOpen === 0, 'lockdown keeps every door shut');
+  assert(sim.o2Min > 80, 'oxygen stays above 80 %');
+  console.log('camel overkill passed');
+}

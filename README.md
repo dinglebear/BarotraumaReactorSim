@@ -48,7 +48,18 @@ node sim/cli.js check <circuit>                      # syntax/wiring check
 node sim/test.js                                     # simulator + Blueprints-format tests
 node sim/build_web.js                                # rebuild the bench after adding circuits or test files
 ```
-Circuits written as `.circ` export to Blueprints `.txt` on a single-profile `run`. To rewire a whole sub (doors, lights, relays, embedded circuit boxes), see [`SUBEDIT.md`](SUBEDIT.md): `node sim/cli.js sub list|patch|check`. [`context/reactor_circuits/STUDY.md`](context/reactor_circuits/STUDY.md) benchmarks the community circuits to beat.
+Circuits written as `.circ` export to Blueprints `.txt` on a single-profile `run`. To rewire a whole sub (doors, lights, relays, embedded circuit boxes), see [`SUBEDIT.md`](SUBEDIT.md) (`node sim/cli.js sub list|patch|check`) and the pattern library [`CIRCUIT_PATTERNS.md`](CIRCUIT_PATTERNS.md). `node sim/cli.js explain <file.sub|assembly.xml>` turns any sub or community item assembly into a readable netlist. [`context/reactor_circuits/STUDY.md`](context/reactor_circuits/STUDY.md) benchmarks the community circuits to beat.
+
+## Camel Overkill
+A comedically over-engineered Camel, rewired entirely by Claude with these tools. It has:
+- a battery-only propulsion bus and surplus-only charging;
+- an oxygen generator that only runs when needed;
+- a sensor network with alert lighting, siren, mood display and radio announcements;
+- smart doors with flood interlock and lockdown;
+- CamelOS, a terminal OS that also takes commands from radio chat (`camel status`);
+- a second chaingun.
+
+See [`ships/CAMEL_OVERKILL.md`](ships/CAMEL_OVERKILL.md) for what each part does and how to test it in game. The sub is `ships/custom/Camel_Overkill.sub` (a ready mod folder is `ships/custom/Camel Overkill/`).
 
 ## Folders
 | Folder | Contents |
@@ -57,7 +68,8 @@ Circuits written as `.circ` export to Blueprints `.txt` on a single-profile `run
 | `context/reactor_circuits/` | community reactor circuits (Blueprints `.txt`, optional `.pins`) and their study |
 | `context/blueprints_mod/`, `context/community_circuits/` | Blueprints mod scripts and example circuits (format reference) |
 | `load_profiles/` | test files: recorded rounds (`*_roundNNN*.csv`) and synthetic ones (`synthetic_*`, from `sim/make_profiles.js`) |
-| `ships/` | vanilla subs used by the mock (`vanilla/`), sub patches (`patches/`) and patched subs (`custom/`) |
+| `ships/` | vanilla subs used by the mock (`vanilla/`), sub patches (`patches/`), patched subs (`custom/`) and vanilla item templates for the sub editor (`templates/`) |
+| `context/circuit_studies/` | study notes on community smart-sub circuits (HuskOS, Smart Sub Toolkit, LHMRS/DMFSS, the Iroh, MK-II doors) |
 | `mod/ReactorPowerLogger/` | the client-side logging mod |
 | `reference/BAROTRAUMA_MECHANICS.md` | game mechanics, from the game source |
 | `sim/` | simulator: engine, components, formats, CLI, pin finder, web build |

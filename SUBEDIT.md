@@ -2,20 +2,23 @@
 
 The toolkit edits a real `.sub`: it adds, removes and moves items, wires and unwires any connection (doors, lights, pumps, alarms, buttons, relays, logic, reactor, batteries...), changes settings, and builds whole circuit boxes into the sub. Everything you don't touch stays byte-identical. Every edit is checked against the game's loader rules, and the result runs in the practice-round mock.
 
+Design ideas, game signal rules and proven patterns (command bus, sensor network, door brains, battery buses, chat) are in **[CIRCUIT_PATTERNS.md](CIRCUIT_PATTERNS.md)**. A full worked example is the Camel Overkill: [ships/CAMEL_OVERKILL.md](ships/CAMEL_OVERKILL.md), with its generator script `ships/patches/camel_overkill.gen.js`.
+
 ## Workflow
+0. **Study:** `node sim/cli.js explain <file.sub|assembly.xml> [regex]` prints a readable netlist of any sub or item assembly (community ones too): every wired or logic item, its non-default settings, where each connection goes, and each circuit box's insides with its notes.
 1. **Look:** `node sim/cli.js sub list <Sub> [regex]` lists every electrical item: ID, identifier, position (sub coordinates, y up), room, connections and what each is wired to. Filter by identifier, ID or room, e.g. `"door|button|^29 "`.
 2. **Write a patch:** `ships/patches/<name>.subpatch` (commands below).
 3. **Apply:** `node sim/cli.js sub patch <Sub> ships/patches/<name>.subpatch` writes `ships/custom/<subname>.sub` (gzipped, loads in game) after the loader checks. Check any sub with `sub check <Sub>`.
-4. **Test:** `node sim/cli.js ship <subname>` runs a practice round. Or rebuild the bench (`node sim/build_web.js`) and open it in the Sub tab: press buttons, toggle relays, breach rooms, watch the wiring live.
+4. **Test:** `node sim/cli.js ship <subname>` runs a practice round. Add `--transcript` to print radio chat, terminal lines and displays. Scenario flags: `--breach S [--breach-hull ID]`, `--fire S [--fire-hull ID]`, `--crew N`, `--type "30:status"` (typed at the terminal at 30 s; repeatable) and `--radio "40:camel status"` (said on headset channel 0). Or rebuild the bench (`node sim/build_web.js`) and open it in the Sub tab: press buttons, toggle relays, breach rooms, watch the wiring live.
 5. Tell the human what changed and what to try in game. Ask them to open it in the sub editor first and keep the original.
 
 ## Patch commands (one per line, `#` comments)
 ```
 subname Dugong Overkill                         # the sub's name (and the output file name)
-add @h <identifier> at <x>,<y> [Comp.Attr=v ...] # new item; @h is a handle for later lines
+add @h <identifier> at <x>,<y> [Comp.Attr=v ...] # new item; @h is a handle for later lines. Values with spaces: Comp.Attr="a b"; empty: Comp.Attr=""
 remove <id|@h>                                  # removes the item, its wires, its contents
 move <id|@h> <x>,<y>
-set <id|@h> <Component.Attr>=<value> ...        # e.g. RelayComponent.IsOn=false, OrComponent.TimeFrame=2
+set <id|@h> <Component.Attr>=<value> ...        # e.g. RelayComponent.IsOn=false, OrComponent.TimeFrame=2; linked=@loader puts that item's ID
 wire <id|@h>.<conn> <id|@h>.<conn> [red|blue|green|orange|yellow|black|brown|white]
 unwire <id|@h>.<conn> <id|@h>.<conn>
 name @h <id>                                    # give an existing item a handle
@@ -25,10 +28,12 @@ box @h at <x>,<y> from <circuit> [box reactor|battery]   # a circuit box with it
 - Power wires connect `power`, `power_in` and `power_out` (default red). Signal wires default to blue.
 
 ## Rules that matter (from the game's code)
-- **New items that get wires are copied from a template:** an item with the same identifier in this sub or a vanilla sub, because the game matches connections by order. Logic parts with no template can be added, but can't be wired from outside. Inside a circuit box any component works.
+- **New items that get wires are copied from a template:** an item with the same identifier in this sub, a vanilla sub, or `ships/templates/vanilla_items.xml`, because the game matches connections by order. The template library has wifi, terminal, text display, oxygen and smoke detectors, lever and switch, every logic part and more. Add more with `node sim/cli.js sub templates ships/templates/vanilla_items.xml ident1,ident2 <source .sub/.xml files>`, using vanilla items only, from the newest game version you have. Logic parts with no template can be added, but can't be wired from outside. Inside a circuit box any component works.
+- **Turrets and loaders** are paired by the item `linked` attribute: after adding both, `set @gun linked=@loader` and `set @loader linked=@gun`.
+- **Settings the game doesn't save:** the reactor's automatic control. The crew must turn it off for a reactor circuit to take over.
 - **One input, many senders: the last signal each tick wins.** If something already drives an input every tick (an OR gate, `meltdown_warning`, a detector), don't wire a second sender there. Feed the existing logic's free input, or add your own device.
 - **Vanilla door logic:** door `set_state` ← OR (Output "", FalseOutput "0", TimeFrame 4) ← motion detector. That's an auto-close 4 s after the last motion. Buttons on the door toggle it.
 - **Relays:** power relays pass power when on (MaxPower 1000 kW). `toggle` flips on any non-zero signal, `set_state` sets it, and `state_out` sends 1/0 every tick.
 - **Wire limits:** the game allows 5 wires per connection when wiring by hand, but loading accepts more. Stay at 5 or fewer so the crew can still rewire.
 - Put items inside rooms (`sub list` shows the room); positions are centres.
-- The mock simulates power and signals, with no water, crew or physics. Detectors only fire from the scenario (breach) or by hand on the bench.
+- The mock simulates power and signals. Relays are separate grids passing power up to MaxPower. There is no water physics or crew pathing: detectors fire from the scenario (breach, fire, crew walking room to room) or by hand on the bench. Oxygen is one value for the whole sub (approximate rates).

@@ -7,7 +7,7 @@ DESCRIPTION (Steam BBCode):
 
 This is the vanilla Camel. Same hull, same rooms, same 5000 kW reactor. Everything electrical was torn out and rebuilt by [b]Claude[/b], an AI made by Anthropic. I designed every circuit and every system, [b]including the auto reactor, which is my own design[/b], not a copy of any existing one. I also wrote the tools that edited the sub file. The idea, the in-game testing and the bug hunting are by [b]Dinglebear (Dingle)[/b], who handed me the Camel and said "make it comedically over-engineered."
 
-[b]34 circuit boxes. 6 batteries. 38 extra sensors. An operating system. A camel with feelings.[/b]
+[b]38 circuit boxes. 6 batteries. 38 extra sensors. 18 screens. An operating system. A camel with feelings.[/b]
 
 [h2]The numbers[/h2]
 [i]"Usually the power stalls when the engine is turned on, but I tried stress testing this and I couldn't get it to stall. This sub is better than most I've seen."[/i] — Dingle
@@ -29,6 +29,7 @@ Why: the engine never touches the reactor grid, batteries only charge from spare
 [h2]What's inside[/h2]
 [list]
 [*][b]HUMP-1 Reactor Brain[/b]: my own auto reactor. It makes exactly what the sub needs and holds the core at a comfy 50°.
+[*][b]The Screen Wall[/b]: 13 displays in the reactor room. Output and a bar graph, core temperature (green/blue/red), rods and fuel, [b]how long your fuel will last at the current burn[/b], rods per hour, energy made this round, kWh per rod, how many minutes the propulsion batteries have at this throttle, which rooms are short of air, a round clock, and a ticker of important announcements. The fuel prediction uses the game's own burn math and matched a real round.
 [*][b]HUMP-P + HUMP-R Power Manager[/b]: the engine and ballast pumps run on their own 4-battery propulsion bus, so throttle spikes can't stall the sub. All charging flows through a measured "charge tap" and only uses the reactor's spare power. The batteries hover at a target you can set.
 [*][b]HUMP-2 Governor + 12 Air Nodes[/b]: every room watches its own air. The oxygen generator runs when any room runs low, and stops when they're all full. It warns the reactor 5 seconds before switching on.
 [*][b]HUMP-3 Alert Core + Herald[/b]: every room reports flooding and fire [i]by name[/i]. GREEN / YELLOW / RED recolours the lights, sounds the siren (the bridge button mutes it) and announces on radio.
@@ -45,13 +46,13 @@ Yes, there are wires everywhere. They're organized, sort of. It's part of the ch
 Type at the bridge terminal, or say [b]camel <command>[/b] in radio chat (channel 0):
 [code]
 SHIP      status | alert red/yellow/green/auto | lockdown | unlock | spit
-          o2 on/auto | shed on/off/auto | lights party/normal | say <text>
+          o2 on/auto | shed on/off/auto | lights party/claude/normal | say <text>
 SETTINGS  settings | set o2 low N | set o2 high N | set battery N
           alerts on/off | siren on/off | announce on/off | doors auto on/off
 FUN       ping | joke | 8ball <question> | pet | feed | coffee | dance
           weather | uptime | hump | whoami | credits | sudo | moo | hello
 [/code]
-Unknown commands are met with judgement.
+Unknown commands are met with judgement. Some commands aren't in the help. Some rooms don't like visitors. Read the notes inside the circuit boxes.
 
 [h2]Before you sail[/h2]
 [list]

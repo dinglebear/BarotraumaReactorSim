@@ -174,6 +174,7 @@ const COMMANDS = {
   // sub list <sub> [filter]           items with ID, position, room and every connection (what it is wired to)
   // sub patch <sub> <patch> [-o out]  apply an edit script (SUBEDIT.md), check it, save ships/custom/<name>.sub
   // sub check <sub>                   loader checks (IDs, wires, links)
+  // sub catalog <sub> [regex]          structures (walls/shells/backgrounds/deco) and items you can place, with sizes
   // sub audit <sub> [--base <sub>]     everything that broke in game before: box size, loose items, items in walls, moved originals
   sub(a) {
     const zlib = require('zlib'), SE = require('./subedit'), SF = require('./subfile');
@@ -212,6 +213,16 @@ const COMMANDS = {
       fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, '<?xml version="1.0" encoding="utf-8"?>\n' + X.serialize(root)); console.log(`wrote ${items.length} templates to ${out}`); return;
     }
     const doc = new SE.SubDoc(text, templates);
+    if (what === 'catalog') { // sub catalog [regex]: every structure and item available to copy (this sub + templates), with typical size
+      const X = require('./subxml'), seen = new Map(), re = arg ? new RegExp(arg, 'i') : null;
+      for (const d of [doc, ...templates]) for (const n of d.sub.children) {
+        if (n.tag !== 'Structure' && n.tag !== 'Item') continue; const idf = X.get(n, 'identifier'); if (!idf || /wire$/.test(idf)) continue;
+        const key = n.tag + ':' + idf; if (seen.has(key)) { seen.get(key).n++; continue; }
+        const r = (X.get(n, 'rect') || '0,0,0,0').split(',').map(Number); seen.set(key, { tag: n.tag, idf, name: X.get(n, 'name') || '', w: r[2], h: r[3], n: 1, solid: n.tag === 'Structure' && SF.SOLID.test(X.get(n, 'name') || '') });
+      }
+      for (const e of [...seen.values()].sort((a, b) => a.tag.localeCompare(b.tag) || a.idf.localeCompare(b.idf))) if (!re || re.test(e.idf) || re.test(e.name)) console.log(`${e.tag === 'Structure' ? (e.solid ? 'WALL ' : 'DECO ') : 'ITEM '} ${e.idf.padEnd(28)} ${(e.name || '').padEnd(34)} ${e.w}x${e.h}  (x${e.n})`);
+      return;
+    }
     if (what === 'check') { const p = doc.check(); console.log(p.length ? p.join('\n') : 'ok: no loader problems'); return; }
     if (what === 'audit') { // sub audit <sub> [--base Camel]: loader checks, box size, loose items, items in walls, moved originals, >5 wires
       const bf = a.base ? find(a.base) : null, base = bf ? new SE.SubDoc(readSub(bf)) : null;

@@ -44,7 +44,7 @@
       r = String(r);
       const id = r.startsWith('@') ? this.handles[r.slice(1)] : r;
       if (!id) throw new Error(`unknown handle ${r}`);
-      const n = this.items.get(String(id)); if (!n) throw new Error(`no item with ID ${id}`);
+      const n = this.items.get(String(id)) || this.elById(id); if (!n) throw new Error(`no item with ID ${id}`);
       return n;
     }
     comp(n, name) { return n.children.find(c => c.tag === name); }
@@ -60,6 +60,44 @@
       for (const d of [this, ...this.templates]) for (const n of d.items.values()) if (X.get(n, 'identifier') === identifier) { if (this.panel(n) || /wire$/.test(identifier)) return n; loose = loose || n; }
       return loose;
     }
+    // ---------- sub structure: rooms (hulls), walls/shells (structures), gaps, waypoints ----------
+    // Rects are x (left), y (TOP, y up), w, h, like the game's. These are what a sub built from scratch is made of.
+    templateEl(tag, identifier) {
+      for (const d of [this, ...this.templates]) for (const n of d.sub.children) if (n.tag === tag && (!identifier || X.get(n, 'identifier') === identifier)) return n;
+      return null;
+    }
+    elById(id) { return this.sub.children.find(n => X.get(n, 'ID') === String(id)); }
+    addRaw(n, handle) { const id = this.newId(); X.set(n, 'ID', id); this.sub.children.push(n); if (n.tag === 'Item') this.items.set(id, n); if (handle) this.handles[handle] = id; this._solids = this._hulls = null; return id; }
+    addHull(x, top, w, h, props, handle) { // Oxygen = full (volume = w x h)
+      const t = this.templateEl('Hull'); const n = t ? X.clone(t) : X.el('Hull', {});
+      n.children = []; X.set(n, 'rect', `${Math.round(x)},${Math.round(top)},${Math.round(w)},${Math.round(h)}`); X.set(n, 'water', '0'); X.set(n, 'Oxygen', String(Math.round(w * h))); X.del(n, 'linked');
+      for (const [k, v] of Object.entries(props || {})) X.set(n, k, v);
+      const id = this.addRaw(n, handle); this.log.push(`hull #${id} ${x},${top} ${w}x${h}${props && props.RoomName ? ' ' + props.RoomName : ''}`); return id;
+    }
+    addStructure(identifier, x, top, w, h, props, handle) { // walls, shells, backgrounds, platforms (resizable)
+      const t = this.templateEl('Structure', identifier); if (!t) throw new Error(`no structure template "${identifier}" (in this sub or the template subs)`);
+      const n = X.clone(t); X.set(n, 'rect', `${Math.round(x)},${Math.round(top)},${Math.round(w)},${Math.round(h)}`); X.del(n, 'flippedx'); X.del(n, 'flippedy');
+      n.children = n.children.filter(c => c.tag !== 'Upgrade');
+      for (const [k, v] of Object.entries(props || {})) X.set(n, k, v);
+      const id = this.addRaw(n, handle); return id;
+    }
+    addGap(x, top, w, h, horizontal, handle) { // horizontal=true: water/air flows sideways (a door in a vertical wall)
+      const t = this.templateEl('Gap'); const n = t ? X.clone(t) : X.el('Gap', {});
+      n.children = []; X.set(n, 'rect', `${Math.round(x)},${Math.round(top)},${Math.round(w)},${Math.round(h)}`); X.set(n, 'horizontal', horizontal ? 'true' : 'false');
+      return this.addRaw(n, handle);
+    }
+    addWaypoint(x, y, opts, handle) { // opts: { spawn: 'Path'|'Human'|'Cargo'|'Enemy', job, ladders, gap }
+      opts = opts || {};
+      const n = X.el('WayPoint', { ID: '0', x: Math.round(x), y: Math.round(y), spawn: opts.spawn || 'Path' });
+      if (opts.job) X.set(n, 'job', opts.job); if (opts.ladders) X.set(n, 'ladders', opts.ladders); if (opts.gap) X.set(n, 'gap', opts.gap);
+      return this.addRaw(n, handle);
+    }
+    linkWaypoints(a, b) { // linkedto0, linkedto1... on both ends
+      const A = this.elById(a), B = this.elById(b);
+      const addTo = (n, id) => { const ks = n.attrs.filter(x => /^linkedto\d+$/.test(x[0])); if (ks.some(x => x[1] === String(id))) return; X.set(n, 'linkedto' + ks.length, String(id)); };
+      addTo(A, b); addTo(B, a);
+    }
+
     // ---------- placement: keep new fittings out of floors, ceilings and walls ----------
     // Solid structure = the sub's real walls (shell, inside walls and caps, platforms, bow, stairs); "Back Wall" and
     // background/deco pieces are only scenery. A room (hull) rectangle includes the thickness of its floor and ceiling,
@@ -71,7 +109,7 @@
     hulls() { if (!this._hulls) this._hulls = this.sub.children.filter(n => n.tag === 'Hull').map(n => { const r = rectOf(n); return { x0: r[0], x1: r[0] + r[2], y1: r[1], y0: r[1] - r[3] }; }); return this._hulls; }
     freeSpot(n) {
       const r = rectOf(n), w = r[2], h = r[3], cx = r[0] + w / 2, cy = r[1] - h / 2;
-      const box = (x, y) => ({ x0: x - w / 2, x1: x + w / 2, y0: y - h / 2, y1: y + h / 2 });
+      const box = (x, y) => ({ x0: x - w / 2 - 2, x1: x + w / 2 + 2, y0: y - h / 2 - 2, y1: y + h / 2 + 2 }); // 2 px margin: rects are rounded when written
       const hit = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
       const ok = b => !this.solids().some(s => hit(b, s));
       const inside = this.hulls().some(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1);
@@ -83,13 +121,13 @@
       cands.sort((a, b) => a[2] - b[2]);
       for (const [dx, dy] of cands) {
         const b = box(cx + dx, cy + dy);
-        if (home && !(b.x0 >= home.x0 && b.x1 <= home.x1 && b.y0 >= home.y0 && b.y1 <= home.y1)) continue;
+        if (home && !(b.x0 + 2 >= home.x0 && b.x1 - 2 <= home.x1 && b.y0 + 2 >= home.y0 && b.y1 - 2 <= home.y1)) continue;
         if (ok(b)) return [Math.round(cx + dx), Math.round(cy + dy)];
       }
       return null;
     }
     nudge(n) {
-      if (/gun|periscope|loader|hardpoint|turret|coil|laser|cannon|depthcharge|engine|reactor|dockinghatch|door|hatch/i.test(X.get(n, 'identifier'))) return; // mounted through the hull or part of it
+      if (/gun|periscope|loader|hardpoint|turret|coil|laser|cannon|depthcharge|engine|reactor|dockinghatch|dockingport|door|hatch|ladder/i.test(X.get(n, 'identifier'))) return; // mounted through the hull or part of it
       const p = this.freeSpot(n); if (!p) return;
       const r = rectOf(n); X.set(n, 'rect', `${Math.round(p[0] - r[2] / 2)},${Math.round(p[1] + r[3] / 2)},${r[2]},${r[3]}`);
       this.log.push(`  moved ${X.get(n, 'identifier')} #${X.get(n, 'ID')} to ${p[0]},${p[1]} (it was inside a floor or wall)`);
@@ -147,7 +185,9 @@
       return id;
     }
     remove(r) {
-      const n = this.ref(r), id = X.get(n, 'ID'), p = this.panel(n);
+      const n = this.ref(r), id = X.get(n, 'ID');
+      if (n.tag !== 'Item') { this.sub.children = this.sub.children.filter(c => c !== n); this._solids = this._hulls = null; this.log.push(`remove ${n.tag} #${id}`); return; }
+      const p = this.panel(n);
       if (p) for (const c of p.children) for (const l of X.kids(c, 'link')) this.removeWire(X.get(l, 'w'));
       for (const c of n.children) if (c.tag === 'ItemContainer') for (const slot of (X.get(c, 'contained') || '').split(',')) for (const cid of slot.split(';').filter(Boolean)) { const ci = this.items.get(cid); if (ci) { this.sub.children = this.sub.children.filter(x => x !== ci); this.items.delete(cid); } }
       for (const o of this.items.values()) for (const c of o.children) if (c.tag === 'ItemContainer') { const v = X.get(c, 'contained'); if (v && v.split(/[,;]/).includes(id)) X.set(c, 'contained', v.split(',').map(s => s.split(';').filter(x => x !== id).join(';')).join(',')); }
@@ -253,7 +293,7 @@
         if (inBox.has(id) || inCont.has(id) || this.comp(n, 'Wire')) continue;
         const h = this.comp(n, 'Holdable');
         if (h && X.get(h, 'Attached') !== 'True' && !baseIds.has(id)) add('error', `${tag(n)} is not attached: it will fall to the floor`);
-        if (!baseIds.has(id) && this.freeSpot(n) && !/gun|periscope|loader|hardpoint|turret|coil|laser|cannon|depthcharge|engine|reactor|door|hatch/i.test(idf)) add('warn', `${tag(n)} sits inside a floor or wall`);
+        if (!baseIds.has(id) && this.freeSpot(n) && !/gun|periscope|loader|hardpoint|turret|coil|laser|cannon|depthcharge|engine|reactor|door|hatch|ladder|dockingport/i.test(idf)) add('warn', `${tag(n)} sits inside a floor or wall`);
         const r = rectOf(n), cx = r[0] + r[2] / 2, cy = r[1] - r[3] / 2;
         if (!baseIds.has(id) && !this.hulls().some(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1) && !/gun|turret|coil|laser|cannon|depthcharge|light/i.test(idf)) add('warn', `${tag(n)} is outside every room`);
         const p = this.panel(n); if (p) for (const c of p.children) { const k = X.kids(c, 'link').length; if (k > 5) add('info', `${tag(n)}.${X.get(c, 'name')} has ${k} wires (more than 5: loads fine, can't add more by hand)`); }
@@ -292,7 +332,19 @@
             this.box(h, x, y, JSON.parse(JSON.stringify(bm)));
           }
           else if (cmd === 'subname') X.set(this.sub, 'name', t.slice(1).join(' '));
-          else throw new Error(`unknown command "${t[0]}" (wire, unwire, add, remove, move, set, name, box, subname)`);
+          // structure editing: hull @h x,top,w,h [RoomName=..]  |  structure @h <identifier> x,top,w,h [SpriteColor=..]
+          //                    gap @h x,top,w,h horizontal|vertical  |  waypoint @h x,y [spawn=Human job=engineer gap=@g ladders=@l]  |  wplink @a @b
+          else if (cmd === 'hull' || cmd === 'structure' || cmd === 'gap' || cmd === 'waypoint' || cmd === 'wplink') {
+            const h = t[1] && t[1].startsWith('@') ? t[1].slice(1) : null, rest = h ? t.slice(2) : t.slice(1);
+            const kv = {}; for (const x of rest) { const j = x.indexOf('='); if (j > 0) kv[x.slice(0, j)] = /^@\w+$/.test(x.slice(j + 1)) ? X.get(this.ref(x.slice(j + 1)), 'ID') : x.slice(j + 1); }
+            const nums = rest.find(x => /^-?[\d.]+(,-?[\d.]+)+$/.test(x)); const r = nums ? nums.split(',').map(Number) : [];
+            if (cmd === 'hull') this.addHull(r[0], r[1], r[2], r[3], kv, h);
+            else if (cmd === 'structure') this.addStructure(rest[0], r[0], r[1], r[2], r[3], kv, h);
+            else if (cmd === 'gap') this.addGap(r[0], r[1], r[2], r[3], rest.includes('horizontal'), h);
+            else if (cmd === 'waypoint') this.addWaypoint(r[0], r[1], kv, h);
+            else this.linkWaypoints(X.get(this.ref(t[1]), 'ID'), X.get(this.ref(t[2]), 'ID'));
+          }
+          else throw new Error(`unknown command "${t[0]}" (wire, unwire, add, remove, move, set, name, box, subname, hull, structure, gap, waypoint, wplink)`);
         } catch (e) { throw new Error(`line ${i + 1}: ${e.message}\n  ${raw.trim()}`); }
       });
       X.set(this.sub, 'checkval', String(Math.floor(Math.random() * 2147483647))); // the game writes a new one on every save

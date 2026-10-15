@@ -148,3 +148,19 @@ console.log('real-game checks passed');
   assert(au.length === 0, 'Camel Overkill audit: ' + au.map(x => x.msg).join('; '));
   console.log('camel overkill passed');
 }
+
+// a sub built from scratch (sim/subbuild.js): loader checks, audit, and it runs: the reactor circuit holds the load
+{
+  const { execFileSync } = require('child_process');
+  execFileSync('node', [path.join(ROOT, 'ships/scratch/capsule.gen.js')]);
+  const zlib = require('zlib'), SE = require('./subedit'), SF = require('./subfile'), SH = require('./ship');
+  const text = zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/custom/Claudes_Test_Capsule.sub'))).toString('utf8');
+  const doc = new SE.SubDoc(text);
+  assert(doc.check().length === 0, 'capsule loader checks: ' + doc.check().join('; '));
+  assert(doc.audit(null).filter(x => x.level !== 'info').length === 0, 'capsule audit');
+  const ship = SF.parseSub(text);
+  assert(ship.hulls.length === 6 && ship.gaps.length === 4 && ship.waypoints.length > 30, 'capsule rooms, gaps, waypoints');
+  const sim = new SH.ShipSim(ship, { duration: 120, scenario: { fights: false } }); const r = sim.runToEnd();
+  assert(r.unmet_pct < 2, 'capsule power: unmet ' + r.unmet_pct);
+  console.log('scratch build passed');
+}

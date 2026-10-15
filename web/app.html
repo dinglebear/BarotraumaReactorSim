@@ -82,16 +82,20 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
 .filecard pre { margin: 0; max-height: 160px; overflow: auto; font: 11px/1.4 var(--f-mono); color: var(--muted); white-space: pre; background: var(--sunk); padding: 8px; border-radius: 4px }
 .clock { font: 500 15px var(--f-mono); font-variant-numeric: tabular-nums; min-width: 9ch }
 /* circuit box view / editor */
+.tabpane.expanded { position: fixed; inset: 0; z-index: 50; background: var(--bg); padding: 10px max(10px, env(safe-area-inset-right, 0px)) 10px max(10px, env(safe-area-inset-left, 0px)); overflow: auto }
+.tabpane.expanded .edwrap { height: calc(100vh - 80px) }
+.tabpane.expanded .insp { max-height: calc(100vh - 80px) }
+body.noscroll { overflow: hidden }
 .edbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
 .edbar select { width: auto; max-width: 220px }
 .edgrid { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 10px; min-width: 0 }
 @media (max-width: 760px) { .edgrid { grid-template-columns: minmax(0, 1fr) } }
-.edwrap { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--sunk); height: 620px; overflow: hidden; touch-action: none }
+.edwrap { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--sunk); height: clamp(560px, 72vh, 1000px); overflow: hidden; touch-action: none }
 .edwrap svg { width: 100%; height: 100%; display: block; cursor: grab; user-select: none }
 .edwrap svg.panning { cursor: grabbing }
 .edwrap .zoom { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px }
 .edwrap .zoom button { padding: 3px 9px; font-family: var(--f-mono) }
-.insp { border: 1px solid var(--line); border-radius: 4px; padding: 10px; display: grid; gap: 8px; align-content: start; font-size: 13px; min-width: 0; max-height: 620px; overflow: auto }
+.insp { border: 1px solid var(--line); border-radius: 4px; padding: 10px; display: grid; gap: 8px; align-content: start; font-size: 13px; min-width: 0; max-height: clamp(560px, 72vh, 1000px); overflow: auto }
 .insp h3 { font: 600 14px var(--f-display) }
 .insp label { display: grid; gap: 3px; font-size: 12px; color: var(--muted) }
 .insp .val { font: 12px var(--f-mono); background: var(--sunk); padding: 4px 6px; border-radius: 4px; word-break: break-all; color: var(--ink) }
@@ -183,6 +187,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
       <fieldset>
         <legend>Reactor circuit</legend>
         <select id="circSel" aria-label="Reactor circuit"></select>
+        <p class="hint" id="circDesc"></p>
         <label class="btn filebtn">Load .circ / .txt…<input type="file" id="circFile" accept=".circ,.txt" multiple></label>
         <p class="hint">For two in-game files, select both (<code>name_reactor.txt</code> and <code>name_battery.txt</code>). Build your own in the <b>Circuit box</b> tab.</p>
       </fieldset>
@@ -231,7 +236,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
           </div>
           <div class="edgrid">
             <div class="edwrap" id="edWrap"><svg id="edSvg" tabindex="0" aria-label="Circuit box diagram"></svg>
-              <div class="zoom"><button id="edZin" aria-label="Zoom in">+</button><button id="edZout" aria-label="Zoom out">−</button><button id="edFit">Fit</button></div></div>
+              <div class="zoom"><button class="expand" title="Fill the window (Esc to close)">Expand</button><button id="edZin" aria-label="Zoom in">+</button><button id="edZout" aria-label="Zoom out">−</button><button id="edFit">Fit</button></div></div>
             <div class="insp" id="edInsp"></div>
           </div>
         </div>
@@ -249,7 +254,7 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
           </div>
           <div class="edgrid">
             <div class="edwrap" id="svWrap"><svg id="svSvg" tabindex="0" aria-label="Submarine side view"></svg>
-              <div class="zoom"><button id="svZin" aria-label="Zoom in">+</button><button id="svZout" aria-label="Zoom out">−</button><button id="svFit">Fit</button></div></div>
+              <div class="zoom"><button class="expand" title="Fill the window (Esc to close)">Expand</button><button id="svZin" aria-label="Zoom in">+</button><button id="svZout" aria-label="Zoom out">−</button><button id="svFit">Fit</button></div></div>
             <div class="insp" id="svInsp"></div>
           </div>
         </div>
@@ -276,23 +281,37 @@ let profiles = Object.assign({}, LIB.profiles), circuits = Object.assign({}, LIB
 let sim = null, model = null, running = false, speed = '1', carry = 0, lastTs = 0, finished = false, report = null, lagging = false, profile = null;
 
 // ---------- settings ----------
+// grouped list: items [{value, label, group}] in the catalog's group order
+const CAT = LIB.catalog || { groups: [], circuits: {} };
+function fillGrouped(sel, items, value) {
+  sel.innerHTML = ''; const order = [...CAT.groups];
+  for (const it of items) if (it.group && !order.includes(it.group)) order.push(it.group);
+  const loose = items.filter(i => !i.group); for (const it of loose) { const o = document.createElement('option'); o.value = it.value; o.textContent = it.label; sel.appendChild(o); }
+  for (const g of order) {
+    const its = items.filter(i => i.group === g); if (!its.length) continue;
+    const og = document.createElement('optgroup'); og.label = g; for (const it of its) { const o = document.createElement('option'); o.value = it.value; o.textContent = it.label; og.appendChild(o); } sel.appendChild(og);
+  }
+  if (value && items.some(i => i.value === value)) sel.value = value;
+}
+function circMeta(k) { const c = CAT.circuits[k] || {}, e = circuits[k] || {}; if (k === 'my_circuit') return { title: 'My circuit (from the editor)', group: 'Edited', order: 1, desc: 'What you built or changed in the Circuit box tab.' }; return { title: c.title || k, group: c.group || (e.group === 'AI' ? 'New (AI-made)' : e.group) || 'Loaded', order: c.order || 99, desc: c.desc || '' }; }
+function circItems(filter) { return Object.keys(circuits).filter(filter || (() => true)).map(k => ({ value: k, label: circMeta(k).title, group: circMeta(k).group, order: circMeta(k).order })).sort((a, b) => a.order - b.order || a.label.localeCompare(b.label)); }
 function fillSelect(sel, entries, value) { sel.innerHTML = ''; for (const [v, label] of entries) { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); } if (value && entries.some(e => e[0] === value)) sel.value = value; }
 function refreshLists() {
   fillSelect($('profileSel'), Object.keys(profiles).sort().map(k => [k, k]), store.get('profile', null) || $('profileSel').value);
-  const groups = [['vanilla', 'Vanilla automatic control (baseline)']];
-  for (const k of Object.keys(circuits).sort()) groups.push([k, (circuits[k].group ? circuits[k].group + ': ' : '') + k]);
-  fillSelect($('circSel'), groups, store.get('circuit', null) || 'example_feedforward');
+  fillGrouped($('circSel'), [{ value: 'vanilla', label: 'Game\'s automatic control (baseline)' }, ...circItems()], store.get('circuit', null) || 'example_battery');
+  circDesc();
   refreshBattList();
 }
 // battery circuits: the battery box of any circuit that has one (or the reactor circuit's own)
+function circDesc() { const k = $('circSel').value; $('circDesc').textContent = k === 'vanilla' ? 'The reactor\'s own AutoTemp: no circuit box. The baseline to beat.' : circMeta(k).desc; }
 function hasBatteryBox(key) { const c = circuits[key]; if (!c) return false; if (c.battery) return true; if (c.circ != null) return /^\s*box\s+battery\b/m.test(c.circ); return false; }
 function refreshBattList(keep) {
   const rk = $('circSel').value, prev = keep || $('battCirc').value || store.get('battCircuit', null);
-  const opts = [['none', 'None: batteries only cover shortfalls']];
-  if (hasBatteryBox(rk)) opts.push(['same', 'The reactor circuit\'s own battery box']);
-  for (const k of Object.keys(circuits).sort()) if (k !== rk && hasBatteryBox(k)) opts.push(['b:' + k, (circuits[k].group ? circuits[k].group + ': ' : '') + k]);
-  const want = opts.some(o => o[0] === prev) ? prev : hasBatteryBox(rk) ? 'same' : 'none';
-  fillSelect($('battCirc'), opts, want);
+  const opts = [{ value: 'none', label: 'None: batteries only cover shortfalls' }];
+  if (hasBatteryBox(rk)) opts.push({ value: 'same', label: 'The reactor circuit\'s own battery box' });
+  for (const it of circItems(k => k !== rk && hasBatteryBox(k))) opts.push(Object.assign({}, it, { value: 'b:' + it.value }));
+  const want = opts.some(o => o.value === prev) ? prev : hasBatteryBox(rk) ? 'same' : 'none';
+  fillGrouped($('battCirc'), opts, want);
 }
 function config() {
   return {
@@ -822,7 +841,7 @@ function svRender() {
     const kw = d.batt ? d.batt.cpc : d.cpc || 0, off = d.voltage !== undefined && d.voltage < 0.5 && kind !== 'logic' && kind !== 'circuitbox' && kind !== 'reactor' && kind !== 'battery' && kind !== 'supercap';
     const over = d.overloaded;
     o.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${3 * k}" fill="${col}" fill-opacity="${off ? .25 : .8}" stroke="${over ? '#ff2a1a' : sel ? 'var(--ink)' : 'none'}" stroke-width="${(over ? 4 : 3) * k}" data-k="dev" data-id="${it.id}"/>`);
-    if (showL && (kw >= 50 || kind === 'reactor' || kind === 'battery' || kind === 'supercap' || kind === 'junction')) {
+    if (showL && (kw >= 50 || kind === 'reactor' || kind === 'battery' || kind === 'supercap' || (kind === 'junction' && d.grid && (Math.abs(d.grid.voltage - 1) > 0.05 || sel)))) {
       const t = kind === 'reactor' ? `${Math.round(-sim.reactor.cpc)} kW · ${sim.reactor.temp.toFixed(0)}°` : d.batt ? `${Math.round(d.batt.charge / d.batt.capacity * 100)}%` : kind === 'junction' && d.grid ? `${d.grid.voltage.toFixed(2)} V` : `${Math.round(kw)} kW`;
       o.push(`<text class="cb-t" x="${r.x + r.w / 2}" y="${r.y - 4 * k}" font-size="${fs}" text-anchor="middle" pointer-events="none">${esc(t)}</text>`);
     }
@@ -919,6 +938,14 @@ function svLive() { if (mode === 'sub' && !$('svSvg').closest('[hidden]') && per
   };
 })();
 
+// expand a view to the whole window (Esc or the button again closes it)
+function setExpanded(pane, on) {
+  pane.classList.toggle('expanded', on); document.body.classList.toggle('noscroll', on);
+  pane.querySelectorAll('.expand').forEach(b => b.textContent = on ? 'Close' : 'Expand');
+  if (pane.dataset.pane === 'sub') { SV.view = null; svRender(); } else { ED.view = null; edRender(); }
+}
+document.querySelectorAll('.expand').forEach(b => b.onclick = () => { const pane = b.closest('.tabpane'); setExpanded(pane, !pane.classList.contains('expanded')); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const p = document.querySelector('.tabpane.expanded'); if (p) setExpanded(p, false); } });
 // ---------- events ----------
 $('btnRun').onclick = () => { if (!sim) build(); if (!sim) return; if (finished) build(); running = !running; setRunLabel(); if (running) { lastTs = performance.now(); requestAnimationFrame(loop); } };
 $('btnReset').onclick = build;
@@ -931,7 +958,7 @@ function saveCustom(text) {
 $('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return; speed = b.dataset.s; carry = 0; document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x === b)); store.set('speed', speed); };
 document.querySelector('.tabs').onclick = e => { const b = e.target.closest('[role=tab]'); if (b) showTab(b.dataset.tab); };
 $('profileSel').onchange = () => { selectProfile(); build(); };
-$('circSel').onchange = () => { refreshBattList(hasBatteryBox($('circSel').value) ? 'same' : null); if ($('battCirc').value !== 'none') $('battOn').checked = true; selectCircuit(); build(); autoCheckPins(); };
+$('circSel').onchange = () => { circDesc(); refreshBattList(hasBatteryBox($('circSel').value) ? 'same' : null); if ($('battCirc').value !== 'none') $('battOn').checked = true; selectCircuit(); build(); autoCheckPins(); };
 $('battCirc').onchange = () => { if ($('battCirc').value !== 'none') $('battOn').checked = true; selectCircuit(); build(); };
 $('battShip').onchange = () => { battInfo(); build(); };
 $('btnPins').onclick = () => findPins(true);

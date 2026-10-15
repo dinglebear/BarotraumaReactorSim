@@ -145,6 +145,59 @@ const COMMANDS = {
     const out = path.join(ROOT, 'logs', `${r.circuit}__${r.profile}.log`); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, P.fmtReport(r));
     process.stdout.write(P.fmtReport(r)); console.log('log: ' + rel(out));
   },
+  // export <circuit> --sub Dugong,Humpback,... : Blueprints files with that sub's values (from its .sub) -> exports/<Sub>/
+  export(a) {
+    const zlib = require('zlib'), SF = require('./subfile');
+    const f = resolve(a._[0], CIRC_DIRS), model = loadModel(f);
+    for (const name of String(a.sub || 'Dugong,Humpback,Typhon2').split(',')) {
+      const sf = [`ships/vanilla/${name}.sub`, `ships/custom/${name}.sub`, name].map(x => path.isAbsolute(x) ? x : path.join(ROOT, x)).find(x => fs.existsSync(x) && fs.statSync(x).isFile());
+      if (!sf) { console.log(`no sub "${name}"`); continue; }
+      const buf = fs.readFileSync(sf), sh = SF.parseSub((buf[0] === 0x1f && buf[1] === 0x8b ? zlib.gunzipSync(buf) : buf).toString('utf8'));
+      const R = (sh.items.find(i => i.comps.Reactor) || { comps: { Reactor: [{}] } }).comps.Reactor[0];
+      const bs = sh.items.filter(i => i.comps.PowerContainer && !/supercapacitor/.test(i.identifier)).map(i => i.comps.PowerContainer[0]), sum = k => bs.reduce((x, b) => x + Number(b[k]), 0);
+      const vals = { MAX: Number(R.MaxPowerOutput) || 5000, BATT_N: bs.length, BATT_KW: sum('MaxRechargeSpeed'), BATT_OUT: sum('MaxOutPut'), BATT_CAP: sum('Capacity') };
+      const dir = path.join(ROOT, 'exports', sh.name); fs.mkdirSync(dir, { recursive: true });
+      for (const o of P.exportBoxes(model, vals)) { fs.writeFileSync(path.join(dir, o.filename), o.text); console.log(rel(path.join(dir, o.filename)), JSON.stringify(vals)); }
+    }
+  },
+  // sub list <sub> [filter]           items with ID, position, room and every connection (what it is wired to)
+  // sub patch <sub> <patch> [-o out]  apply an edit script (SUBEDIT.md), check it, save ships/custom/<name>.sub
+  // sub check <sub>                   loader checks (IDs, wires, links)
+  sub(a) {
+    const zlib = require('zlib'), SE = require('./subedit'), SF = require('./subfile');
+    const [what, name, arg] = a._;
+    const find = nm => [nm, `ships/custom/${nm}.sub`, `ships/vanilla/${nm}.sub`].map(x => path.isAbsolute(x) ? x : path.join(ROOT, x)).find(x => fs.existsSync(x) && fs.statSync(x).isFile());
+    const readSub = f => { const b = fs.readFileSync(f); return (b[0] === 0x1f && b[1] === 0x8b ? zlib.gunzipSync(b) : b).toString('utf8'); };
+    const f = find(name || ''); if (!f) throw new Error(`no sub "${name}" (ships/custom, ships/vanilla or a path)`);
+    const text = readSub(f);
+    if (what === 'list') {
+      const sh = SF.parseSub(text), by = new Map(sh.items.map(i => [i.id, i])), re = arg ? new RegExp(arg, 'i') : null;
+      const room = it => { const cx = it.rect[0] + it.rect[2] / 2, cy = it.rect[1] - it.rect[3] / 2, h = sh.hulls.find(h => cx >= h.rect[0] && cx <= h.rect[0] + h.rect[2] && cy <= h.rect[1] && cy >= h.rect[1] - h.rect[3]); return h ? (h.name || 'hull' + h.id) : 'outside'; };
+      for (const it of sh.items) {
+        if (re && !re.test(it.identifier) && !re.test(it.id) && !re.test(room(it))) continue;
+        const ws = sh.wires.filter(w => w.from.item === it.id || w.to.item === it.id).map(w => { const me = w.from.item === it.id ? w.from : w.to, o = me === w.from ? w.to : w.from; return `${me.conn}->${(by.get(o.item) || {}).identifier || '?'}#${o.item}.${o.conn}`; });
+        const cx = Math.round(it.rect[0] + it.rect[2] / 2), cy = Math.round(it.rect[1] - it.rect[3] / 2);
+        console.log(`${it.id} ${it.identifier} @${cx},${cy} [${room(it)}] conns: ${it.conns.map(c => c.name).join(',')}${ws.length ? '\n    wired: ' + ws.join(' | ') : ''}`);
+      }
+      return;
+    }
+    const templates = ['Dugong', 'Humpback', 'Typhon2'].map(n => find(n)).filter(Boolean).filter(x => x !== f).map(x => new SE.SubDoc(readSub(x)));
+    const doc = new SE.SubDoc(text, templates);
+    if (what === 'check') { const p = doc.check(); console.log(p.length ? p.join('\n') : 'ok: no loader problems'); return; }
+    if (what === 'patch') {
+      const ship0 = SF.parseSub(text), R = (ship0.items.find(i => i.comps.Reactor) || { comps: { Reactor: [{}] } }).comps.Reactor[0];
+      const bs = ship0.items.filter(i => i.comps.PowerContainer && !/supercapacitor/.test(i.identifier)).map(i => i.comps.PowerContainer[0]), sum = k => bs.reduce((x, b) => x + Number(b[k]), 0);
+      const vals = { MAX: Number(R.MaxPowerOutput) || 5000, BATT_N: bs.length, BATT_KW: sum('MaxRechargeSpeed'), BATT_OUT: sum('MaxOutPut'), BATT_CAP: sum('Capacity') };
+      const readCircuit = file => P.substitute(loadModel(resolve(file, CIRC_DIRS)), vals);
+      doc.apply(read(resolve(/\.\w+$/.test(arg) ? arg : arg + '.subpatch', ['.', 'ships/patches'])), { readCircuit });
+      const probs = doc.check(); if (probs.length) throw new Error('loader checks failed:\n  ' + probs.join('\n  '));
+      const out = a.o || a.out || path.join(ROOT, 'ships/custom', (doc.name() || 'edited').replace(/[^\w-]+/g, '_') + '.sub');
+      fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, zlib.gzipSync(Buffer.from(doc.text(), 'utf8')));
+      console.log(doc.log.join('\n')); console.log(`saved ${rel(out)} (${doc.items.size} items; loader checks ok)`);
+      return;
+    }
+    throw new Error('sub list|patch|check');
+  },
   // verify <trace.csv>: replay a ReactorTrace recorded in game and show where the simulator differs
   verify(a) { const f = resolve(a._[0], ['traces', 'load_profiles']); process.stdout.write(require('./verify').verify(read(f), { from: a.from != null ? Number(a.from) : null, mode: a.physics ? 'physics' : a.autotemp ? 'autotemp' : null, debug: a.debug ? String(a.debug).split('-').map(Number) : null })); },
   profiles() { for (const p of listProfiles({})) { const pr = E.parseProfile(read(p), path.basename(p)); const d = pr.points.map(x => x.demand); console.log(`${path.basename(p, '.csv')} dur=${pr.duration.toFixed(0)}s max_kw=${pr.reactorMaxKW || '?'} sub=${pr.meta.sub || '?'} demand=${Math.min(...d).toFixed(0)}..${Math.max(...d).toFixed(0)}`); } },

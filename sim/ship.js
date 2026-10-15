@@ -32,6 +32,11 @@
       if (ri) this.byId.set(ri.id, { it: ri, sim: this.reactor, kind: 'reactor', cpc: 0 });
       for (const it of ship.items) if (it !== ri) this.addDevice(it);
       for (const w of ship.wires) this.addWire(w);
+      for (const d of this.relays) if (ship.wires.some(w => (w.from.item === d.it.id && /^power/.test(w.from.conn)) || (w.to.item === d.it.id && /^power/.test(w.to.conn)))) d.state.on = true; // relays carrying power start ON (closed)
+      for (const w of ship.wires) for (const [a, b] of [[w.from, w.to], [w.to, w.from]]) { // turrets/coils: batteries wired straight to their power_in
+        const t = this.byId.get(a.item), src = this.byId.get(b.item);
+        if (t && src && src.batt && a.conn === 'power_in' && b.conn === 'power_out' && (t.kind === 'turret' || t.kind === 'discharger')) (t.feeds = t.feeds || []).push(src.batt);
+      }
       this.grids = []; this.gridsKey = '';
       // who runs the reactor: a circuit wired to its set_fissionrate/set_turbineoutput, else the crew's automatic control
       const ctl = ship.wires.some(w => ri && ((w.from.item === ri.id && /^set_(fissionrate|turbineoutput)$/.test(w.from.conn)) || (w.to.item === ri.id && /^set_(fissionrate|turbineoutput)$/.test(w.to.conn))));
@@ -72,7 +77,7 @@
       if (k.PowerTransfer) { const p = first(it, 'PowerTransfer'); Object.assign(d.sim, { cond: 100, overloadV: n(p.OverloadVoltage, 1.7), prevP: 0, pSig: null, prevL: 0, lSig: null }); d.kind = 'junction'; this.jbs.push(d); return; }
       if (k.RelayComponent) {
         const p = first(it, 'RelayComponent'); d.kind = 'relay'; d.maxPower = n(p.MaxPower, 1000); this.relays.push(d);
-        d.state.on = true; d.state.savedOn = bool(p.IsOn, true); // relays start ON (closed); toggle/set_state signals or the viewer can switch them
+        d.state.savedOn = bool(p.IsOn, true); d.state.on = d.state.savedOn; // power relays are switched on after wiring (below); signal-only relays keep their saved state
         d.sim.recv = (pin, sig) => {
           const s = d.state;
           if (pin === 'toggle') { if (sig.v !== '0') s.on = !s.on; }
@@ -214,20 +219,20 @@
     let base = () => lightKW();
     if (k.Engine) {
       const e = first(it, 'Engine'), max = n(e.PowerConsumption, 0); d.kind = 'engine'; s.force = 0; s.target = 0;
-      recvs.push((pin, sig) => { if (pin === 'set_force') { const v = parse(sig.v); if (Number.isFinite(v)) { s.target = cl(v, -100, 100); s.lastSig = sim.time; } } });
-      d.update = () => { if (sim.time - (s.lastSig ?? -9) > 0.1) s.target = 0; s.force = s.target; d.cpc = f(max * Math.pow(Math.abs(s.force) / 100, 1.5) + lightKW()); };
+      recvs.push((pin, sig) => { if (pin === 'set_force') { const v = parse(sig.v); if (Number.isFinite(v)) s.target = cl(v, -100, 100); } });
+      // Engine.cs: force lerps to the target (10/s, 0 below MinVoltage); power = (|target|/100)^1.5 * PowerConsumption
+      d.update = (dt) => { s.force += ((d.voltage < n(e.MinVoltage, 0.5) ? 0 : s.target) - s.force) * Math.min(1, dt * 10); d.cpc = f(max * Math.pow(Math.abs(s.target) / 100, 1.5) + lightKW()); };
     } else if (k.Pump) {
       const p = first(it, 'Pump'), max = n(p.PowerConsumption, 0); d.kind = 'pump';
-      s.active = bool(p.IsActive, false); s.flow = n(p.FlowPercentage, 0); s.level = 50; s.target = null;
+      s.active = bool(p.IsActive, false); s.flow = n(p.FlowPercentage, 0); s.level = 50; s.target = null; const FILL = 8; // ballast fill %/s at full flow (tuned to recorded rounds: no buoyancy here)
       recvs.push((pin, sig) => {
         if (pin === 'set_active') s.active = sig.v !== '0';
         else if (pin === 'toggle') { if (sig.v !== '0') s.active = !s.active; }
-        else if (pin === 'set_speed') { const v = parse(sig.v); if (Number.isFinite(v)) s.flow = cl(v, -100, 100); }
-        else if (pin === 'set_targetlevel') { const v = parse(sig.v); if (Number.isFinite(v)) { s.target = cl((v + 100) / 2, 0, 100); s.lastTarget = sim.time; s.active = true; } }
+        else if (pin === 'set_speed') { const v = parse(sig.v); if (Number.isFinite(v)) { s.flow = Math.round(cl(v, -100, 100)); s.target = null; } }
+        else if (pin === 'set_targetlevel') { const v = parse(sig.v); if (Number.isFinite(v)) s.target = cl((v + 100) / 2, 0, 100); }
       });
       d.update = (dt) => {
-        if (s.target !== null) { s.flow = cl((s.target - s.level) * 10, -100, 100); s.level = cl(s.level + s.flow / 100 * 8 * dt * (powered() ? 1 : 0), 0, 100); } // ballast tank fills toward the target level
-        const hw = sim.hullWater[d.hull] || 0; if (s.target === null && s.active && hw > 0) s.flow = -100;          // bilge pump in a flooding room
+        if (s.target !== null) { s.flow = Math.round(cl((s.target - s.level) * 10, -100, 100)); if (s.active && powered()) s.level = cl(s.level + s.flow / 100 * FILL * dt, 0, 100); } // ballast tank fills toward the target level
         d.cpc = f((s.active ? max * Math.abs(s.flow) / 100 : 0) + lightKW());
       };
     } else if (k.Steering) {
@@ -246,13 +251,22 @@
         d.cpc = f(kwSteer + (s.sonarActive ? kwSonar : kwSonar * 0.1) + (mm ? n(mm.PowerConsumption, 0) : 0) + lightKW());
       };
     } else if (k.Turret || k.ElectricalDischarger) {
-      const t = first(it, k.Turret ? 'Turret' : 'ElectricalDischarger'), kw = n(t.PowerConsumption, 0);
-      d.kind = k.ElectricalDischarger ? 'discharger' : /searchlight/.test(it.identifier) ? 'light' : 'turret'; s.firing = 0;
-      recvs.push((pin, sig) => { if ((pin === 'trigger_in' || pin === 'activate') && sig.v !== '0') s.firing = Math.max(s.firing, d.kind === 'discharger' ? 0.5 : 1 / 60 * 2); });
-      d.update = (dt) => {
-        s.firing = Math.max(0, s.firing - dt);
-        d.cpc = f((d.kind === 'light' ? (lights.some(l => l.on) ? kw * 0.001 : 0) : s.firing > 0 ? kw : 0) + lightKW()); // firing draws from its (supercapacitor) grid
+      // Turret.cs / ElectricalDischarger.cs: no grid draw (GetCurrentPowerConsumption = 0). A shot needs the directly wired
+      // batteries/supercapacitors to give PowerConsumption at once (sum of min(charge*3600, maxOut/60)), then takes
+      // PowerConsumption/3600 kW*min from them, split evenly. Reload limits the fire rate. Their recharge is the grid load.
+      const t = first(it, k.Turret ? 'Turret' : 'ElectricalDischarger'), kw = n(t.PowerConsumption, 0), reload = n(t.Reload, 1);
+      d.kind = k.ElectricalDischarger ? 'discharger' : /searchlight/.test(it.identifier) ? 'light' : 'turret'; s.reload = 0; s.shots = 0;
+      const shoot = () => {
+        if (s.reload > 0 || d.kind === 'light') return;
+        const bs = (d.feeds || []).filter(b => !b.disabled && b.charge > 0.0001 && b.maxOut > 0.0001);
+        const avail = bs.reduce((a, b) => a + Math.min(b.charge * 3600, b.maxOut / 60), 0);
+        if (kw > 0 && avail < kw) return; // not enough stored energy for this shot
+        let need = kw;
+        while (need > 0.0001 && bs.some(b => b.charge > 0.0001)) { const live = bs.filter(b => b.charge > 0.0001), take = Math.min(need / live.length, ...live.map(b => Math.min(b.charge * 3600, b.maxOut))); for (const b of live) { need -= take; b.charge = Math.max(0, b.charge - take / 3600); b.prevCharge = b.charge; } }
+        s.reload = reload; s.shots++;
       };
+      recvs.push((pin, sig) => { if ((pin === 'trigger_in' || pin === 'activate') && sig.v !== '0') shoot(); });
+      d.update = (dt) => { s.reload = Math.max(0, s.reload - dt); d.cpc = f(lightKW()); };
     } else if (k.OxygenGenerator || k.Fabricator || k.Deconstructor || k.MiniMap || k.Powered || k.Door || k.Vent) {
       const comp = first(it, 'OxygenGenerator') || first(it, 'Fabricator') || first(it, 'Deconstructor') || first(it, 'MiniMap') || first(it, 'Powered') || first(it, 'Door') || {};
       d.kind = k.OxygenGenerator ? 'oxygen' : k.Fabricator || k.Deconstructor ? 'fabricator' : k.Door ? 'door' : 'powered';
@@ -305,9 +319,9 @@
         if (t >= this.nextY) { const q = r(); s.ty = q < 0.35 ? 0 : (r() < 0.5 ? -1 : 1) * (q < 0.6 ? 5 + r() * 35 : q < 0.7 ? 40 + r() * 40 : 80 + r() * 20); this.nextY = t + 5 + r() * 35; }
         s.sonarActive = fighting;
       }
-      if (fighting && t >= this.nextShot) { // gunners
-        for (const d of sim.devs) if ((d.kind === 'turret' || d.kind === 'discharger') && r() < (d.kind === 'discharger' ? 0.15 : 0.7)) d.sim.recv('trigger_in', { v: '1', steps: 0, src: null });
-        this.nextShot = t + 0.5 + r() * 1.5;
+      if (fighting) { // gunners: bursts of fire (trigger held while the burst lasts); the discharge coil now and then
+        if (t >= this.nextShot) { this.burstEnd = t + 1 + r() * 4; this.nextShot = this.burstEnd + 1 + r() * 6; this.coil = r() < 0.2; }
+        if (t < this.burstEnd) for (const d of sim.devs) if (d.kind === 'turret' || (d.kind === 'discharger' && this.coil)) d.sim.recv('trigger_in', { v: '1', steps: 0, src: null });
       }
       if (this.o.breachAt !== null && t >= this.o.breachAt && !this.breached) {
         this.breached = true; const hs = sim.ship.hulls; const h = hs.find(x => x.id === this.o.breachHull) || hs[Math.floor(r() * hs.length)];

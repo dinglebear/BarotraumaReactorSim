@@ -1,0 +1,217 @@
+<Root>
+  <Item name="" identifier="circuitbox" ID="2999" markedfordeconstruction="false" flippedx="true" rect="208,-8,32,32" NonInteractable="False" NonPlayerTeamInteractable="False" AllowSwapping="True" Rotation="0" Scale="0.5" SpriteColor="255,255,255,255" InventoryIconColor="255,255,255,255" ContainerColor="255,255,255,255" InvulnerableToDamage="False" Tags="smallitem" DisplaySideBySideWhenLinked="False" DisallowedUpgrades="" SpriteDepth="0.8" HiddenInGame="False" conditionpercentage="100">
+    <Holdable Attached="True" SpriteDepthWhenDropped="0.55" PickingTime="5" CanBePicked="True" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgDetachWrench">
+      <requireditem items="wrench" type="Equipped" characterinventoryslottype="None" optional="false" ignoreineditor="false" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" />
+    </Holdable>
+    <ConnectionPanel Locked="False" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgRewireScrewdriver">
+      <requireditem items="screwdriver" type="Equipped" characterinventoryslottype="None" optional="false" ignoreineditor="false" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" />
+      <input name="signal_in1" />
+      <input name="signal_in2" />
+      <input name="signal_in3" />
+      <input name="signal_in4" />
+      <input name="signal_in5" />
+      <input name="signal_in6" />
+      <input name="signal_in7" />
+      <input name="signal_in8" />
+      <output name="signal_out1" />
+      <output name="signal_out2" />
+      <output name="signal_out3" />
+      <output name="signal_out4" />
+      <output name="signal_out5" />
+      <output name="signal_out6" />
+      <output name="signal_out7" />
+      <output name="signal_out8" />
+    </ConnectionPanel>
+    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="3000,3001,3002,3003,3004,3005,3006,3007,3008,3009,3010,3011,3012,3013,3014,3015,3016,3017,3018,3019,3020,3021,3022,3023,3024,3025,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ExtraStackSize="0" />
+    <ItemContainer QuickUseMovesItemsInside="False" ContainableRestrictions="" AutoFill="True" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="" contained="3200;3201;3202;3203;3204;3205;3206;3207;3208;3209;3210;3211;3212;3213;3214;3215;3216;3217;3218;3219;3220;3221;3222;3223;3224;3225;3226;3227,,,,,,,,," ExtraStackSize="0" />
+    <CircuitBox Locked="False" PickingTime="0" CanBePicked="False" LockGuiFramePosition="False" GuiFrameOffset="0,0" AllowInGameEditing="True" Msg="ItemMsgInteractSelect">
+      <requireditem items="idcard" type="Picked" characterinventoryslottype="None" optional="false" ignoreineditor="true" excludebroken="true" requireempty="false" excludefullcondition="false" targetslot="-1" allowvariants="true" rotation="0" setactive="false" msg="UNAUTHORIZED ACCESS" />
+      <InputNode pos="-1400,0">
+        <ConnectionLabelOverride name="signal_in1" value="<<<STRINGSTART>>>battery.charge_%<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_in2" value="<<<STRINGSTART>>>battery.charge_rate<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_in3" value="<<<STRINGSTART>>>junction.load_value_out<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_in6" value="<<<STRINGSTART>>>reactor.power_value_out<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_in7" value="<<<STRINGSTART>>>battery.power_value_out<<<STRINGEND>>>" />
+      </InputNode>
+      <OutputNode pos="3000,0">
+        <ConnectionLabelOverride name="signal_out1" value="<<<STRINGSTART>>>battery.set_rate<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_out3" value="<<<STRINGSTART>>>battery.disable_output<<<STRINGEND>>>" />
+        <ConnectionLabelOverride name="signal_out2" value="<<<STRINGSTART>>>link.reactor_in8<<<STRINGEND>>>" />
+      </OutputNode>
+      <Component id="0" position="-900,496" backingitemid="0,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>1600<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="1" position="-900,228" backingitemid="1,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>100<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="2" position="-500,512" backingitemid="2,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="3" position="-100,512" backingitemid="3,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
+      <Component id="4" position="300,512" backingitemid="4,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
+      <Component id="5" position="-900,-40" backingitemid="5,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>60<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="6" position="-500,276" backingitemid="6,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
+      <Component id="7" position="-900,-308" backingitemid="7,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>32<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="8" position="-100,276" backingitemid="8,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>800<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-800<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="9" position="2300,512" backingitemid="9,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="10" position="700,512" backingitemid="10,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
+      <Component id="11" position="1100,512" backingitemid="11,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
+      <Component id="12" position="1500,512" backingitemid="12,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>100<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>0<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="13" position="-900,-576" backingitemid="13,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>2<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="14" position="-500,40" backingitemid="14,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="15" position="-900,-844" backingitemid="15,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>50<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="16" position="-100,40" backingitemid="16,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="17" position="-900,-1112" backingitemid="17,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>-1<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="18" position="300,276" backingitemid="18,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MultiplyComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>multiplycomponent<<<STRINGEND>>> />
+      <Component id="19" position="700,276" backingitemid="19,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>SubtractComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>subtractcomponent<<<STRINGEND>>> />
+      <Component id="20" position="1100,292" backingitemid="20,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>FunctionComponent<<<STRINGEND>>> item=<<<STRINGSTART>>>abscomponent<<<STRINGEND>>> />
+      <Component id="21" position="700,40" backingitemid="21,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="22" position="1500,276" backingitemid="22,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>AdderComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>addercomponent<<<STRINGEND>>> />
+      <Component id="23" position="-900,-1380" backingitemid="23,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>2<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Component id="24" position="1900,512" backingitemid="24,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>DivideComponent<<<STRINGEND>>> ClampMax=<<<STRINGSTART>>>999999<<<STRINGEND>>> ClampMin=<<<STRINGSTART>>>-999999<<<STRINGEND>>> TimeFrame=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>dividecomponent<<<STRINGEND>>> />
+      <Component id="25" position="-900,-1648" backingitemid="25,0" usedresource="fpgacircuit" Class=<<<STRINGSTART>>>MemoryComponent<<<STRINGEND>>> Value=<<<STRINGSTART>>>0<<<STRINGEND>>> item=<<<STRINGSTART>>>memorycomponent<<<STRINGEND>>> />
+      <Wire id="0" backingitemid="" prefab="redwire">
+        <From name="signal_in2" target="" />
+        <To name="signal_in1" target="2" />
+      </Wire>
+      <Wire id="1" backingitemid="0,0" prefab="redwire">
+        <From name="signal_out" target="0" />
+        <To name="signal_in2" target="2" />
+      </Wire>
+      <Wire id="2" backingitemid="0,1" prefab="redwire">
+        <From name="signal_out" target="0" />
+        <To name="signal_in2" target="11" />
+      </Wire>
+      <Wire id="3" backingitemid="0,2" prefab="redwire">
+        <From name="signal_out" target="2" />
+        <To name="signal_in1" target="3" />
+      </Wire>
+      <Wire id="4" backingitemid="0,3" prefab="redwire">
+        <From name="signal_out" target="1" />
+        <To name="signal_in2" target="3" />
+      </Wire>
+      <Wire id="5" backingitemid="0,4" prefab="redwire">
+        <From name="signal_out" target="1" />
+        <To name="signal_in2" target="12" />
+      </Wire>
+      <Wire id="6" backingitemid="" prefab="redwire">
+        <From name="signal_in3" target="" />
+        <To name="signal_in1" target="4" />
+      </Wire>
+      <Wire id="7" backingitemid="0,5" prefab="redwire">
+        <From name="signal_out" target="3" />
+        <To name="signal_in2" target="4" />
+      </Wire>
+      <Wire id="8" backingitemid="0,6" prefab="redwire">
+        <From name="signal_out" target="4" />
+        <To name="signal_in1" target="9" />
+      </Wire>
+      <Wire id="9" backingitemid="0,7" prefab="redwire">
+        <From name="signal_out" target="4" />
+        <To name="signal_in2" target="10" />
+      </Wire>
+      <Wire id="10" backingitemid="0,8" prefab="redwire">
+        <From name="signal_out" target="5" />
+        <To name="signal_in1" target="6" />
+      </Wire>
+      <Wire id="11" backingitemid="" prefab="redwire">
+        <From name="signal_in1" target="" />
+        <To name="signal_in2" target="6" />
+      </Wire>
+      <Wire id="12" backingitemid="0,9" prefab="redwire">
+        <From name="signal_out" target="6" />
+        <To name="signal_in1" target="8" />
+      </Wire>
+      <Wire id="13" backingitemid="0,10" prefab="redwire">
+        <From name="signal_out" target="7" />
+        <To name="signal_in2" target="8" />
+      </Wire>
+      <Wire id="14" backingitemid="" prefab="redwire">
+        <From name="signal_in7" target="" />
+        <To name="signal_in1" target="14" />
+      </Wire>
+      <Wire id="15" backingitemid="0,11" prefab="redwire">
+        <From name="signal_out" target="13" />
+        <To name="signal_in2" target="14" />
+      </Wire>
+      <Wire id="16" backingitemid="0,12" prefab="redwire">
+        <From name="signal_out" target="14" />
+        <To name="signal_in1" target="16" />
+      </Wire>
+      <Wire id="17" backingitemid="0,13" prefab="redwire">
+        <From name="signal_out" target="15" />
+        <To name="signal_in2" target="16" />
+      </Wire>
+      <Wire id="18" backingitemid="0,14" prefab="redwire">
+        <From name="signal_out" target="16" />
+        <To name="signal_in1" target="18" />
+      </Wire>
+      <Wire id="19" backingitemid="0,15" prefab="redwire">
+        <From name="signal_out" target="17" />
+        <To name="signal_in2" target="18" />
+      </Wire>
+      <Wire id="20" backingitemid="0,16" prefab="redwire">
+        <From name="signal_out" target="8" />
+        <To name="signal_in1" target="19" />
+      </Wire>
+      <Wire id="21" backingitemid="0,17" prefab="redwire">
+        <From name="signal_out" target="8" />
+        <To name="signal_in1" target="21" />
+      </Wire>
+      <Wire id="22" backingitemid="0,18" prefab="redwire">
+        <From name="signal_out" target="18" />
+        <To name="signal_in2" target="19" />
+      </Wire>
+      <Wire id="23" backingitemid="0,19" prefab="redwire">
+        <From name="signal_out" target="18" />
+        <To name="signal_in2" target="21" />
+      </Wire>
+      <Wire id="24" backingitemid="0,20" prefab="redwire">
+        <From name="signal_out" target="19" />
+        <To name="signal_in" target="20" />
+      </Wire>
+      <Wire id="25" backingitemid="0,21" prefab="redwire">
+        <From name="signal_out" target="21" />
+        <To name="signal_in1" target="22" />
+      </Wire>
+      <Wire id="26" backingitemid="0,22" prefab="redwire">
+        <From name="signal_out" target="20" />
+        <To name="signal_in2" target="22" />
+      </Wire>
+      <Wire id="27" backingitemid="0,23" prefab="redwire">
+        <From name="signal_out" target="22" />
+        <To name="signal_in1" target="24" />
+      </Wire>
+      <Wire id="28" backingitemid="0,24" prefab="redwire">
+        <From name="signal_out" target="23" />
+        <To name="signal_in2" target="24" />
+      </Wire>
+      <Wire id="29" backingitemid="0,25" prefab="redwire">
+        <From name="signal_out" target="24" />
+        <To name="signal_in2" target="9" />
+      </Wire>
+      <Wire id="30" backingitemid="" prefab="redwire">
+        <From name="signal_out" target="25" />
+        <To name="signal_out3" target="" />
+      </Wire>
+      <Wire id="31" backingitemid="" prefab="redwire">
+        <From name="signal_out" target="9" />
+        <To name="signal_out2" target="" />
+      </Wire>
+      <Wire id="32" backingitemid="" prefab="redwire">
+        <From name="signal_in6" target="" />
+        <To name="signal_in1" target="10" />
+      </Wire>
+      <Wire id="33" backingitemid="0,26" prefab="redwire">
+        <From name="signal_out" target="10" />
+        <To name="signal_in1" target="11" />
+      </Wire>
+      <Wire id="34" backingitemid="0,27" prefab="redwire">
+        <From name="signal_out" target="11" />
+        <To name="signal_in1" target="12" />
+      </Wire>
+      <Wire id="35" backingitemid="" prefab="redwire">
+        <From name="signal_out" target="12" />
+        <To name="signal_out1" target="" />
+      </Wire>
+      <Label id="0" color="#7ED3E0" position="-508,1116" size="784,568" header="BATTERY BOX: HOW IT WORKS" body="Keeps the batteries near 60 % so they can soak up surplus AND cover dips (a full battery can't absorb anything).&#xA;Demand = grid load - battery charging (charge rate % x total recharge).&#xA;Error = 60 - charge %. The reactor is asked for demand + error x recharge/50 (at most +/- half the recharge): more when the batteries are low, less when they are high.&#xA;It only asks for less than demand by what the batteries really deliver (+50 kW), so disabled or empty batteries never cause a brownout.&#xA;Surplus = reactor output - demand goes into the batteries: set_rate = surplus / total recharge.&#xA;It keeps battery output enabled (disable_output 0)." />
+      <Label id="1" color="#7ED3E0" position="196,980" size="504,296" header="WIRING" body="in1 charge_%, in2 charge_rate, in7 power_value_out (from ONE battery)&#xA;in3 main junction box load_value_out, in6 reactor power_value_out&#xA;out1 set_rate and out3 disable_output -&gt; EVERY battery&#xA;out2 -&gt; reactor box in8" />
+      <Label id="2" color="#FFB000" position="816,1031" size="616,398" header="VALUES FOR THIS SUB" body="Set for: reactor 3000 kW, 2 batteries (1600 kW recharge, 1300 kW output, 1000 kW*min). On another sub change:&#xA;Memory Value = 1600: total battery max recharge (kW)&#xA;Memory Value = 32: total battery max recharge (kW) / 50&#xA;Multiply ClampMin = -800: -total battery max recharge (kW) / 2&#xA;Multiply ClampMax = 800: total battery max recharge (kW) / 2&#xA;Memory Value = 2: number of batteries" />
+    </CircuitBox>
+    <itemstats />
+  </Item>
+</Root>

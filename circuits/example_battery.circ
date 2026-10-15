@@ -8,8 +8,20 @@
 #     too full  -> reactor makes LESS than demand -> batteries discharge on their own
 #     too empty -> reactor makes MORE than demand -> surplus goes into the batteries
 #   surplus   = reactor output - demand ; set_rate = surplus / BATT_KW * 100 (0 when short)
+# Safety (real subs): the reactor only goes below demand by what the batteries are really giving, plus 50 kW:
+#   bias = max(bias, -(battery_out * BATT_N + 50)). Disabled/empty batteries -> at most a 50 kW dip, no brownout.
+#   The box also holds the batteries' disable_output at 0 (on vanilla subs, unwire the sub's own battery toggle).
 name example_battery
 box battery
+note "BATTERY BOX: HOW IT WORKS" "Keeps the batteries near 60 % so they can soak up surplus AND cover dips (a full battery can't absorb anything).\nDemand = grid load - battery charging (charge rate % x total recharge).\nError = 60 - charge %. The reactor is asked for demand + error x recharge/50 (at most +/- half the recharge): more when the batteries are low, less when they are high.\nIt only asks for less than demand by what the batteries really deliver (+50 kW), so disabled or empty batteries never cause a brownout.\nSurplus = reactor output - demand goes into the batteries: set_rate = surplus / total recharge.\nIt keeps battery output enabled (disable_output 0)."
+note "WIRING" "in1 charge_%, in2 charge_rate, in7 power_value_out (from ONE battery)\nin3 main junction box load_value_out, in6 reactor power_value_out\nout1 set_rate and out3 disable_output -> EVERY battery\nout2 -> reactor box in8"
+pin in1 battery.charge_%
+pin in2 battery.charge_rate
+pin in3 junction.load_value_out
+pin in6 reactor.power_value_out
+pin in7 battery.power_value_out
+pin out1 battery.set_rate
+pin out3 battery.disable_output
 c kb mem Value=$BATT_KW
 c k100 mem Value=100
 c chg mul                     # charge_rate% * BATT_KW
@@ -23,6 +35,19 @@ c setp add                    # demand + bias -> reactor setpoint
 c sur sub                     # reactor output - demand = surplus
 c rate div                    # surplus / BATT_KW
 c pct mul ClampMin=0 ClampMax=100   # -> set_rate %
+c kn mem Value=$BATT_N
+c bo mul                      # one battery's output * battery count = kW the batteries give
+c k50 mem Value=50
+c allow0 add                  # + 50
+c km1 mem Value=-1
+c allow mul                   # -(given + 50): the lowest bias the batteries can back up
+c d1 sub                      # max(bias, allow) = (bias + allow + |bias - allow|) / 2
+c ad abs
+c s1 add
+c s2 add
+c k2 mem Value=2
+c bmax div
+c k0 mem Value=0              # keep battery output enabled
 w in2 chg.1
 w kb.out chg.2 rate.2
 w chg.out chgk.1
@@ -34,13 +59,29 @@ w ktgt.out err.1
 w in1 err.2
 w err.out bias.1
 w kg.out bias.2
-w bias.out setp.2
+w in7 bo.1
+w kn.out bo.2
+w bo.out allow0.1
+w k50.out allow0.2
+w allow0.out allow.1
+w km1.out allow.2
+w bias.out d1.1 s1.1
+w allow.out d1.2 s1.2
+w d1.out ad.in
+w s1.out s2.1
+w ad.out s2.2
+w s2.out bmax.1
+w k2.out bmax.2
+w bmax.out setp.2
+w k0.out out3
 w setp.out out2
 w in6 sur.1
 w sur.out rate.1
 w rate.out pct.1
 w pct.out out1
 box reactor
+note "REACTOR BOX: HOW IT WORKS (12 parts)" "Makes what the battery box asks for (in8, kW).\nTurbine = setpoint / max output x 100.\nFission = (actual turbine + 100 - temperature) x 50 / fuel: exactly the heat needed, temperature held at 50.\nTurn the reactor's automatic control OFF."
+note "WIRING" "From the reactor: in2 power_value_out, in3 temperature_out, in4 fuel_out\nin8 <- battery box out2\nout1 -> set_fissionrate, out2 -> set_turbineoutput"
 c tdiv div                    # setpoint / max
 c tmax mem Value=$MAX
 c tpct mul ClampMin=0 ClampMax=100  # * 100 -> turbine

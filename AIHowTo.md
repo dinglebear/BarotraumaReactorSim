@@ -9,7 +9,7 @@ node sim/cli.js run <circuit> --profile <name>      # one test, prints the full 
 node sim/cli.js compare a,b,vanilla --profile all   # side-by-side table (vanilla = game's own auto control)
 node sim/cli.js check <circuit>                     # fast syntax/wiring check, no run
 ```
-Other: `autopins <file.txt>` (find which pin goes where by trial and error, writes `.pins`), `decompile <file.txt>` (in-game file -> .circ text), `build <circuit>` (export only), `profiles` (list test files), `verify <trace.csv>` (replay a reactor trace recorded in game and show where the simulator differs; traces go in `traces/`).
+Other: `export <circuit> --sub Dugong,...` (Blueprints files with that sub's own values into `exports/<Sub>/`), `autopins <file.txt>` (find which pin goes where by trial and error, writes `.pins`), `decompile <file.txt>` (in-game file -> .circ text), `build <circuit>` (export only), `profiles` (list test files), `verify <trace.csv>` (replay a reactor trace recorded in game and show where the simulator differs; traces go in `traces/`).
 Flags: `--batteries N` (0 = off) or `--batteries ship` (the recorded sub's own batteries, from the test file's `ship_batteries` header), `--btype battery|supercapacitor`, `--max KW`, `--rods N`, `--fuel uranium|thorium|fulgurium|volatile`, `--link wire|wifi`, `--start warm|cold`, `--duration S`, `--timeline` (also write a 1 Hz CSV), `--battery file.txt`.
 Defaults come from `sim.config.json` (the web page's "Save settings" writes this file). The test file supplies the reactor max output and the rod count unless overridden.
 
@@ -18,6 +18,7 @@ Defaults come from `sim.config.json` (the web page's "Save settings" writes this
 ## 2. Files
 | Path | What |
 |---|---|
+| `circuits/catalog.json` | Title, group and order of each circuit in the bench's lists. Add your new circuits here (group "My auto-reactors"). |
 | `circuits/<name>.circ` | YOUR circuits (edit these). A run exports `<name>.txt` (1 box) or `<name>_reactor.txt` + `<name>_battery.txt` (2 boxes) in the in-game Blueprints format. |
 | `load_profiles/*.csv` | Test files: the ship's power demand over a round. Real ones come from the mod in `mod/`. `synthetic_*` are made by `sim/make_profiles.js` from a ship model calibrated on the real rounds, and they rank circuits like the real rounds do (avoidable unmet: rank correlation 0.98). Use them for fast iteration and confirm on the real ones. |
 | `logs/<circuit>__<profile>.log` | Result of each run (read this). |
@@ -39,6 +40,7 @@ link reactor.out5 battery.in1          # wire between the boxes (or use wifi com
 pin in1 reactor.load_value_out         # optional: override the default pin wiring for this box
 ```
 Component pin shorthand: `1`/`2` = `signal_in1/2`, `in` = `signal_in`, `out` = `signal_out`, plus named pins (`set_output`, `lock_state`, `set_targetsignal`, `set_frequency`, `move_input`, `signal_in3`, `signal_out0`...).
+In-game notes: `note "HEADER" "body text\nnext line"` inside a box becomes a label in the circuit box (placed above the circuit). Give every circuit a HOW IT WORKS note and a WIRING note. The exporter adds VALUES FOR THIS SUB itself.
 Placeholders in any value, filled from the test settings: `$MAX` (reactor max output kW), `$BATT_KW` (total max recharge kW of all batteries), `$BATT_OUT` (total max output kW), `$BATT_CAP` (total capacity kW·min), `$BATT_N` (battery count). Simple formulas are calculated: `Value=$BATT_KW/50`, `ClampMin=-$BATT_KW/2`. The export bakes in the numbers and adds an in-game note saying which components to edit for another ship.
 
 ## 4. Box pins (default wiring)
@@ -251,3 +253,6 @@ How the round plays:
 - `$MAX`/`$BATT_*` are filled from the sub. The log has the same metrics as a test-file run.
 
 Each sub sets its own reactor fire/meltdown delays, junction-box overload voltage (1.7) and battery sizes. Test-file headers carry them too (`reactor_fire_delay`, `junction_overload_voltage`, `ship_batteries`).
+
+## 12. Editing a sub's wiring
+[`SUBEDIT.md`](SUBEDIT.md) covers rewiring a real `.sub` (doors, lights, relays, whole circuit boxes). Write a `.subpatch` script, apply it with `node sim/cli.js sub patch <in.sub> <patch>`, check it with `node sim/cli.js sub check`, then run it in the mock with `ship`.

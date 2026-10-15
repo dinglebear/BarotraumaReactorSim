@@ -146,7 +146,14 @@
       L.push(`        <To name="${w.to.pin}" target="${w.to.c === null ? '' : idMap[w.to.c]}" />`);
       L.push('      </Wire>');
     });
-    box.labels.forEach((l, i) => L.push(`      <Label id="${i}" color="${l.color || '#7ED3E0'}" position="${(l.pos || [0, -900 - i * 300]).join(',')}" size="${(l.size || [500, 250]).join(',')}" header="${encEnt(l.header)}" body="${encEnt(l.body)}" />`));
+    // notes without a saved position go in a row ABOVE the circuit (node centres, y up), so they never cover components
+    const topY = Math.max(600, ...box.components.map(c => c.pos[1] + 200)), leftX = Math.min(-900, ...box.components.map(c => c.pos[0]));
+    let nx = leftX;
+    box.labels.forEach((l, i) => {
+      const size = l.size || [Math.min(900, 360 + Math.ceil((l.body || '').length / 6) * 4), Math.min(700, 160 + Math.ceil((l.body || '').length / 55) * 34)];
+      const pos = l.pos || [nx + size[0] / 2, topY + 120 + size[1] / 2]; if (!l.pos) nx += size[0] + 60;
+      L.push(`      <Label id="${i}" color="${l.color || '#7ED3E0'}" position="${pos.map(v => Math.round(v)).join(',')}" size="${size.map(v => Math.round(v)).join(',')}" header="${encEnt(l.header)}" body="${encEnt(l.body)}" />`);
+    });
     L.push('    </CircuitBox>');
     L.push('    <itemstats />');
     L.push('  </Item>');

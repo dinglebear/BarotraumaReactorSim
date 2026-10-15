@@ -8,7 +8,7 @@
 //                                        | motion | water | smoke | oxygen   (see DEVICES below)
 //   part <id> <component> [Prop=value]   a component outside any box (same types as .circ: and, mem, regex, wifi...)
 //   box <name>                           a circuit box; then .circ lines (c / w / note / label) until the next
-//   ...                                  top-level statement. Box pins: <box>.in1..in8 / <box>.out1..out8
+//   ...                                  top-level statement. Box pins: <box>.in0..in9 / <box>.out0..out9 (current boxes have 10 each)
 //   box <name> file=<path> [box=N] [K=V] load a box from a .circ or Blueprints .txt file (path from the repo root;
 //                                        the web page knows circuits/**), filling $K placeholders
 //                                        (e.g. file=circuits/camel/camel_door.circ ROOM=Medbay). box=N picks the Nth box.
@@ -26,7 +26,7 @@
 })(typeof self !== 'undefined' ? self : this, function (E, C, F) {
   'use strict';
   const STEP = E.STEP;
-  const HELP = "File format (.sbx), one statement per line, '#' comments:\n  name <title>\n  dev <id> <type> [Prop=value ...]     button | switch | const | terminal | light | display | probe | door\n                                       | motion | water | smoke | oxygen   (see DEVICES below)\n  part <id> <component> [Prop=value]   a component outside any box (same types as .circ: and, mem, regex, wifi...)\n  box <name>                           a circuit box; then .circ lines (c / w / note / label) until the next\n  ...                                  top-level statement. Box pins: <box>.in1..in8 / <box>.out1..out8\n  box <name> file=<path> [box=N] [K=V] load a box from a .circ or Blueprints .txt file (path from the repo root;\n                                       the web page knows circuits/**), filling $K placeholders\n                                       (e.g. file=circuits/camel/camel_door.circ ROOM=Medbay). box=N picks the Nth box.\n  wire <a> <b> [<c> ...]               world wires: <dev>.<pin>, <part>.<pin>, <box>.in3 / <box>.out2\n  at <t> press|set|toggle|type|say <target> [value]     scripted input at t seconds\n  watch <endpoint> ...                 print every change on these pins\n  expect <t> <endpoint|dev> <op> <value>   check at t: op = | != | > | < | ~ (regex) ; dev value = its state/text\n  expectwarn <regex> / expecterror <regex>   this run must report a matching warning/error (for pitfall demos);\n                                       a matched error doesn't fail the run\n  run <seconds>\nEndpoints: pin shorthands work as in .circ (1 = signal_in1, out = signal_out, in = signal_in).";
+  const HELP = "File format (.sbx), one statement per line, '#' comments:\n  name <title>\n  dev <id> <type> [Prop=value ...]     button | switch | const | terminal | light | display | probe | door\n                                       | motion | water | smoke | oxygen   (see DEVICES below)\n  part <id> <component> [Prop=value]   a component outside any box (same types as .circ: and, mem, regex, wifi...)\n  box <name>                           a circuit box; then .circ lines (c / w / note / label) until the next\n  ...                                  top-level statement. Box pins: <box>.in0..in9 / <box>.out0..out9 (current boxes have 10 each)\n  box <name> file=<path> [box=N] [K=V] load a box from a .circ or Blueprints .txt file (path from the repo root;\n                                       the web page knows circuits/**), filling $K placeholders\n                                       (e.g. file=circuits/camel/camel_door.circ ROOM=Medbay). box=N picks the Nth box.\n  wire <a> <b> [<c> ...]               world wires: <dev>.<pin>, <part>.<pin>, <box>.in3 / <box>.out2\n  at <t> press|set|toggle|type|say <target> [value]     scripted input at t seconds\n  watch <endpoint> ...                 print every change on these pins\n  expect <t> <endpoint|dev> <op> <value>   check at t: op = | != | > | < | ~ (regex) ; dev value = its state/text\n  expectwarn <regex> / expecterror <regex>   this run must report a matching warning/error (for pitfall demos);\n                                       a matched error doesn't fail the run\n  run <seconds>\nEndpoints: pin shorthands work as in .circ (1 = signal_in1, out = signal_out, in = signal_in).";
   // virtual devices: pins and what they do
   const DEVICES = {
     button: { outs: ['signal_out'], ins: [], about: 'press -> sends Output (default "1") once' },
@@ -35,7 +35,7 @@
     terminal: { outs: ['signal_out'], ins: ['signal_in', 'clear_text'], about: 'type <text> -> signal_out; prints what arrives on signal_in' },
     light: { outs: [], ins: ['toggle', 'set_state', 'set_color'], about: 'on/off and colour' },
     display: { outs: [], ins: ['set_text', 'set_text_color'], about: 'a text display' },
-    probe: { outs: [], ins: ['*'], about: 'logs every signal on any pin' },
+    probe: { outs: [], ins: ['*'], about: 'shows the last signal on any pin and logs every change' },
     door: { outs: ['state_out'], ins: ['toggle', 'set_state'], about: 'open/closed; state_out every tick' },
     motion: { outs: ['state_out'], ins: [], about: 'Output ("1") while someone is there, else FalseOutput ("0"); set 1|0' },
     water: { outs: ['signal_out', 'water_%'], ins: [], about: 'like a water detector: set <percent>' },
@@ -118,7 +118,7 @@
       const i = s.indexOf('.'); const id = i < 0 ? s : s.slice(0, i), pin0 = i < 0 ? '' : s.slice(i + 1), o = this.objs[id];
       const err = m => { if (!quiet) this.errors.push(`line ${ln}: ${m}`); return null; };
       if (!o) return err(`"${id}" is not a device, part or box`);
-      if (o.kind === 'box') { const m = /^(in|out)([1-8])$/.exec(pin0) || /^signal_(in|out)([1-8])$/.exec(pin0); if (!m) return err(`box pins are in1..in8 / out1..out8 (got "${pin0}")`); return this.conn(o.it, `signal_${m[1]}${m[2]}`); }
+      if (o.kind === 'box') { const m = /^(in|out)([0-9])$/.exec(pin0) || /^signal_(in|out)([0-9])$/.exec(pin0); if (!m) return err(`box pins are in0..in9 / out0..out9 (got "${pin0}")`); return this.conn(o.it, `signal_${m[1]}${m[2]}`); }
       if (o.kind === 'part') { const pin = F.longPin(pin0 || 'out', o.def.item); if (![...o.def.ins, ...o.def.outs].includes(pin)) return err(`${o.def.alias} has no pin "${pin0}" (${[...o.def.ins, ...o.def.outs].join(', ')})`); return this.conn(o.it, pin); }
       const dt = DEVICES[o.type], pin = pin0 === 'out' || pin0 === '' ? (dt.outs[0] || dt.ins[0]) : pin0 === 'in' ? 'signal_in' : pin0;
       if (dt.ins[0] !== '*' && ![...dt.ins, ...dt.outs].includes(pin)) return err(`${o.type} "${id}" has no pin "${pin0}" (${[...dt.ins, ...dt.outs].join(', ')})`);
@@ -147,7 +147,7 @@
           else if (pin === 'set_color') { if (v !== s.color) { s.color = v; log(`colour ${v}`); } }
         } else if (T === 'display') { if (pin === 'set_text' && v !== s.text) { s.text = v; log(`shows "${v}"`); } else if (pin === 'set_text_color') s.color = v; }
         else if (T === 'terminal') { if (pin === 'signal_in' && v !== '') { s.lines.push(v); log(`< ${v}`); } else if (pin === 'clear_text' && v !== '0') { s.lines = []; log('(cleared)'); } }
-        else if (T === 'probe') { s.last = v; log(`${pin} = "${v}"`); }
+        else if (T === 'probe') { if (v !== s.last) log(`${pin} = "${v}"`); s.last = v; }
       };
       o.update = () => {
         if (T === 'switch') send('signal_out', s.on ? (P.On || '1') : (P.Off || '0'));
@@ -187,7 +187,7 @@
             try { new RegExp(ex.replace(/\(\?i\)/g, '')); } catch (e) { this.errors.push(`${name}: regex "${ex}" is invalid (${e.message})`); }
             if (/(^|[^\\[a-z])d[+*]/.test(ex) && !/\\d/.test(ex)) W(`${name}: regex "${ex}" has "d+": in .circ a backslash escapes the next character, so \\d arrives as d. Use [0-9]+`);
           }
-          const outs = def.outs.filter(o => !/selected_|state_out/.test(o));
+          const outs = def.outs;
           if (def.alias !== 'wifi' && outs.length && !outs.some(o => used.has(id + '|' + o) || world(o) > 0)) W(`${name}: its output goes nowhere`);
         }
       }

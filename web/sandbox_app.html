@@ -314,7 +314,7 @@ function drawBox() {
     nodes[key] = { g, vals };
     g.addEventListener('click', e => { e.stopPropagation(); select(key); });
   };
-  const ioIns = Array.from({ length: 8 }, (_, i) => 'signal_in' + (i + 1)), ioOuts = Array.from({ length: 8 }, (_, i) => 'signal_out' + (i + 1));
+  const ioIns = Array.from({ length: 10 }, (_, i) => 'signal_in' + i), ioOuts = Array.from({ length: 10 }, (_, i) => 'signal_out' + i);
   // box inputs feed the box from the left: their pins are outputs inside the box
   mkNode('IN', bm.inPos[0], bm.inPos[1], 'INPUTS', [], ioIns, 'io'); mkNode('OUT', bm.outPos[0], bm.outPos[1], 'OUTPUTS', ioOuts, [], 'io');
   for (const c of bm.components) { const ci = box.compById[c.id]; if (!ci) continue; mkNode('c:' + c.id, c.pos[0], c.pos[1], `${ci.def.alias} ${c.id}`.slice(0, 15), ci.def.ins, ci.def.outs); }
@@ -346,7 +346,7 @@ function select(k) { selKey = k; if (drawn) for (const [kk, n] of Object.entries
 function showInsp() {
   const i = $('insp'); if (!drawn || !selKey) return;
   const box = drawn.box;
-  if (selKey === 'IN' || selKey === 'OUT') { const pre = selKey === 'IN' ? 'signal_in' : 'signal_out'; i.textContent = `${selKey === 'IN' ? 'Box inputs' : 'Box outputs'} of ${box.model.name}\n` + Array.from({ length: 8 }, (_, n) => `  ${pre}${n + 1} = ${JSON.stringify(connVal(box, pre + (n + 1)) ?? '')}`).join('\n'); return; }
+  if (selKey === 'IN' || selKey === 'OUT') { const pre = selKey === 'IN' ? 'signal_in' : 'signal_out'; i.textContent = `${selKey === 'IN' ? 'Box inputs' : 'Box outputs'} of ${box.model.name}\n` + Array.from({ length: 10 }, (_, n) => `  ${pre}${n} = ${JSON.stringify(connVal(box, pre + n) ?? '')}`).join('\n'); return; }
   const id = selKey.slice(2), ci = box.compById[id], cm = box.model.components.find(c => c.id === id); if (!ci) return;
   const props = Object.entries(ci.comp.p).map(([k, v]) => `  ${k} = ${JSON.stringify(v)}${cm.props[k] !== undefined ? '' : '  (default)'}`).join('\n');
   const pinv = [...ci.def.ins, ...ci.def.outs].map(p => `  ${p.padEnd(16)} ${JSON.stringify(connVal(ci, p) ?? '')}`).join('\n');

@@ -16,6 +16,17 @@
     'Turret', 'ElectricalDischarger', 'LightComponent', 'Door', 'Fabricator', 'Deconstructor', 'MiniMap', 'Controller', 'MotionSensor', 'WaterDetector', 'SmokeDetector',
     'OxygenDetector', 'Terminal', 'ButtonTerminal', 'TextDisplay', 'CircuitBox', 'WifiComponent', 'Vent', 'Powered', 'StatusMonitor', 'ItemLabel']);
 
+  // vanilla room names are localization keys ("roomname.engineroom"); show them the way the game's English text does
+  const ROOM_WORDS = { engineroom: 'Engine Room', commandroom: 'Command Room', airlockaccess: 'Airlock Access', medbay: 'Medical Bay', engineering: 'Engineering',
+    armory: 'Armory', airlock: 'Airlock', oxygengenerator: 'Oxygen Generator', crewquarters: 'Crew Quarters', reactorroom: 'Reactor Room', dockingport: 'Docking Port',
+    centralaccessshaft: 'Central Access Shaft', centralaccesspassage: 'Central Access Passage', junctioncompartment: 'Junction Compartment', electrical: 'Electrical',
+    subcenter: 'Center', subbottomcenter: 'Bottom Center', rearballast: 'Rear Ballast', frontballast: 'Front Ballast', gunnerycompartment: 'Gunnery Compartment',
+    bilge: 'Bilge', cargo: 'Cargo', ballasttank: 'Ballast Tank', storage: 'Storage', brig: 'Brig', bridge: 'Bridge', lab: 'Laboratory', hangar: 'Hangar' };
+  function roomLabel(name) {
+    const m = /^roomname\.([a-z]+?)(\d*)$/i.exec(name || ''); if (!m) return name || '';
+    const w = ROOM_WORDS[m[1].toLowerCase()] || m[1].charAt(0).toUpperCase() + m[1].slice(1);
+    return w + (m[2] ? ' ' + m[2] : '');
+  }
   function parseSub(xml) {
     const doc = F.parseXml(xml), sub = doc.children.find(n => n.tag === 'Submarine' || n.tag === 'ItemAssembly'); // assemblies hold items the same way
     if (!sub) throw new Error('not a submarine file (no <Submarine>)');
@@ -24,7 +35,7 @@
       structures: [], gaps: [], waypoints: [], props: [] }; // structures/gaps/waypoints/props: for the viewer and for building subs
     const byId = new Map(), wireItems = new Map();
     for (const n of sub.children) {
-      if (n.tag === 'Hull') ship.hulls.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), name: n.attrs.roomname || n.attrs.RoomName || '', linked: n.attrs.linked || '' });
+      if (n.tag === 'Hull') { const name = n.attrs.roomname || n.attrs.RoomName || ''; ship.hulls.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), name, label: roomLabel(name), linked: n.attrs.linked || '' }); }
       if (n.tag === 'Structure') ship.structures.push({ id: n.attrs.ID, identifier: n.attrs.identifier, name: n.attrs.name || '', rect: rect(n.attrs.rect), solid: SOLID.test(n.attrs.name || ''), rotation: num(n.attrs.Rotation) || 0, flippedx: n.attrs.flippedx === 'true' });
       if (n.tag === 'Gap') ship.gaps.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), horizontal: n.attrs.horizontal === 'true' });
       if (n.tag === 'WayPoint') ship.waypoints.push({ id: n.attrs.ID, x: num(n.attrs.x), y: num(n.attrs.y), spawn: n.attrs.spawn || 'Path', job: n.attrs.job || '', links: Object.keys(n.attrs).filter(k => /^linkedto\d+$/.test(k)).map(k => n.attrs[k]) });
@@ -111,5 +122,5 @@
     L.push('items: ' + Object.entries(count).sort((a, b) => b[1] - a[1]).map(([k, v]) => v > 1 ? `${k}×${v}` : k).join(', '));
     return L.join('\n');
   }
-  return { parseSub, summary, SOLID };
+  return { parseSub, summary, SOLID, roomLabel };
 });

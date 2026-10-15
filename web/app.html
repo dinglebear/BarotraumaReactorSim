@@ -254,6 +254,12 @@ body.noscroll { overflow: hidden }
             <label class="check" title="Background walls and decorative structures"><input type="checkbox" id="svBack"> Background</label>
             <label class="check" title="Every other placed item: cabinets, ladders, decorations (outlines = hitboxes)"><input type="checkbox" id="svProps"> Props</label>
             <label class="check" title="Gaps (openings between rooms, doors) and AI waypoints / spawn points"><input type="checkbox" id="svNav"> Gaps &amp; waypoints</label>
+            <label class="check" title="Room names and sizes"><input type="checkbox" id="svRooms" checked> Room names</label>
+            <label class="check" title="Every wifi component (loose or inside a circuit box), linked to the others on its channel"><input type="checkbox" id="svWifi"> Wifi channels</label>
+            <label class="check" title="A line every metre (100 units); every 10 m when zoomed out"><input type="checkbox" id="svGrid"> Grid</label>
+            <input type="text" id="svFind" placeholder="Find: battery, 7300, Engine…" aria-label="Find items, rooms or wifi channels" style="width:200px">
+            <span class="hint" id="svFindN"></span>
+            <button id="svMeasure" aria-pressed="false" title="Click two points to measure the distance (Esc clears)">Measure</button>
             <span class="hint">Colours: each power grid has its own colour; dim = no power. Click anything.</span>
           </div>
           <div class="edgrid">
@@ -261,6 +267,7 @@ body.noscroll { overflow: hidden }
               <div class="zoom"><button class="expand" title="Fill the window (Esc to close)">Expand</button><button id="svZin" aria-label="Zoom in">+</button><button id="svZout" aria-label="Zoom out">−</button><button id="svFit">Fit</button></div></div>
             <div class="insp" id="svInsp"></div>
           </div>
+          <p class="hint" id="svCoord" style="font-family:var(--f-mono)">Move over the sub for coordinates (sub units; 100 units = 1 m, y up).</p>
         </div>
         <div class="tabpane" data-pane="files" hidden>
           <p class="hint">Blueprints-format files: load them in game with the Blueprints mod. Box pins are labelled with what to wire them to.</p>
@@ -826,6 +833,12 @@ function svRender() {
   const fs = 11 * k;
   const showW = $('svWalls').checked, showB = $('svBack').checked, showPr = $('svProps').checked, showN = $('svNav').checked;
   const strRect = (st, fill, stroke, op) => { const r = svRect(st.rect); return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" fill-opacity="${op}" stroke="${stroke}" stroke-width="${k}" pointer-events="visibleFill" data-k="struct" data-id="${st.id}"${st.rotation ? ` transform="rotate(${-st.rotation} ${r.x + r.w / 2} ${r.y + r.h / 2})"` : ''}><title>${esc(st.name || st.identifier)} (${st.identifier}) #${st.id}</title></rect>`; };
+  if ($('svGrid').checked) { // 1 m grid (10 m when zoomed out), only what's in view
+    const step = v.w / 100 > 120 ? 1000 : 100, x0 = Math.floor(v.x / step) * step, y0 = Math.floor(v.y / step) * step;
+    for (let x = x0; x <= v.x + v.w; x += step) o.push(`<line x1="${x}" y1="${v.y}" x2="${x}" y2="${v.y + v.h}" stroke="var(--line)" stroke-width="${(x % (step * 10) === 0 ? 1.4 : .6) * k}" pointer-events="none"/>`);
+    for (let y = y0; y <= v.y + v.h; y += step) o.push(`<line x1="${v.x}" y1="${y}" x2="${v.x + v.w}" y2="${y}" stroke="var(--line)" stroke-width="${(y % (step * 10) === 0 ? 1.4 : .6) * k}" pointer-events="none"/>`);
+    o.push(`<text class="cb-m" x="${v.x + 8 * k}" y="${v.y + v.h - 8 * k}" font-size="${fs}" pointer-events="none">grid ${step / 100} m</text>`);
+  }
   if (showB) for (const st of sh.structures || []) if (!st.solid) o.push(strRect(st, '#c9b8a0', 'none', .18));
   // rooms
   for (const h of sh.hulls) {
@@ -863,9 +876,60 @@ function svRender() {
       o.push(`<text class="cb-t" x="${r.x + r.w / 2}" y="${r.y - 4 * k}" font-size="${fs}" text-anchor="middle" pointer-events="none">${esc(t)}</text>`);
     }
   }
+  if ($('svRooms').checked) for (const h of sh.hulls) {
+    const r = svRect(h.rect), t = h.label || h.name || 'Room ' + h.id, f = Math.min(fs * 1.15, r.h / 4, r.w / Math.max(6, t.length) * 1.6);
+    if (f < fs * .45) continue; // too small to read at this zoom
+    o.push(`<text class="cb-t" x="${r.x + 6 * k}" y="${r.y + f + 5 * k}" font-size="${f}" font-weight="600" opacity=".75" pointer-events="none">${esc(t)}</text><text class="cb-m" x="${r.x + 6 * k}" y="${r.y + f * 2 + 7 * k}" font-size="${f * .75}" opacity=".7" pointer-events="none">${(h.rect[2] / 100).toFixed(1)} × ${(h.rect[3] / 100).toFixed(1)} m</text>`);
+  }
+  if ($('svWifi').checked) { // wifi network: one colour per channel, every member linked to the first one on that channel
+    const q = (SV.find || '').trim(), groups = svWifiGroups().filter(([ch]) => !/^\d+$/.test(q) || ch === q);
+    for (const [ch, ms] of groups) {
+      const hue = (Number(ch) * 137.5) % 360, col = `hsl(${hue} 75% 48%)`, a = ms[0];
+      for (const m of ms.slice(1)) o.push(`<line x1="${a.x}" y1="${a.y}" x2="${m.x}" y2="${m.y}" stroke="${col}" stroke-width="${1.5 * k}" stroke-dasharray="${6 * k} ${4 * k}" opacity=".7" pointer-events="none"/>`);
+      for (const m of ms) o.push(`<circle cx="${m.x}" cy="${m.y}" r="${5 * k}" fill="${col}" pointer-events="none"/><text x="${m.x + 7 * k}" y="${m.y - 5 * k}" font-size="${fs * .9}" fill="${col}" font-family="var(--f-mono)" font-weight="600" pointer-events="none">${esc(ch)}${m.chat ? ' chat' : ''}${m.n > 1 ? ' ×' + m.n : ''}</text>`);
+    }
+  }
+  const hits = svFindHits();
+  for (const r0 of hits) { const r = svRect(r0.rect), pad = 6 * k; o.push(`<rect x="${r.x - pad}" y="${r.y - pad}" width="${r.w + 2 * pad}" height="${r.h + 2 * pad}" rx="${4 * k}" fill="none" stroke="var(--amber)" stroke-width="${3 * k}" pointer-events="none"/>`); }
+  if (SV.measure && SV.measure.a) {
+    const [a, b] = [SV.measure.a, SV.measure.b || SV.measure.hover || SV.measure.a], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    o.push(`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="var(--accent)" stroke-width="${2 * k}" pointer-events="none"/><circle cx="${a[0]}" cy="${a[1]}" r="${4 * k}" fill="var(--accent)" pointer-events="none"/><circle cx="${b[0]}" cy="${b[1]}" r="${4 * k}" fill="var(--accent)" pointer-events="none"/>`);
+    o.push(`<text class="cb-v" x="${(a[0] + b[0]) / 2 + 6 * k}" y="${(a[1] + b[1]) / 2 - 6 * k}" font-size="${fs * 1.2}" font-weight="600" pointer-events="none">${Math.round(d)} (${(d / 100).toFixed(2)} m) · dx ${Math.round(Math.abs(b[0] - a[0]))} dy ${Math.round(Math.abs(b[1] - a[1]))}</text>`);
+  }
   svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
   svg.innerHTML = o.join('');
+  $('svFindN').textContent = SV.find ? `${hits.length} found${hits.length ? ' (Enter zooms)' : ''}` : '';
   svInspector();
+}
+// wifi members: loose wifi components, and circuit boxes holding wifi (one dot per box per channel)
+function svWifiGroups() {
+  const sh = sim.ship, g = new Map(), add = (ch, it, chat) => { ch = String(ch); const r = svRect(it.rect), x = r.x + r.w / 2, y = r.y + r.h / 2; const list = g.get(ch) || []; const same = list.find(m => m.id === it.id); if (same) { same.n++; same.chat = same.chat || chat; } else list.push({ id: it.id, x, y, n: 1, chat }); g.set(ch, list); };
+  for (const it of sh.items) {
+    for (const w of (it.comps && it.comps.WifiComponent) || []) add(w.Channel ?? '1', it, String(w.LinkToChat).toLowerCase() === 'true');
+    if (it.box) for (const c of it.box.components) if (/wifi/i.test(c.item)) add(c.props.Channel ?? '1', it, String(c.props.LinkToChat).toLowerCase() === 'true');
+  }
+  return [...g.entries()].sort((a, b) => Number(a[0]) - Number(b[0]));
+}
+// search: items, props, structures and rooms by identifier, name, tags, ID; a number also finds wifi on that channel
+function svFindHits() {
+  const q = (SV.find || '').trim(); if (!q || !sim || !sim.ship) return [];
+  let re; try { re = new RegExp(q, 'i'); } catch (e) { re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); }
+  const sh = sim.ship, out = [], hit = (...t) => t.some(x => x !== undefined && x !== null && re.test(String(x)));
+  for (const it of sh.items) {
+    const chans = [...((it.comps && it.comps.WifiComponent) || []).map(w => w.Channel), ...(it.box ? it.box.components.filter(c => /wifi/i.test(c.item)).map(c => c.props.Channel) : [])];
+    if (hit(it.identifier, it.id, it.tags, it.name) || (/^\d+$/.test(q) && chans.some(c => String(c) === q))) out.push(it);
+  }
+  for (const p of sh.props || []) if (hit(p.identifier, p.id)) out.push(p);
+  for (const st of sh.structures || []) if (hit(st.identifier, st.name, st.id)) out.push(st);
+  for (const h of sh.hulls) if (hit(h.label, h.name, h.id)) out.push(h);
+  return out.slice(0, 500);
+}
+function svZoomTo(list) {
+  if (!list.length) return; const wrap = $('svWrap'), W = wrap.clientWidth || 800, H = wrap.clientHeight || 560;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const it of list) { const r = svRect(it.rect); x0 = Math.min(x0, r.x); x1 = Math.max(x1, r.x + r.w); y0 = Math.min(y0, r.y); y1 = Math.max(y1, r.y + r.h); }
+  const pad = 200, kk = Math.max((x1 - x0 + 2 * pad) / W, (y1 - y0 + 2 * pad) / H);
+  SV.view = { x: (x0 + x1) / 2 - W * kk / 2, y: (y0 + y1) / 2 - H * kk / 2, w: W * kk, h: H * kk }; svRender();
 }
 function svFit() {
   const sh = sim && sim.ship, wrap = $('svWrap'), W = wrap.clientWidth || 800, H = wrap.clientHeight || 560;
@@ -880,7 +944,11 @@ function svInspector() {
   const s = SV.sel, R = sim.reactor;
   if (!s) {
     const rg = sim.reactorGrid || {};
+    let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity; for (const h of sim.ship.hulls) { bx0 = Math.min(bx0, h.rect[0]); bx1 = Math.max(bx1, h.rect[0] + h.rect[2]); by1 = Math.max(by1, h.rect[1]); by0 = Math.min(by0, h.rect[1] - h.rect[3]); }
+    const wg = svWifiGroups();
     el.innerHTML = `<h3>${esc(sim.ship.name)}</h3><p class="hint">${esc(sim.ship.description || '')}</p>`
+      + `<label>Size (rooms)<div class="val">${Math.round(bx1 - bx0)} × ${Math.round(by1 - by0)} units · ${((bx1 - bx0) / 100).toFixed(1)} × ${((by1 - by0) / 100).toFixed(1)} m · ${sim.ship.hulls.length} rooms</div></label>`
+      + (wg.length ? `<label>Wifi channels<div class="val">${wg.map(([ch, ms]) => `<span style="color:hsl(${(Number(ch) * 137.5) % 360} 75% 48%)">■</span> ${esc(ch)}: ${ms.reduce((a, m) => a + m.n, 0)}${ms.some(m => m.chat) ? ' (chat)' : ''}`).join(' · ')}</div></label>` : '')
       + `<label>Main grid<div class="val">${Math.round(rg.power || 0)} / ${Math.round(rg.load || 0)} kW · ${(rg.voltage || 0).toFixed(2)} V · ${(rg.consumers || []).length} devices</div></label>`
       + `<label>Reactor<div class="val">${Math.round(-R.cpc)} kW of ${R.maxPower} · ${R.temp.toFixed(1)} ° · ${R.autoTemp ? 'crew automatic control' : 'run by the circuit'} · fire after ${R.fireDelay} s > 60°, meltdown after ${R.meltdownDelay} s > 70°</div></label>`
       + `<label>Power grids<div class="val">${sim.grids.filter(g => g.consumers.length || g.sources.length || g.reactor).map((g, i) => `<span style="color:${svGridCol(g)}">■</span> ${g.reactor ? 'reactor grid' : g.sources.length ? 'battery/capacitor grid' : 'grid'}: ${Math.round(g.load)} kW, ${g.voltage.toFixed(2)} V`).join('<br>')}</div></label>`
@@ -898,7 +966,7 @@ function svInspector() {
   if (s.hull) {
     const h = sim.ship.hulls.find(x => x.id === s.hull), w = sim.hullWater[s.hull] || 0;
     const smoke = !!sim.hullSmoke[s.hull], crew = sim.hullCrew[s.hull] || 0;
-    el.innerHTML = `<h3>${esc(h.name || 'Room ' + h.id)}</h3><label>Water<div class="val">${w ? 'flooding (water detectors read ' + w + ' %)' : 'dry'}</div></label><label>Smoke<div class="val">${smoke ? 'FIRE (smoke detectors fire)' : 'clear'}</div></label><label>Crew here<div class="val">${crew} (motion detectors see them)</div></label><button id="svAct">${w ? 'Pump it dry' : 'Hull breach here'}</button> <button id="svFire">${smoke ? 'Put the fire out' : 'Start a fire here'}</button>`;
+    el.innerHTML = `<h3>${esc(h.label || h.name || 'Room ' + h.id)}</h3><p class="hint">hull #${esc(h.id)} · x ${h.rect[0]} … ${h.rect[0] + h.rect[2]}, y ${h.rect[1] - h.rect[3]} … ${h.rect[1]} · ${(h.rect[2] / 100).toFixed(1)} × ${(h.rect[3] / 100).toFixed(1)} m (floor at y ${h.rect[1] - h.rect[3]})</p><label>Water<div class="val">${w ? 'flooding (water detectors read ' + w + ' %)' : 'dry'}</div></label><label>Smoke<div class="val">${smoke ? 'FIRE (smoke detectors fire)' : 'clear'}</div></label><label>Crew here<div class="val">${crew} (motion detectors see them)</div></label><button id="svAct">${w ? 'Pump it dry' : 'Hull breach here'}</button> <button id="svFire">${smoke ? 'Put the fire out' : 'Start a fire here'}</button>`;
     $('svAct').onclick = () => { if (w) delete sim.hullWater[s.hull]; else { sim.hullWater[s.hull] = 100; sim.metrics.ev('hull breach in ' + (h.name || 'room ' + h.id) + ' (by hand)'); } svRender(); };
     $('svFire').onclick = () => { if (smoke) delete sim.hullSmoke[s.hull]; else { sim.hullSmoke[s.hull] = true; sim.metrics.ev('fire in ' + (h.name || 'room ' + h.id) + ' (by hand)'); } svRender(); };
     return;
@@ -931,6 +999,18 @@ function svInspector() {
     const pinText = {}; // what each box pin is wired to on the sub
     for (const w of sim.ship.wires) { const me = w.from.item === it.id ? w.from : w.to.item === it.id ? w.to : null; if (!me) continue; const o = me === w.from ? w.to : w.from, od = sim.ship.items.find(i => i.id === o.item); const sp = F.shortPin(me.conn); pinText[sp] = (pinText[sp] ? pinText[sp] + ', ' : '') + `${od ? od.identifier : '?'}#${o.item}.${o.conn}`; }
     edOpenModel({ name: it.identifier + '_' + it.id, boxes: [d.box], links: [], meta: {} }, true, pinText); showTab('box'); }]);
+  if (d.kind === 'circuitbox') acts.push(['Open in the sandbox', () => {
+    // the box as .sbx: a const device on every input the sub wires (set them by hand there) and a probe on every output
+    const ins = new Set(), outs = new Set(), what = {};
+    for (const w of sim.ship.wires) { const me = w.from.item === it.id ? w.from : w.to.item === it.id ? w.to : null; if (!me) continue; const o = me === w.from ? w.to : w.from, od = sim.ship.items.find(i => i.id === o.item), m = /^signal_(in|out)(\d)$/.exec(me.conn); if (!m) continue; (m[1] === 'in' ? ins : outs).add(m[2]); what[me.conn] = (what[me.conn] ? what[me.conn] + ', ' : '') + `${od ? od.identifier : '?'}.${o.conn}`; }
+    const body = F.toCirc({ name: 'x', boxes: [Object.assign({}, d.box, { name: 'box1' })], links: [], meta: {} }).split('\n').filter(l => !/^(name|set|link)\b/.test(l)).join('\n');
+    const L = [`# ${sim.ship.name}: circuit box #${it.id} (${it.identifier}), opened from the sub viewer`, `name ${sim.ship.name} box #${it.id}`, body.trim(), ''];
+    for (const n of [...ins].sort()) L.push(`dev in${n} const 0          # on the sub: ${what['signal_in' + n]}`, `wire in${n}.out box1.in${n}`);
+    for (const n of [...outs].sort()) L.push(`dev out${n} probe          # on the sub: ${what['signal_out' + n]}`, `wire box1.out${n} out${n}.in`);
+    L.push('', 'run 30');
+    try { localStorage.setItem('sbx.src', JSON.stringify(L.join('\n'))); localStorage.setItem('sbx.ex', JSON.stringify('')); } catch (e) { }
+    location.href = 'sandbox.html';
+  }]);
   if (it.comps && it.comps.LightComponent && d.kind !== 'reactor') acts.push(['Toggle light', () => d.sim.recv('toggle', { v: '1', steps: 0, src: null })]);
   h += acts.map((a, i) => `<button data-act="${i}">${esc(a[0])}</button>`).join(' ');
   if (conns.length) h += `<label>Wires<div class="val">${conns.join('<br>')}</div></label>`;
@@ -944,12 +1024,24 @@ function svLive() { if (mode === 'sub' && !$('svSvg').closest('[hidden]') && per
   const pt = e => { const r = svg.getBoundingClientRect(), v = SV.view; return [v.x + (e.clientX - r.left) / r.width * v.w, v.y + (e.clientY - r.top) / r.height * v.h]; };
   svg.addEventListener('pointerdown', e => { if (!SV.view) return; SV.drag = { sx: e.clientX, sy: e.clientY, vx: SV.view.x, vy: SV.view.y, moved: false, t: e.target }; svg.setPointerCapture(e.pointerId); svg.classList.add('panning'); });
   svg.addEventListener('pointermove', e => { const d = SV.drag; if (!d) return; const r = svg.getBoundingClientRect(); const dx = e.clientX - d.sx, dy = e.clientY - d.sy; if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true; SV.view.x = d.vx - dx / r.width * SV.view.w; SV.view.y = d.vy - dy / r.height * SV.view.h; svg.setAttribute('viewBox', `${SV.view.x} ${SV.view.y} ${SV.view.w} ${SV.view.h}`); });
-  const up = () => { const d = SV.drag; SV.drag = null; svg.classList.remove('panning'); if (!d || d.moved) return; const t = d.t, k = t.dataset && t.dataset.k; SV.sel = k === 'dev' ? { id: t.dataset.id } : k === 'hull' ? { hull: t.dataset.id } : k === 'struct' ? { struct: t.dataset.id } : k === 'prop' ? { prop: t.dataset.id } : null; svRender(); };
-  svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', () => { SV.drag = null; svg.classList.remove('panning'); });
+  const up = e => { const d = SV.drag; SV.drag = null; svg.classList.remove('panning'); if (!d || d.moved) return;
+    if (SV.measure) { const p = pt(e); if (!SV.measure.a || SV.measure.b) SV.measure = { a: p }; else SV.measure.b = p; svRender(); return; }
+    const t = d.t, k = t.dataset && t.dataset.k; SV.sel = k === 'dev' ? { id: t.dataset.id } : k === 'hull' ? { hull: t.dataset.id } : k === 'struct' ? { struct: t.dataset.id } : k === 'prop' ? { prop: t.dataset.id } : null; svRender(); };
+  svg.addEventListener('pointerup', up);
+  svg.addEventListener('pointermove', e => {
+    if (SV.drag || !SV.view || !sim || !sim.ship) return; const [x, y] = pt(e), gy = -y;
+    const room = sim.ship.hulls.find(h => x >= h.rect[0] && x <= h.rect[0] + h.rect[2] && gy <= h.rect[1] && gy >= h.rect[1] - h.rect[3]);
+    $('svCoord').textContent = `x ${Math.round(x)}, y ${Math.round(gy)}  (${(x / 100).toFixed(2)} m, ${(gy / 100).toFixed(2)} m)${room ? '  in ' + (room.label || room.name || 'room ' + room.id) + (room ? `, ${Math.round(gy - (room.rect[1] - room.rect[3]))} above its floor` : '') : '  outside the rooms'}`;
+    if (SV.measure && SV.measure.a && !SV.measure.b) { SV.measure.hover = [x, y]; if (performance.now() - (SV.mAt || 0) > 40) { SV.mAt = performance.now(); svRender(); } }
+  });
+  $('svMeasure').onclick = () => { SV.measure = SV.measure ? null : {}; $('svMeasure').setAttribute('aria-pressed', !!SV.measure); svRender(); };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && SV.measure) { SV.measure = {}; svRender(); } });
+  $('svFind').oninput = () => { SV.find = $('svFind').value; svRender(); };
+  $('svFind').onkeydown = e => { if (e.key === 'Enter') svZoomTo(svFindHits()); }; svg.addEventListener('pointercancel', () => { SV.drag = null; svg.classList.remove('panning'); });
   svg.addEventListener('wheel', e => { e.preventDefault(); if (!SV.view) return; const [px, py] = pt(e), f = e.deltaY > 0 ? 1.15 : 1 / 1.15, v = SV.view; v.x = px - (px - v.x) * f; v.y = py - (py - v.y) * f; v.w *= f; v.h *= f; svRender(); }, { passive: false });
   const zoom = f => { const v = SV.view; if (!v) return; const cx = v.x + v.w / 2, cy = v.y + v.h / 2; v.x = cx - (cx - v.x) * f; v.y = cy - (cy - v.y) * f; v.w *= f; v.h *= f; svRender(); };
   $('svZin').onclick = () => zoom(1 / 1.25); $('svZout').onclick = () => zoom(1.25); $('svFit').onclick = () => { SV.view = null; svRender(); };
-  for (const id of ['svPower', 'svSignal', 'svLabels', 'svWalls', 'svBack', 'svProps', 'svNav']) $(id).onchange = svRender;
+  for (const id of ['svPower', 'svSignal', 'svLabels', 'svWalls', 'svBack', 'svProps', 'svNav', 'svRooms', 'svWifi', 'svGrid']) $(id).onchange = svRender;
   $('mode').onclick = e => { const b = e.target.closest('button'); if (b) { setMode(b.dataset.m); build(); } };
   $('subSel').onchange = () => { store.set('sub', $('subSel').value); subInfo(); build(); };
   for (const id of ['subDur', 'subFights', 'subBreach']) $(id).onchange = build;

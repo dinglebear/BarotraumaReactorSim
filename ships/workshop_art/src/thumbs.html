@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Camel Overkill workshop art</title>
+<style>
+/* Workshop art for Camel Overkill. Each .card is rendered to its own PNG by ../render.js.
+   Look: Europa deep-sea dark, rust and Claude orange, alarm red, sonar green; clickbait type with heavy outlines. */
+@font-face { font-family: Anton; src: url(fonts/Anton.woff2) format("woff2"); }
+@font-face { font-family: Stencil; src: url(fonts/BlackOpsOne.woff2) format("woff2"); }
+@font-face { font-family: Term; src: url(fonts/ShareTechMono.woff2) format("woff2"); }
+:root {
+  --abyss: #02090d; --deep: #06222b; --teal: #0b3a44; --orange: #e8784f; --hot: #ff9b62; --yellow: #ffd23f;
+  --red: #ff2d1f; --redglow: rgba(255, 45, 31, .55); --sonar: #47f5a8; --ink: #ffffff; --black: #000;
+}
+* { box-sizing: border-box; margin: 0; padding: 0 }
+body { background: #111; display: flex; flex-direction: column; gap: 40px; padding: 40px; align-items: flex-start }
+.card { position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 55%, var(--teal) 0%, var(--deep) 45%, var(--abyss) 100%); color: var(--ink) }
+.sq { width: 1024px; height: 1024px }
+.wide { width: 1920px; height: 1080px }
+.grain::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 50;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 4px); mix-blend-mode: overlay }
+.vignette::before { content: ""; position: absolute; inset: 0; z-index: 40; pointer-events: none; background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.75) 100%) }
+.big { font-family: Anton, Impact, sans-serif; text-transform: uppercase; line-height: .9; letter-spacing: .01em;
+  -webkit-text-stroke: 14px var(--black); paint-order: stroke fill; text-shadow: 0 10px 0 #000, 0 14px 30px rgba(0,0,0,.8) }
+.stencil { font-family: Stencil, Impact, sans-serif; text-transform: uppercase; -webkit-text-stroke: 10px #000; paint-order: stroke fill }
+.mono { font-family: Term, monospace }
+.abs { position: absolute }
+.sonar { position: absolute; border: 3px solid rgba(71,245,168,.18); border-radius: 50%; }
+.ring { position: absolute; border: 12px solid var(--red); border-radius: 50%; box-shadow: 0 0 0 6px #000, inset 0 0 0 5px #000, 0 0 40px var(--redglow) }
+.tag { font-family: Anton, Impact, sans-serif; text-transform: uppercase; color: #fff; background: var(--red); padding: 6px 18px 4px; border: 5px solid #000; box-shadow: 8px 8px 0 #000; white-space: nowrap }
+.badge { font-family: Anton, Impact, sans-serif; text-transform: uppercase; background: var(--orange); color: #1a0b05; border: 6px solid #000; border-radius: 18px; box-shadow: 8px 8px 0 #000; padding: 10px 22px 6px; line-height: 1 }
+.badge small { display: block; font-family: Term, monospace; text-transform: none; font-size: .42em; letter-spacing: .02em; margin-top: 4px }
+.arrow { position: absolute; height: 18px; background: var(--yellow); border: 5px solid #000; transform-origin: 0 50% }
+.arrow::after { content: ""; position: absolute; right: -34px; top: 50%; transform: translateY(-50%); border-left: 40px solid var(--yellow); border-top: 28px solid transparent; border-bottom: 28px solid transparent; filter: drop-shadow(4px 0 0 #000) }
+.subimg { position: absolute; display: block; filter: drop-shadow(0 0 40px rgba(232,120,79,.35)) drop-shadow(0 30px 40px rgba(0,0,0,.9)) }
+.chat { font-family: Term, monospace; background: rgba(0,0,0,.82); border: 4px solid #000; outline: 3px solid rgba(71,245,168,.5); border-radius: 10px; color: var(--sonar); padding: 18px 24px; line-height: 1.35 }
+.chat .who { color: var(--hot) }
+.chat .red { color: #ff6a5c }
+.stripes { background: repeating-linear-gradient(-45deg, var(--yellow) 0 40px, #111 40px 80px); border-top: 6px solid #000; border-bottom: 6px solid #000 }
+</style>
+</head>
+<body>
+
+<!-- ============ MAIN: Workshop preview (square) ============ -->
+<div class="card sq grain vignette" id="main">
+  <div class="sonar" style="width:900px;height:900px;left:62px;top:180px"></div>
+  <div class="sonar" style="width:620px;height:620px;left:202px;top:320px"></div>
+  <div class="sonar" style="width:340px;height:340px;left:342px;top:460px"></div>
+  <!-- the sub, tilted, with annotations riding on it -->
+  <div class="abs" style="left:-60px;top:330px;width:1144px;height:490px;transform:rotate(-4deg)">
+    <img class="subimg" src="sub_cut.png" style="width:1144px;left:0;top:0">
+    <!-- screen wall (reactor room displays) at x 160-250, y 425-490 of the 2000x857 image -->
+    <div class="ring" style="left:58px;top:208px;width:120px;height:120px"></div>
+  </div>
+  <div class="abs big" style="left:40px;top:34px;font-size:150px;color:#fff;width:950px">An AI built</div>
+  <div class="abs big" style="left:40px;top:172px;font-size:150px;color:var(--yellow);width:950px">this sub</div>
+  <div class="arrow" style="left:240px;top:738px;width:90px;transform:rotate(-140deg)"></div>
+  <div class="abs tag" style="left:40px;top:738px;font-size:44px;transform:rotate(-3deg)">It predicts when your fuel runs out</div>
+  <div class="abs stripes" style="left:-40px;right:-40px;bottom:72px;height:26px;transform:rotate(-2deg)"></div>
+  <div class="abs big" style="left:0;right:0;bottom:104px;text-align:center;font-size:84px;color:#fff;transform:rotate(-2deg)">38 circuit boxes. <span style="color:var(--red)">0 stalls.</span></div>
+  <div class="abs badge" style="right:34px;top:330px;font-size:40px;transform:rotate(6deg)">Built by Claude<small>an AI. it owns this camel.</small></div>
+</div>
+
+<!-- ============ G1: CODE RED (in-game alert lighting) ============ -->
+<div class="card wide grain vignette" id="g1-code-red" style="background:#000">
+  <img src="alert.webp" class="abs" style="width:2000px;left:-40px;top:40px;filter:saturate(1.3) contrast(1.1)">
+  <div class="abs" style="inset:0;background:radial-gradient(ellipse at 50% 50%, rgba(255,0,0,.05), rgba(120,0,0,.55) 100%);z-index:2"></div>
+  <div class="abs stencil" style="left:70px;top:40px;font-size:230px;color:var(--red);text-shadow:0 0 50px var(--redglow), 0 0 120px var(--redglow);z-index:5">CODE RED</div>
+  <div class="abs big" style="left:80px;top:300px;font-size:92px;color:#fff;z-index:5">It knows <span style="color:var(--yellow)">which room</span> is flooding</div>
+  <div class="abs chat" style="left:80px;bottom:80px;font-size:34px;z-index:6;width:1300px">
+    <div><span class="who">[radio ch0]</span> <span class="red">[CamelOS] ALERT RED | flood: DivingBay | fire: none</span></div>
+    <div style="color:#bfe;opacity:.85;font-size:28px;margin-top:8px">lights go red · siren · doors seal the flooded room · says it once, not every tick</div>
+  </div>
+  <div class="abs badge" style="right:70px;bottom:90px;font-size:52px;z-index:6;transform:rotate(-4deg)">Real screenshot<small>Dinglebear's round, flooding</small></div>
+</div>
+
+<!-- ============ G2: IT WON'T STALL (numbers) ============ -->
+<div class="card wide grain vignette" id="g2-wont-stall">
+  <img class="subimg" src="sub_cut.png" style="width:2100px;left:-90px;top:250px;opacity:.16;filter:grayscale(.4)">
+  <div class="abs big" style="left:80px;top:60px;font-size:170px;color:#fff">It won't <span style="color:var(--red)">stall.</span></div>
+  <div class="abs mono" style="left:86px;top:250px;font-size:36px;color:var(--hot);max-width:1700px;line-height:1.3">"I tried stress testing this and I couldn't get it to stall. This sub is better than most I've seen." — Dinglebear</div>
+  <div class="abs" style="left:80px;top:400px;width:1760px;display:grid;gap:48px" id="bars"></div>
+  <div class="abs mono" style="left:86px;bottom:50px;font-size:28px;color:#9cc;max-width:1750px">Simulator: the same 20-minute round on both subs (sailing, fights, a flood, a fire). In game: bus voltage 0.95–1.05 for 99.3 % of the logged time.</div>
+</div>
+
+<!-- ============ G3: IT HAS ITS OWN OS ============ -->
+<div class="card wide grain vignette" id="g3-camelos">
+  <img class="subimg" src="sub_cut.png" style="width:2300px;left:-200px;top:180px;opacity:.22">
+  <div class="abs big" style="left:70px;top:50px;font-size:120px;color:#fff;width:1800px">The AI wrote an <span style="color:var(--yellow)">operating system</span></div>
+  <div class="abs big" style="left:70px;top:170px;font-size:120px;color:var(--orange)">for a camel.</div>
+  <div class="abs chat" style="left:90px;top:360px;width:1360px;font-size:40px;padding:28px 34px">
+    <div style="color:#7aa;font-size:28px;margin-bottom:10px">BRIDGE TERMINAL — CamelOS 2.0</div>
+    <div><span class="who">&gt;</span> status</div>
+    <div>PWR 420kW LOAD 420kW | PROP 84% | O2 95% | ALERT RED</div>
+    <div><span class="who">&gt;</span> 8ball will we survive</div>
+    <div>It is certain.</div>
+    <div><span class="who">&gt;</span> pet</div>
+    <div>You pet the camel. It hums contentedly. All systems nominal.</div>
+    <div><span class="who">&gt;</span> sudo make me a sandwich</div>
+    <div class="red">Nice try. You are not root. You are cargo.</div>
+  </div>
+  <div class="abs tag" style="right:90px;top:430px;font-size:56px;transform:rotate(5deg)">Also works over radio</div>
+  <div class="abs badge" style="right:110px;top:600px;font-size:46px;transform:rotate(-3deg)">"camel status"<small>say it on channel 0</small></div>
+  <div class="abs big" style="right:90px;bottom:70px;font-size:64px;color:#fff;text-align:right">Some commands<br><span style="color:var(--yellow)">aren't in the help.</span></div>
+</div>
+
+<!-- ============ G4: DON'T GO IN CLAUDE'S ROOM ============ -->
+<div class="card wide grain vignette" id="g4-claudes-room">
+  <!-- zoom on the aft (left) hump: image 2000 wide scaled 3x, nook near x 450, y 215 -->
+  <img src="sub_cut.png" class="abs" style="width:6000px;left:-1000px;top:-420px;filter:contrast(1.1)">
+  <div class="abs" style="inset:0;background:linear-gradient(90deg, rgba(0,0,0,.85) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,0) 70%)"></div>
+  <div class="ring" style="left:265px;top:150px;width:360px;height:360px"></div>
+  <div class="abs stripes" style="left:-40px;right:-40px;top:610px;height:56px;transform:rotate(-3deg)"></div>
+  <div class="abs big" style="left:70px;top:690px;font-size:150px;color:#fff">Do not enter</div>
+  <div class="abs big" style="left:70px;top:830px;font-size:150px;color:var(--red)">Claude's room</div>
+  <div class="abs chat" style="right:70px;top:120px;width:860px;font-size:34px">
+    <div><span class="who">[CamelOS]</span> HEY. This is Claude's room. Get out.</div>
+    <div style="margin-top:12px"><span class="who">[CamelOS]</span> Intruder in Claude's room! Releasing the bees. (There are no bees.)</div>
+    <div style="margin-top:12px"><span class="who">[CamelOS]</span> Occupancy limit: one camel. You are not a camel.</div>
+  </div>
+  <div class="abs tag" style="right:90px;top:520px;font-size:54px;transform:rotate(-4deg)">Where is it? Find it.</div>
+</div>
+
+<!-- ============ G5: MONA LISA IN CRAYON ============ -->
+<div class="card wide grain vignette" id="g5-crayon">
+  <img class="subimg" src="sub_cut.png" style="width:1840px;left:40px;top:250px">
+  <div class="abs big" style="left:60px;top:44px;font-size:76px;color:#fff;width:1800px;line-height:1">"A child gave me a 1 to 1 recreation of the <span style="color:var(--yellow)">Mona Lisa in crayon</span>"</div>
+  <div class="abs mono" style="right:70px;top:210px;font-size:34px;color:var(--hot)">— Dinglebear, about the wiring</div>
+  <div class="abs tag" style="left:70px;bottom:60px;font-size:50px">38 circuit boxes · 43 wifi · 6 batteries · 1 camel with feelings</div>
+</div>
+
+<script>
+// G2 bars: stock Camel vs Camel Overkill (mock round, sim/cli.js ship)
+const rows = [
+  ['Power not delivered', 5.1, 0.08, '%'],
+  ['Brownouts', 125, 0.2, ' s'],
+  ['Fuel burned', 1.38, 1.14, ' rods'],
+];
+const host = document.getElementById('bars');
+for (const [name, a, b, u] of rows) {
+  const max = Math.max(a, b), W = 820;
+  host.insertAdjacentHTML('beforeend', `<div style="display:grid;grid-template-columns:560px 1fr;align-items:center;gap:24px">
+    <div class="big" style="font-size:64px;-webkit-text-stroke:8px #000;color:#fff;white-space:nowrap">${name}</div>
+    <div style="display:grid;gap:10px">
+      <div style="display:flex;align-items:center;gap:18px"><div style="height:40px;width:${Math.max(8, a / max * W)}px;background:#7d8b90;border:4px solid #000"></div><span class="mono" style="font-size:36px;color:#cfd8dc;white-space:nowrap">stock Camel ${a}${u}</span></div>
+      <div style="display:flex;align-items:center;gap:18px"><div style="height:40px;width:${Math.max(8, b / max * W)}px;background:var(--orange);border:4px solid #000;box-shadow:0 0 24px rgba(232,120,79,.6)"></div><span class="mono" style="font-size:36px;color:var(--hot);white-space:nowrap">Camel Overkill ${b}${u}</span></div>
+    </div></div>`);
+}
+</script>
+</body>
+</html>

@@ -177,6 +177,8 @@ Name: recipe. The source is in brackets: H = HuskOS, T = Toolkit, L = LHMRS, I =
 - **The 1000 kW relay limit:** the stock relay's MaxPower is exactly the oxygen generator's draw. Raise MaxPower on relays that carry big loads (the charge tap is set to 4000).
 - **Circuit boxes hold 64 components (found in game):** two Camel boxes had 68 and 84, and everything past 64 was lost, including the parts that set the battery rates, so the main bus browned out at 0.4 V. Plan boxes at 64 or fewer; the editor and `check` now enforce it.
 - **Placed items must be attached (found in game):** a wifi template saved loose made 42 wifi components fall to the floor. The editor now sets `Attached=True` on every placed item.
+- **Sloshing water flickers detectors (found in game):** anything driven by a water detector needs a hold, `or TimeFrame=5..10`, or it will flap: doors reopened and closed, and alert announcements repeated. Announce on level changes only, and give chat wifis a long MinChatMessageInterval.
+- **Room rectangles include floor and ceiling slabs (found in game):** text displays placed near a room's edge ended up inside the floor. The editor now nudges new fittings out of solid structure.
 - **Empty values in patch files:** `Key=""` must give an empty value, not a quote character. A stray `"` made every dry water sensor read as flooded. Fixed in the patch parser; tested.
 
 ## 5. Checklist before calling a sub design done

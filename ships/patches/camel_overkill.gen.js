@@ -112,7 +112,7 @@ say('box @lightshow at 640,110 from camel/camel_lightshow   # wifi only: alert c
 say('unwire 693.signal_out 692.toggle      # the siren button becomes the ALERT ACK (mute 60 s)');
 say('wire 693.signal_out @hump3.signal_in1');
 say('wire @hump3.signal_out1 692.set_state');
-say('add @chatA wificomponent at 660,70 WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=true WifiComponent.MinChatMessageInterval=5');
+say('add @chatA wificomponent at 660,70 WifiComponent.Channel=0 WifiComponent.LinkToChat=true WifiComponent.DiscardDuplicateChatMessages=true WifiComponent.MinChatMessageInterval=20');
 say('wire @hump3.signal_out2 @chatA.signal_in');
 say('add @mood textdisplay at 740,250 ItemLabel.Text="(^_^) content camel"');
 say('wire @hump3.signal_out3 @mood.set_text');

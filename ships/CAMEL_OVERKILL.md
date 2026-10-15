@@ -70,6 +70,11 @@ The oxygen model is an approximation (one value for the whole sub; crew use and 
 - **Wifi on the floor:** the wifi template was saved unattached, so 42 wifi components and their wires fell. Every placed item is now attached.
 - **Circuit box errors in the console:** two boxes were over the game's 64-component limit (alert core 68, power manager 84). The lost parts were the ones that set the battery rates, so the batteries charged at their saved speed and the main bus sat at 0.4 V. Both boxes are split now; the editor refuses boxes over 64.
 
+## Round 3 fixes
+- **Radio spam during floods:** water sloshing at a detector, or a different room joining the flood, re-announced the alert. Now flood and fire are held 10 s after the last sensor message, the radio only speaks when the alert LEVEL changes, and the chat wifi waits at least 20 s between messages. The siren and red lights carry on meanwhile.
+- **Doors flapping in a flood:** each dry flicker unblocked auto-open, and each wet flicker sent another close pulse. Water now counts for 5 s after the last wet reading. In the mock, 80 s of sloshing with people at the door gives one close and no reopening.
+- **Screens and sensors in the floors:** a room's rectangle includes its floor and ceiling slabs, so things placed at room edges sat inside them. The sub editor now checks the sub's real walls (shell, inside walls, caps, platforms) and moves any new fitting to the nearest free spot in the same room. 46 items were moved.
+
 ## Testing it in game (please report back)
 1. **Install and open it.** Copy `ships/custom/Camel Overkill/` into `Barotrauma/LocalMods/`, enable it, and **open it in the sub editor first**. If it doesn't load, send the error. Keep your original Camel.
 2. **Reactor: turn automatic control OFF.** The game doesn't save AutoTemp, so HUMP-1 only takes over once it's off.

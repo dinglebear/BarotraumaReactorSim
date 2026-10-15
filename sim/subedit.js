@@ -14,6 +14,7 @@
   else root.BaroSubEdit = factory(root.BaroSubXml, root.BaroComponents, root.BaroFormat);
 })(typeof self !== 'undefined' ? self : this, function (X, C, F) {
   'use strict';
+  const SOLID = /^(Shell|Shuttle Shell|Large (Horizontal|Vertical) Inside Wall|Large Inside Wall Cap|Platform|Submarine Bow|Stairs)/i; // structure names that are real walls/floors
   const CIRCUITBOX_MAX_COMPONENTS = 64; // in game: "Circuit box error: failed to find an item in the container" for slot 64 and up
   const WIRE_COLORS = { red: 'redwire', blue: 'bluewire', green: 'greenwire', orange: 'orangewire', yellow: 'yellowwire', black: 'blackwire', brown: 'brownwire', white: 'wire', wire: 'wire' };
   const rectOf = n => (X.get(n, 'rect') || '0,0,0,0').split(',').map(Number);
@@ -58,6 +59,38 @@
       let loose = null;
       for (const d of [this, ...this.templates]) for (const n of d.items.values()) if (X.get(n, 'identifier') === identifier) { if (this.panel(n) || /wire$/.test(identifier)) return n; loose = loose || n; }
       return loose;
+    }
+    // ---------- placement: keep new fittings out of floors, ceilings and walls ----------
+    // Solid structure = the sub's real walls (shell, inside walls and caps, platforms, bow, stairs); "Back Wall" and
+    // background/deco pieces are only scenery. A room (hull) rectangle includes the thickness of its floor and ceiling,
+    // so an item placed at a room's edge would sit inside the floor: nudge it to the nearest free spot in the same room.
+    solids() {
+      if (!this._solids) this._solids = this.sub.children.filter(n => n.tag === 'Structure' && SOLID.test(X.get(n, 'name') || '')).map(n => { const r = rectOf(n); return { x0: r[0], x1: r[0] + r[2], y1: r[1], y0: r[1] - r[3] }; });
+      return this._solids;
+    }
+    hulls() { if (!this._hulls) this._hulls = this.sub.children.filter(n => n.tag === 'Hull').map(n => { const r = rectOf(n); return { x0: r[0], x1: r[0] + r[2], y1: r[1], y0: r[1] - r[3] }; }); return this._hulls; }
+    freeSpot(n) {
+      const r = rectOf(n), w = r[2], h = r[3], cx = r[0] + w / 2, cy = r[1] - h / 2;
+      const box = (x, y) => ({ x0: x - w / 2, x1: x + w / 2, y0: y - h / 2, y1: y + h / 2 });
+      const hit = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+      const ok = b => !this.solids().some(s => hit(b, s));
+      if (ok(box(cx, cy))) return null;
+      const home = this.hulls().find(H => cx >= H.x0 && cx <= H.x1 && cy >= H.y0 && cy <= H.y1);
+      const cands = [];
+      for (let dy = -240; dy <= 240; dy += 4) for (let dx = -160; dx <= 160; dx += 8) cands.push([dx, dy, Math.hypot(dx, dy * 1.5)]);
+      cands.sort((a, b) => a[2] - b[2]);
+      for (const [dx, dy] of cands) {
+        const b = box(cx + dx, cy + dy);
+        if (home && !(b.x0 >= home.x0 && b.x1 <= home.x1 && b.y0 >= home.y0 && b.y1 <= home.y1)) continue;
+        if (ok(b)) return [Math.round(cx + dx), Math.round(cy + dy)];
+      }
+      return null;
+    }
+    nudge(n) {
+      if (/gun|periscope|loader|hardpoint|turret|coil|laser|cannon|depthcharge|engine|reactor|dockinghatch|door|hatch/i.test(X.get(n, 'identifier'))) return; // mounted through the hull or part of it
+      const p = this.freeSpot(n); if (!p) return;
+      const r = rectOf(n); X.set(n, 'rect', `${Math.round(p[0] - r[2] / 2)},${Math.round(p[1] + r[3] / 2)},${r[2]},${r[3]}`);
+      this.log.push(`  moved ${X.get(n, 'identifier')} #${X.get(n, 'ID')} to ${p[0]},${p[1]} (it was inside a floor or wall)`);
     }
     wiresAt(n, conn) { return X.kids(this.connEl(n, conn), 'link').map(l => X.get(l, 'w')); }
 
@@ -107,6 +140,7 @@
       const r = rectOf(n); X.set(n, 'rect', `${Math.round(x - r[2] / 2)},${Math.round(y + r[3] / 2)},${r[2]},${r[3]}`);
       this.sub.children.push(n); this.items.set(id, n); if (handle) this.handles[handle] = id;
       for (const [k, v] of Object.entries(props || {})) this.setProp(id, k, v);
+      this.nudge(n);
       this.log.push(`add ${identifier} #${id}${handle ? ' (@' + handle + ')' : ''} at ${Math.round(x)},${Math.round(y)}`);
       return id;
     }
@@ -178,7 +212,7 @@
       });
       if (conts[1]) { const slots = []; for (let i = 0; i < wireIds.length; i += 32) slots.push(wireIds.slice(i, i + 32).join(';')); X.set(conts[1], 'contained', slots.join(',')); }
       bm.labels.forEach((l, i) => cb.children.push(X.el('Label', { id: i, color: l.color || '#7ED3E0', position: (l.pos || [-900, 900 + i * 300]).join(','), size: (l.size || [600, 250]).join(','), header: l.header || '', body: l.body || '' })));
-      this.sub.children.push(n); this.items.set(id, n); if (handle) this.handles[handle] = id;
+      this.sub.children.push(n); this.items.set(id, n); if (handle) this.handles[handle] = id; this.nudge(n);
       this.log.push(`box ${handle ? '@' + handle + ' ' : ''}#${id}: ${bm.components.length} components, ${bm.wires.length} wires (${wireIds.length} inside)`);
       return id;
     }

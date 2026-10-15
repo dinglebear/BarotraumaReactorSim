@@ -41,6 +41,13 @@
     water: { outs: ['signal_out', 'water_%'], ins: [], about: 'like a water detector: set <percent>' },
     smoke: { outs: ['signal_out'], ins: [], about: 'Output ("1") while set 1, else FalseOutput ("0")' },
     oxygen: { outs: ['signal_out'], ins: [], about: 'oxygen detector: sends the % every tick; set <percent>' },
+    // vehicles: drones, shuttles, anything you drive and shoot from
+    periscope: { outs: ['position_out', 'trigger_out'], ins: [], about: 'aim angle in degrees on position_out every tick; set <deg>; press = one trigger_out (Output, "1"); toggle = hold fire (every tick)' },
+    turret: { outs: [], ins: ['position_in', 'trigger_in', 'toggle_light', 'set_light'], about: 'coilgun/chaingun: takes the angle from position_in; fires on trigger_in if reloaded (Reload=1 s). Read gun.shots / gun.angle' },
+    engine: { outs: [], ins: ['set_force'], about: 'set_force -100..100; with no signal for 0.1 s it falls back to its manual setting (0). Read eng.force' },
+    pump: { outs: [], ins: ['set_speed', 'set_targetlevel', 'set_active', 'toggle'], about: 'set_speed -100..100 (+ pumps in), set_targetlevel 0..100, set_active. Read p.speed / p.target / p.on' },
+    nav: { outs: ['velocity_x_out', 'velocity_y_out', 'toggle_docking', 'current_velocity_x', 'current_velocity_y'], ins: [], about: 'nav terminal: set <x>,<y> steering (-100..100, y up); sends velocity_x_out = x and velocity_y_out = -y (pump speed) every tick; press = toggle_docking' },
+    dock: { outs: ['state_out', 'proximity_sensor', 'on_dock', 'on_undock'], ins: ['toggle', 'set_state'], about: 'docking port: dev d dock 1 = starts docked; set 1/0 = another port is near or not; toggle/set_state docks (only when near) or undocks; on_dock/on_undock pulse once' },
   };
   // inputs that keep only the latest value and act on it in Update() (several senders in one tick: the last one wins).
   // set_* pins always latch; signal_in* only on parts that store it (memory, regex, logic and arithmetic inputs).
@@ -139,6 +146,12 @@
       const T = d.type;
       if (T === 'switch') s.on = /^(1|on|true)$/i.test(d.arg || P.State || '0');
       if (T === 'door') s.on = /^(1|open|true)$/i.test(d.arg || '0');
+      if (T === 'nav' && d.arg === undefined && P.Value === undefined) s.value = '0,0';
+      if (T === 'pump') { s.on = true; s.speed = 0; }
+      if (T === 'turret') { s.angle = 0; s.shots = 0; }
+      if (T === 'engine') s.force = 0;
+      if (T === 'periscope') s.on = true; // manned
+      if (T === 'dock') { s.on = /^(1|docked|true)$/i.test(d.arg || '0'); s.value = s.on ? '1' : '0'; } // dev d dock 1 = starts docked
       it.recv = (pin, sig) => {
         const v = sig.v;
         if (T === 'light' || T === 'switch' || T === 'door') {
@@ -148,16 +161,39 @@
         } else if (T === 'display') { if (pin === 'set_text' && v !== s.text) { s.text = v; log(`shows "${v}"`); } else if (pin === 'set_text_color') s.color = v; }
         else if (T === 'terminal') { if (pin === 'signal_in' && v !== '') { s.lines.push(v); log(`< ${v}`); } else if (pin === 'clear_text' && v !== '0') { s.lines = []; log('(cleared)'); } }
         else if (T === 'probe') { if (v !== s.last) log(`${pin} = "${v}"`); s.last = v; }
+        else if (T === 'turret') {
+          if (pin === 'position_in') { const a = Number(v); if (Number.isFinite(a)) s.angle = a; }
+          else if (pin === 'trigger_in' && v !== '0' && v !== '') { const rl = Number(P.Reload ?? 1); if (this.time - (s.lastShot ?? -1e9) >= rl) { s.lastShot = this.time; s.shots = (s.shots || 0) + 1; log(`fires at ${Number(s.angle || 0).toFixed(1)}° (shot ${s.shots})`); } }
+        }
+        else if (T === 'engine') { if (pin === 'set_force') { const f = Number(v); if (Number.isFinite(f)) { const n = Math.max(-100, Math.min(100, f)); if (Math.round(n) !== Math.round(s.force || 0)) log(`force ${Math.round(n)} %`); s.force = n; s.lockT = this.time; } } }
+        else if (T === 'pump') {
+          const n = Number(v);
+          if (pin === 'set_speed' && Number.isFinite(n)) { const q = Math.max(-100, Math.min(100, n)); if (Math.round(q) !== Math.round(s.speed || 0)) log(`speed ${Math.round(q)} %`); s.speed = q; }
+          else if (pin === 'set_targetlevel' && Number.isFinite(n)) { const q = Math.max(0, Math.min(100, n)); if (Math.round(q) !== Math.round(s.target ?? -1)) log(`target level ${Math.round(q)} %`); s.target = q; }
+          else if (pin === 'set_active') { const on = v !== '0'; if (on !== s.on) log(on ? 'on' : 'off'); s.on = on; }
+          else if (pin === 'toggle' && v !== '0' && v !== '') { s.on = !s.on; log(s.on ? 'on' : 'off'); }
+        }
+        else if (T === 'dock') {
+          const want = pin === 'toggle' ? (v !== '0' && v !== '' ? !s.on : s.on) : pin === 'set_state' ? v !== '0' : s.on;
+          if (want !== s.on) { if (want && s.value === '0') log('can\'t dock: no port near'); else { s.on = want; log(s.on ? 'docked' : 'undocked'); s.pulse = s.on ? 'on_dock' : 'on_undock'; } }
+        }
       };
       o.update = () => {
         if (T === 'switch') send('signal_out', s.on ? (P.On || '1') : (P.Off || '0'));
         else if (T === 'const' || T === 'oxygen') send('signal_out', s.value);
         else if (T === 'door') send('state_out', s.on ? '1' : '0');
         else if (T === 'motion') { const v = s.value !== '0' ? (P.Output !== undefined ? P.Output : '1') : (P.FalseOutput !== undefined ? P.FalseOutput : '0'); if (v !== '') send('state_out', v); }
+        else if (T === 'periscope') { if (s.on !== false) send('position_out', s.value); if (s.fire) send('trigger_out', P.Output || '1'); }
+        else if (T === 'engine') { if (s.lockT !== undefined && this.time - s.lockT > 0.1 && s.force) { s.force = 0; log('no signal: back to manual (0 %)'); } }
+        else if (T === 'nav') { const [x, y] = String(s.value).split(',').map(Number); send('velocity_x_out', String(x || 0)); send('velocity_y_out', String(-(y || 0))); send('current_velocity_x', '0.0000'); send('current_velocity_y', '0.0000'); }
+        else if (T === 'dock') { send('state_out', s.on ? '1' : '0'); send('proximity_sensor', s.value !== '0' ? '1' : '0'); if (s.pulse) { send(s.pulse, '1'); s.pulse = null; } }
         else if (T === 'water' || T === 'smoke') { const wet = Number(s.value) > 0; const v = wet ? (P.Output !== undefined ? P.Output : '1') : (P.FalseOutput !== undefined ? P.FalseOutput : '0'); if (v !== '') send('signal_out', v); if (T === 'water') send('water_%', String(Math.round(Number(s.value) || 0))); }
       };
       o.act = (act, value) => {
-        if (act === 'press') { send('signal_out', P.Output || '1'); log('pressed'); }
+        if (act === 'press' && T === 'periscope') { send('trigger_out', P.Output || '1'); log('fire'); }
+        else if (act === 'press' && T === 'nav') { send('toggle_docking', '1'); log('docking button'); }
+        else if (act === 'press') { send('signal_out', P.Output || '1'); log('pressed'); }
+        else if (act === 'toggle' && T === 'periscope') { s.fire = !s.fire; log(s.fire ? 'holding fire' : 'released fire'); }
         else if (act === 'toggle') { s.on = !s.on; log(T === 'switch' ? (s.on ? 'switched on' : 'switched off') : 'toggled'); }
         else if (act === 'set') { if (T === 'switch' || T === 'door') s.on = /^(1|on|true|open)$/i.test(value); else s.value = value; log(`set to ${value}`); }
         else if (act === 'type') { s.lines.push('> ' + value); log(`> ${value}`); send('signal_out', value); }
@@ -208,8 +244,10 @@
       super.deliver(conn, sig);
     }
     valueOf(target) {
+      const dot = target.indexOf('.'), od = dot > 0 ? this.objs[target.slice(0, dot)] : null;
+      if (od && od.kind === 'dev' && !DEVICES[od.type].outs.includes(target.slice(dot + 1)) && !DEVICES[od.type].ins.includes(target.slice(dot + 1))) { const f = od.s[target.slice(dot + 1)]; return f === undefined ? '' : typeof f === 'number' ? String(Math.round(f * 1000) / 1000) : String(f); } // gun.shots, eng.force...
       const o = this.objs[target];
-      if (o && o.kind === 'dev') { const s = o.s; return o.type === 'display' ? s.text : o.type === 'terminal' ? (s.lines[s.lines.length - 1] || '') : o.type === 'probe' ? (s.last || '') : /light|switch|door/.test(o.type) ? (s.on ? 'on' : 'off') : s.value; }
+      if (o && o.kind === 'dev') { const s = o.s; return o.type === 'display' ? s.text : o.type === 'terminal' ? (s.lines[s.lines.length - 1] || '') : o.type === 'probe' ? (s.last || '') : /light|switch|door|dock/.test(o.type) ? (s.on ? 'on' : 'off') : o.type === 'engine' ? String(Math.round(s.force || 0)) : o.type === 'turret' ? String(s.shots || 0) : o.type === 'pump' ? String(Math.round(s.speed || 0)) : s.value; }
       const c = this.ep(target, 0, true); return c ? (c.last === undefined ? '' : String(c.last)) : undefined;
     }
     // a crew member says something on a radio channel: every LinkToChat wifi on it passes it to signal_out

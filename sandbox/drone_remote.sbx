@@ -1,0 +1,98 @@
+# PRE-PLAN for drones/shuttles: drive a drone from the mothership's nav terminal over wifi, and slave its gun to a
+# mothership periscope. A lever picks what the nav terminal steers: OFF = the mothership, ON = the drone.
+# Pattern: the selector is a pair of relays, so only ONE engine ever gets steering (the sandbox flags two senders
+# fighting over set_force). The drone side just listens: wifi -> engine / pump / turret.
+# Wifi channels 610-613. Range 20000 units = 200 m; the drone stops answering further out (not modelled here).
+name drone remote control
+dev nav nav 0,0
+dev mode switch 0
+dev mEng engine
+dev mPump pump
+dev dEng engine
+dev dPump pump
+dev scope periscope 0
+dev dGun turret Reload=0.5
+dev dDock dock 1
+dev docked display
+
+box mother
+note "MOTHERSHIP LINK" "in1 nav velocity_x_out, in2 nav velocity_y_out, in3 mode lever (1 = steer the drone), in4 periscope angle, in5 periscope trigger, in6 nav toggle_docking. out1/out2 -> own engine / pumps. Drone channels: 610 force, 611 pump, 612 gun angle, 613 gun trigger, 614 dock toggle, 615 dock state back"
+c own relay IsOn=true
+c far relay IsOn=false
+c nmode not
+c txF wifi Channel=610
+c txP wifi Channel=611
+c txA wifi Channel=612
+c txT wifi Channel=613
+c txD wifi Channel=614
+c rxS wifi Channel=615
+c lbl concat Separator=" "
+c pre mem Value="DRONE:"
+c dk equals Output=DOCKED FalseOutput=AWAY
+c one mem Value=1
+w in1 own.1 far.1
+w in2 own.2 far.2
+w in3 far.set_state nmode.in
+w nmode.out own.set_state
+w own.signal_out1 out1
+w own.signal_out2 out2
+w far.signal_out1 txF.in
+w far.signal_out2 txP.in
+w in4 txA.in
+w in5 txT.in
+w in6 txD.in
+w rxS.out dk.1
+w one.out dk.2
+w pre.out lbl.1
+w dk.out lbl.2
+w lbl.out out3
+
+box drone
+note "DRONE BRAIN" "listens on 610-614; out1 engine, out2 pumps, out3 gun angle, out4 gun trigger, out5 dock toggle; in1 dock state_out -> 615"
+c rxF wifi Channel=610
+c rxP wifi Channel=611
+c rxA wifi Channel=612
+c rxT wifi Channel=613
+c rxD wifi Channel=614
+c txS wifi Channel=615
+w rxF.out out1
+w rxP.out out2
+w rxA.out out3
+w rxT.out out4
+w rxD.out out5
+w in1 txS.in
+
+wire nav.velocity_x_out mother.in1
+wire nav.velocity_y_out mother.in2
+wire mode.out mother.in3
+wire scope.position_out mother.in4
+wire scope.trigger_out mother.in5
+wire nav.toggle_docking mother.in6
+wire mother.out1 mEng.set_force
+wire mother.out2 mPump.set_speed
+wire mother.out3 docked.set_text
+wire drone.out1 dEng.set_force
+wire drone.out2 dPump.set_speed
+wire drone.out3 dGun.position_in
+wire drone.out4 dGun.trigger_in
+wire drone.out5 dDock.toggle
+wire dDock.state_out drone.in1
+
+at 0.5 set nav 60,20       # steer: mothership moves
+at 2 press nav             # docking button: the drone undocks
+at 3 toggle mode           # now steer the drone
+at 3 set scope 45
+at 5 press scope
+at 7 toggle mode           # back to the mothership
+expect 1.5 mEng = 60
+expect 1.5 mPump = -20
+expect 1.5 dEng = 0
+expect 2.5 docked = "DRONE: AWAY"
+expect 4 mEng = 0          # the mothership lost steering (falls back to manual)
+expect 4 dEng = 60
+expect 4 dPump = -20
+expect 6 dGun.angle = 45
+expect 6 dGun.shots = 1
+expect 8 mEng = 60
+expect 8 dEng = 0
+run 9

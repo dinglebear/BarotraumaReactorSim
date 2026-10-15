@@ -80,6 +80,11 @@ details.cheat pre { margin: 8px 0 0; max-height: 360px; overflow: auto; font: 11
 .termlog { background: var(--screen); color: var(--screen-ink); font: 12px/1.4 var(--f-mono); padding: 8px 9px; border-radius: 3px; height: 128px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere }
 .termlog .me { color: var(--sig-off) }
 .dev form { display: flex; gap: 6px } .dev form input { flex: 1 1 auto; width: 0 }
+.meter { position: relative; height: 14px; border: 1px solid var(--line); border-radius: 3px; background: var(--sunk) }
+.meter::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted) }
+.meter i { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; background: var(--accent) }
+.gun { width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--line); background: var(--sunk); position: relative }
+.gun i { position: absolute; left: 50%; top: calc(50% - 3px); width: 50%; height: 6px; background: var(--ink); border-radius: 3px; transform-origin: 0 50% }
 .doorbar { height: 30px; border: 2px solid var(--line); border-radius: 3px; position: relative; overflow: hidden; background: var(--sunk) }
 .doorbar i { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background: var(--muted); transition: width .25s }
 .doorbar.open i { width: 12% }
@@ -252,6 +257,18 @@ function renderDevices() {
     else if (T === 'display') { const s = document.createElement('div'); s.className = 'screen'; d.appendChild(s); o.ui = { s }; d.classList.add('wide'); }
     else if (T === 'door') { const b = document.createElement('div'); b.className = 'doorbar'; b.innerHTML = '<i></i>'; d.appendChild(b); const v = document.createElement('div'); v.className = 'dv'; d.appendChild(v); o.ui = { b, v }; }
     else if (T === 'probe') { const v = document.createElement('div'); v.className = 'dv'; d.appendChild(v); o.ui = { v }; }
+    else if (T === 'periscope') {
+      const r = document.createElement('input'); r.type = 'range'; r.min = -180; r.max = 180; r.step = 1; r.value = Number(o.s.value) || 0; r.setAttribute('aria-label', id + ' aim (degrees)'); r.oninput = () => act('set', r.value); d.appendChild(r);
+      const row = document.createElement('div'); row.className = 'bar'; const f = document.createElement('button'); f.textContent = 'Fire'; f.className = 'primary'; f.onclick = () => act('press'); const h = document.createElement('button'); h.textContent = 'Hold fire'; h.onclick = () => act('toggle'); row.append(f, h); d.appendChild(row);
+      o.ui = { r, h };
+    }
+    else if (T === 'nav') {
+      const mk = (lbl, i) => { const r = document.createElement('input'); r.type = 'range'; r.min = -100; r.max = 100; r.step = 1; r.setAttribute('aria-label', id + ' ' + lbl); r.oninput = () => { const v = String(o.s.value).split(',').map(Number); v[i] = Number(r.value); act('set', `${v[0] || 0},${v[1] || 0}`); }; const l = document.createElement('label'); l.className = 'hint'; l.textContent = lbl; l.appendChild(r); d.appendChild(l); return r; };
+      const rx = mk('left / right', 0), ry = mk('down / up', 1); const b = document.createElement('button'); b.textContent = 'Docking'; b.onclick = () => act('press'); d.appendChild(b); o.ui = { rx, ry };
+    }
+    else if (T === 'engine' || T === 'pump') { const b = document.createElement('div'); b.className = 'meter'; b.innerHTML = '<i></i>'; d.appendChild(b); o.ui = { m: b.firstChild }; }
+    else if (T === 'turret') { const g = document.createElement('div'); g.className = 'gun'; g.innerHTML = '<i></i>'; d.appendChild(g); o.ui = { g: g.firstChild }; }
+    else if (T === 'dock') { const b = document.createElement('button'); b.className = 'tog'; b.setAttribute('aria-label', 'Another port is near'); b.onclick = () => act('set', o.s.value !== '0' ? '0' : '1'); const l = document.createElement('label'); l.className = 'check'; l.append(b, document.createTextNode('port near')); d.appendChild(l); o.ui = { tog: b }; }
     if (!o.ui) o.ui = {};
     if (!o.ui.v && !['terminal', 'display', 'light'].includes(T)) { const v = document.createElement('div'); v.className = 'dv'; d.appendChild(v); o.ui.v = v; }
     box.appendChild(d);
@@ -277,6 +294,12 @@ function updateDevices() {
     else if (T === 'display') { u.s.textContent = s.text; const c = lightColor(s.color); u.s.style.color = c || ''; }
     else if (T === 'door') { u.b.classList.toggle('open', s.on); u.v.textContent = s.on ? 'open' : 'closed'; }
     else if (T === 'probe') u.v.textContent = s.last === undefined ? 'nothing yet' : JSON.stringify(s.last);
+    else if (T === 'periscope') { if (document.activeElement !== u.r) u.r.value = Number(s.value) || 0; u.h.setAttribute('aria-pressed', !!s.fire); u.h.textContent = s.fire ? 'Release' : 'Hold fire'; u.v.textContent = `aim ${s.value}°${s.fire ? ' · firing' : ''}`; }
+    else if (T === 'nav') { const [x, y] = String(s.value).split(',').map(Number); if (document.activeElement !== u.rx) u.rx.value = x || 0; if (document.activeElement !== u.ry) u.ry.value = y || 0; u.v.textContent = `steer x ${x || 0}, y ${y || 0} → pumps ${-(y || 0)}`; }
+    else if (T === 'engine') { const f = s.force || 0; u.m.style.left = f < 0 ? (50 + f / 2) + '%' : '50%'; u.m.style.width = Math.abs(f) / 2 + '%'; u.v.textContent = `force ${Math.round(f)} %`; }
+    else if (T === 'pump') { const f = s.speed || 0; u.m.style.left = f < 0 ? (50 + f / 2) + '%' : '50%'; u.m.style.width = Math.abs(f) / 2 + '%'; u.v.textContent = `${s.on ? 'on' : 'off'} · speed ${Math.round(f)} %${s.target !== undefined ? ' · target ' + Math.round(s.target) + ' %' : ''}`; }
+    else if (T === 'turret') { u.g.style.transform = `rotate(${-(s.angle || 0)}deg)`; u.v.textContent = `${Number(s.angle || 0).toFixed(0)}° · ${s.shots || 0} shot${s.shots === 1 ? '' : 's'}`; }
+    else if (T === 'dock') { u.tog.setAttribute('aria-pressed', s.value !== '0'); u.v.textContent = s.on ? 'docked' : 'undocked'; }
     else if (T === 'button' && u.v) u.v.textContent = 'sends ' + JSON.stringify(o.props.Output || '1');
   }
 }
@@ -337,7 +360,7 @@ function updateBox() {
   for (const w of wires) { const v = w.conn ? w.conn.last : undefined; w.p.classList.toggle('live', truthy(v)); }
   for (const [k, n] of Object.entries(nodes)) {
     if (k === 'IN') n.vals.forEach(([p, t]) => { const v = connVal(box, p); t.textContent = v === undefined ? '' : String(v).slice(0, 14); });
-    else if (k.startsWith('c:')) { const ci = box.compById[k.slice(2)]; n.vals.forEach(([p, t]) => { const v = connVal(ci, p); t.textContent = v === undefined ? '' : String(v).slice(0, 14); }); }
+    else if (k.startsWith('c:')) { const ci = box.compById[k.slice(2)]; n.vals.forEach(([p, t]) => { const v = connVal(ci, p); t.textContent = v === undefined ? '' : String(v).slice(0, 10); }); }
   }
   if (selKey) showInsp();
 }

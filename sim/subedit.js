@@ -360,6 +360,7 @@
             this.box(h, x, y, JSON.parse(JSON.stringify(bm)));
           }
           else if (cmd === 'subname') X.set(this.sub, 'name', t.slice(1).join(' '));
+          else if (cmd === 'subattr') X.set(this.sub, t[1], raw.replace(/^\s*subattr\s+\S+\s+/, '').trim()); // any <Submarine> attribute, rest of the line verbatim (description, price, class...)
           // structure editing: hull @h x,top,w,h [RoomName=..]  |  structure @h <identifier> x,top,w,h [SpriteColor=..]
           //                    gap @h x,top,w,h horizontal|vertical  |  waypoint @h x,y [spawn=Human job=engineer gap=@g ladders=@l]  |  wplink @a @b
           else if (cmd === 'hull' || cmd === 'structure' || cmd === 'gap' || cmd === 'waypoint' || cmd === 'wplink') {

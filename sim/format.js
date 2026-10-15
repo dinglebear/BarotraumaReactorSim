@@ -76,20 +76,37 @@
   }
 
   // ---------------- box -> Blueprints .txt ----------------
+  // In game a circuit box's playable area is 8192 x 8192: every node position (component, label, input/output node) is
+  // clamped to +-4096 (CircuitBoxSizes.PlayableAreaSize), so anything placed further out piles up at the border.
+  const CB_HALF = 4096, CB_SAFE = 3800;
   function autoLayout(box) {
-    // place components by signal depth so the in-game editor view is readable
+    // columns by signal depth (left to right), compressed if the chain is deeper than the box is wide; a column that
+    // fills up spills into the next one. Positions are node CENTRES (as in game); a node is 48 + 64 + 32 per pin row tall.
     const depth = {}; box.components.forEach(c => depth[c.id] = 0);
     for (let it = 0; it < box.components.length + 1; it++)
-      for (const w of box.wires) if (w.from.c !== null && w.to.c !== null && w.from.c !== w.to.c && depth[w.to.c] < depth[w.from.c] + 1 && depth[w.from.c] < 40) depth[w.to.c] = depth[w.from.c] + 1;
-    // positions are node CENTRES (as in game); a node is 48 (header) + 64 + 32 per pin row tall
-    const nextY = {}, maxD = Math.max(0, ...Object.values(depth));
-    for (const c of box.components) {
-      const d = depth[c.id], def = C.byItem(c.item), h = 48 + 64 + 32 * Math.max(def ? def.ins.length : 1, def ? def.outs.length : 1);
-      if (nextY[d] === undefined) nextY[d] = 600;
-      if (!c.pos) c.pos = [-900 + d * 400, nextY[d] - h / 2];
-      nextY[d] = Math.min(nextY[d], c.pos[1] - h / 2) - 60;
+      for (const w of box.wires) if (w.from.c !== null && w.to.c !== null && w.from.c !== w.to.c && depth[w.to.c] < depth[w.from.c] + 1 && depth[w.from.c] < 64) depth[w.to.c] = depth[w.from.c] + 1;
+    const COLW = 400, X0 = -3200, NCOL = Math.floor((3200 - X0) / COLW) + 1, TOP = 2700, BOTTOM = -3700, GAP = 50;
+    const maxD = Math.max(0, ...Object.values(depth)), colOf = d => maxD + 1 <= NCOL ? d : Math.floor(d * NCOL / (maxD + 1));
+    const cur = new Array(NCOL).fill(TOP);
+    const order = box.components.map((c, i) => [c, i]).sort((p, q) => depth[p[0].id] - depth[q[0].id] || p[1] - q[1]).map(p => p[0]);
+    for (const c of order) {
+      if (c.pos) { c.pos = [Math.max(-CB_SAFE, Math.min(CB_SAFE, c.pos[0])), Math.max(-CB_SAFE, Math.min(CB_SAFE, c.pos[1]))]; continue; }
+      const def = C.byItem(c.item), h = 48 + 64 + 32 * Math.max(def ? def.ins.length : 1, def ? def.outs.length : 1);
+      let col = colOf(depth[c.id]);
+      while (cur[col] - h < BOTTOM && col < NCOL - 1) col++;
+      c.pos = [X0 + col * COLW, cur[col] - h / 2]; cur[col] -= h + GAP;
     }
-    box.inPos = box.inPos || [-1400, 0]; box.outPos = box.outPos || [Math.max(1200, -900 + (maxD + 1) * 400 + 300), 0];
+    box.inPos = box.inPos || [-3750, 0]; box.outPos = box.outPos || [3750, 0];
+    // notes without a position: a band along the top
+    (box.labels || []).forEach((l, i) => { if (!l.pos) l.pos = [-3000 + (i % 5) * 1500, 3500 - Math.floor(i / 5) * 350]; if (!l.size) l.size = [1400, 300]; });
+  }
+  // every node inside the playable area? -> list of problems (empty = fine)
+  function layoutProblems(box) {
+    const out = [], chk = (what, p) => { if (p && (Math.abs(p[0]) > CB_HALF || Math.abs(p[1]) > CB_HALF)) out.push(`${what} at ${Math.round(p[0])},${Math.round(p[1])} is outside the circuit box area (+-${CB_HALF}): it would pile up at the border`); };
+    for (const c of box.components) chk('component ' + c.id, c.pos);
+    (box.labels || []).forEach((l, i) => chk('label ' + (l.header || i), l.pos));
+    chk('input node', box.inPos); chk('output node', box.outPos);
+    return out;
   }
   function toTxt(box, opts) {
     opts = opts || {};
@@ -262,5 +279,5 @@
     if (/<CircuitBox/.test(text)) { const b = parseTxt(text, boxName); return { name: boxName || 'imported', boxes: [b], links: [], meta: {} }; }
     return parseCirc(text);
   }
-  return { parseTxt, toTxt, parseCirc, toCirc, load, shortPin, longPin, autoLayout, parseXml };
+  return { parseTxt, toTxt, parseCirc, toCirc, load, shortPin, longPin, autoLayout, layoutProblems, CB_HALF, parseXml };
 });

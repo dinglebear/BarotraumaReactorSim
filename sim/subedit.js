@@ -218,6 +218,7 @@
       cb.children = [];
       if (bm.components.length > CIRCUITBOX_MAX_COMPONENTS) throw new Error(`circuit box "${bm.name}" has ${bm.components.length} components: the game's circuit box holds at most ${CIRCUITBOX_MAX_COMPONENTS} (the rest are lost on load). Split it into two boxes.`);
       F.autoLayout(bm);
+      const lp = F.layoutProblems(bm); if (lp.length) throw new Error(`circuit box "${bm.name}": ${lp.join('; ')}`);
       const slotIds = [], compIdx = {};
       bm.components.forEach((c, i) => {
         const def = C.byItem(c.item); if (!def) throw new Error(`circuit box: unknown component ${c.item}`);
@@ -253,7 +254,7 @@
         cb.children.push(e);
       });
       if (conts[1]) { const slots = []; for (let i = 0; i < wireIds.length; i += 32) slots.push(wireIds.slice(i, i + 32).join(';')); X.set(conts[1], 'contained', slots.join(',')); }
-      bm.labels.forEach((l, i) => cb.children.push(X.el('Label', { id: i, color: l.color || '#7ED3E0', position: (l.pos || [-900, 900 + i * 300]).join(','), size: (l.size || [600, 250]).join(','), header: l.header || '', body: l.body || '' })));
+      bm.labels.forEach((l, i) => cb.children.push(X.el('Label', { id: i, color: l.color || '#7ED3E0', position: (l.pos || [-3000, 3500]).map(v => Math.round(v)).join(','), size: (l.size || [1400, 300]).join(','), header: l.header || '', body: l.body || '' })));
       this.sub.children.push(n); this.items.set(id, n); if (handle) this.handles[handle] = id; this.nudge(n);
       this.log.push(`box ${handle ? '@' + handle + ' ' : ''}#${id}: ${bm.components.length} components, ${bm.wires.length} wires (${wireIds.length} inside)`);
       return id;
@@ -272,6 +273,7 @@
       }
       if (this.maxId > 65535) problems.push('more than 65535 IDs');
       for (const n of this.items.values()) {
+        const cbx = n.children.find(c => c.tag === 'CircuitBox'); if (cbx) for (const c of cbx.children) { const p = (X.get(c, 'position') || X.get(c, 'pos') || '0,0').split(',').map(Number); if (Math.abs(p[0]) > 4096 || Math.abs(p[1]) > 4096) { problems.push(`circuit box ${X.get(n, 'ID')}: a ${c.tag} sits at ${p.join(',')}, outside the +-4096 area (it piles up at the border in game)`); break; } }
         if (n.children.some(c => c.tag === 'CircuitBox')) { const k = (X.get(X.kids(n, 'ItemContainer')[0] || { attrs: [] }, 'contained') || '').split(',').filter(Boolean).length; if (k > CIRCUITBOX_MAX_COMPONENTS) problems.push(`circuit box ${X.get(n, 'ID')} holds ${k} components (max ${CIRCUITBOX_MAX_COMPONENTS})`); }
       }
       return problems;

@@ -342,7 +342,7 @@
   def('wifi', 'wificomponent', 'WifiComponent', { Channel: '0', LinkToChat: 'false', MinChatMessageInterval: '1', DiscardDuplicateChatMessages: 'true' }, ['signal_in', 'set_channel'], OUT, (c) => {
     c.recv = (pin, s) => {
       if (pin === 'signal_in') c.wifiTx(s);
-      else if (pin === 'set_channel') { const r = parseI(s.v); if (r.ok) c.p.Channel = String(clamp(r.v, 0, 10000)); }
+      else if (pin === 'set_channel') { const r = parseI(s.v); if (r.ok) { c.p.Channel = String(clamp(r.v, 0, 10000)); if (c.onChannel) c.onChannel(); } }
     };
   });
 

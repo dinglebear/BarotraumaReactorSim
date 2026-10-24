@@ -3,10 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Circuit Sandbox</title>
+<title>Circuit Lab</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!--SHARED-->
 <style>
 /* Layout: the bench's engineering console. Script on the left, the live wiring bench on the right (devices you can
    operate, the circuit boxes drawn to scale inside their 8192-unit area), findings underneath. */
@@ -31,7 +32,7 @@
 * { box-sizing: border-box }
 [hidden] { display: none !important }
 html { -webkit-text-size-adjust: 100% }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: max(14px, env(safe-area-inset-top, 0px)) max(40px, env(safe-area-inset-bottom, 0px)) }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 max(40px, env(safe-area-inset-bottom, 0px)) }
 h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0 }
 a { color: var(--accent) }
 .wrap { max-width: 1500px; margin: 0 auto; display: grid; gap: 14px }
@@ -130,11 +131,12 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
 </style>
 </head>
 <body>
+<!--NAV-->
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <h1>Circuit Sandbox</h1>
-      <p>Wire circuit boxes, loose components and devices together, script what happens, then press buttons and type into terminals yourself. Same component engine as the reactor bench, 60 ticks a second. <a href="index.html">Reactor bench</a></p>
+      <h1>Circuit Lab</h1>
+      <p>Wire circuit boxes, loose components and devices together, script what happens, then press buttons and type into terminals yourself. Same component engine as the Sub Studio and the Reactor Bench, 60 ticks a second.</p>
     </div>
     <div class="controls" role="group" aria-label="Run controls">
       <button id="btnRun" class="primary">Run</button>
@@ -191,13 +193,12 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   </div>
 </div>
 
-<script>/*__SIM__*/</script>
-<script type="application/json" id="lib">/*__LIB__*/</script>
+<!--LIBS-->
 <script>
 (() => {
 'use strict';
 const S = self.BaroSandbox, C = self.BaroComponents, F = self.BaroFormat;
-const LIB = JSON.parse(document.getElementById('lib').textContent);
+const LIB = self.BaroLabLib;
 const $ = id => document.getElementById(id);
 const store = { get(k, d) { try { const v = localStorage.getItem('sbx.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('sbx.' + k, JSON.stringify(v)); } catch (e) { } } };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -462,6 +463,8 @@ $('btnCopy').onclick = () => {
   const ex = store.get('ex', 'mini_os'), src = store.get('src', null);
   $('exSel').value = EX[ex] !== undefined ? ex : '';
   $('src').value = src !== null && src.trim() ? src : (EX[ex] || EX[Object.keys(EX)[0]]);
+  // opened from the Sub Studio ("Open in Circuit Lab"): a sub's circuit box arrives as a ready-made script
+  if (location.hash === '#import') { let t = null; try { t = localStorage.getItem('bw.import'); localStorage.removeItem('bw.import'); } catch (e) { } if (t) { if ($('src').value && !Object.values(EX).includes($('src').value)) store.set('mine', $('src').value); $('src').value = t; $('exSel').value = ''; store.set('src', t); } history.replaceState(null, '', location.pathname); }
   try { build($('src').value); } catch (e) { setStatus('Could not build: ' + e.message, 'err'); }
   requestAnimationFrame(frame);
 }

@@ -39,8 +39,9 @@ textarea { font: 12.5px/1.5 var(--f-mono); color: var(--ink); background: var(--
 .ok { color: var(--good) } .warn { color: var(--amber) } .bad { color: var(--bad) } .mut { color: var(--muted) }
 .mono { font-family: var(--f-mono) }
 .label { font: 600 11px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
-/* the navigation bar shared by every page */
-.topnav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 10px 0; margin-bottom: 14px; background: var(--bg); border-bottom: 1px solid var(--line) }
+/* the navigation bar shared by every page (sticky; the band above it, under a phone's status bar, is painted too) */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 31; background: var(--bg) }
+.topnav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; max-width: 1680px; margin-inline: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 10px 0; margin-bottom: 14px; background: var(--bg); border-bottom: 1px solid var(--line) }
 .topnav .brand { font: 700 17px var(--f-display); letter-spacing: .03em; color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 8px }
 .topnav .brand svg { width: 22px; height: 22px }
 .topnav nav { display: flex; flex-wrap: wrap; gap: 2px }
@@ -48,5 +49,13 @@ textarea { font: 12.5px/1.5 var(--f-mono); color: var(--ink); background: var(--
 .topnav nav a:hover { color: var(--ink); background: var(--sunk) }
 .topnav nav a[aria-current="page"] { color: var(--ink); background: var(--sunk); box-shadow: inset 0 -2px 0 var(--accent) }
 .topnav .spacer { flex: 1 }
+.topnav .themebtn { padding: 6px 8px; line-height: 0; color: var(--muted) }
 .wrap { max-width: 1680px; margin: 0 auto }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important } }
+@media (max-width: 640px) {
+  .topnav { gap: 4px 10px }
+  .topnav .brand { margin-right: auto }
+  .topnav .spacer { display: none }
+  .topnav nav { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap }
+  .topnav nav a { white-space: nowrap; padding: 6px 9px }
+}

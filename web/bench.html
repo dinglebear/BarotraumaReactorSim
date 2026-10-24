@@ -1,7 +1,13 @@
-<title>Reactor Circuit Bench</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reactor Bench</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="shared.css">
 <style>
 /* Layout: engineering console. Settings rail on the left, live instruments + charts on the right, circuit/log drawer below. */
 :root {
@@ -23,7 +29,7 @@
   --c-demand: #8fa4ad; --c-supply: #3cb7ac; --c-volt: #f0a53a; --c-temp: #ff7a5c; --c-fission: #a68bf0; --c-turbine: #5aaef0; --c-batt: #6cc277; --c-battin: #d9c25a; color-scheme: dark }
 * { box-sizing: border-box }
 [hidden] { display: none !important }
-body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 40px }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 40px }
 h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0 }
 .wrap { max-width: 1400px; margin: 0 auto; display: grid; gap: 14px }
 header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; justify-content: space-between }
@@ -116,12 +122,14 @@ body.noscroll { overflow: hidden }
 .cb-m { font-family: var(--f-mono); fill: var(--muted) }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
 </style>
-
+</head>
+<body>
+<header class="topnav"><a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 18c0-4 5-7 12-7h4l2-4h3l-1 4c3 1 5 3 5 7s-5 6-13 6S4 22 4 18z" fill="currentColor" opacity=".9"/><circle cx="12" cy="18" r="1.8" fill="var(--bg)"/><circle cx="17" cy="18" r="1.8" fill="var(--bg)"/><circle cx="22" cy="18" r="1.8" fill="var(--bg)"/></svg>Barotrauma Workshop</a><nav aria-label="Pages"><a href="index.html">Home</a><a href="subs.html">Sub Studio</a><a href="sandbox.html">Circuit Lab</a><a href="bench.html" aria-current="page">Reactor Bench</a></nav><span class="spacer"></span><button class="themebtn" type="button" title="Light or dark" aria-label="Switch between light and dark"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2.5a7.5 7.5 0 0 1 0 15z" fill="currentColor"/></svg></button></header><script>(()=>{const k='bw.theme',r=document.documentElement;try{const t=localStorage.getItem(k);if(t)r.dataset.theme=t}catch(e){}document.currentScript.previousElementSibling.querySelector('.themebtn').onclick=()=>{const d=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=d?'light':'dark';try{localStorage.setItem(k,r.dataset.theme)}catch(e){}}})()</script>
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <h1>Reactor Circuit Bench</h1>
-      <p>Barotrauma reactor, grid and circuit boxes at 60 ticks/s. Automatic control is off: the circuit runs the reactor. <a href="sandbox.html" style="color:var(--accent)">Circuit sandbox</a></p>
+      <h1>Reactor Bench</h1>
+      <p>Test a reactor circuit against a recorded round's power demand: Barotrauma's reactor, grid and circuit boxes at 60 ticks/s, with the reactor's automatic control off. To run a whole sub, use the Sub Studio.</p>
     </div>
     <div class="controls" role="group" aria-label="Simulation controls">
       <button id="btnRun" class="primary">Start</button>
@@ -137,20 +145,6 @@ body.noscroll { overflow: hidden }
   <div class="grid">
     <aside class="panel" aria-label="Master settings">
       <fieldset>
-        <legend>Run</legend>
-        <div class="seg" id="mode" role="group" aria-label="What to run"><button data-m="test" aria-pressed="true">Test file</button><button data-m="sub" aria-pressed="false">Sub practice round</button></div>
-      </fieldset>
-      <fieldset class="smode" hidden>
-        <legend>Submarine</legend>
-        <select id="subSel" aria-label="Submarine"></select>
-        <label class="btn filebtn">Load .sub…<input type="file" id="subFile" accept=".sub,.xml"></label>
-        <p class="hint" id="subInfo"></p>
-        <label class="row">Round length (s)<input type="number" id="subDur" min="60" step="60" value="600"></label>
-        <label class="check"><input type="checkbox" id="subFights" checked> Fights (gunners fire, sonar active)</label>
-        <label class="row">Hull breach at (s)<input type="number" id="subBreach" min="0" step="10" placeholder="none"></label>
-        <p class="hint">The reactor runs on the crew's automatic control unless you pick a reactor circuit below (it is wired into the sub's reactor, main junction box, batteries and nav terminal).</p>
-      </fieldset>
-      <fieldset class="tmode">
         <legend>Test file (power demand)</legend>
         <select id="profileSel" aria-label="Load profile"></select>
         <div class="two">
@@ -170,7 +164,7 @@ body.noscroll { overflow: hidden }
       </fieldset>
       <fieldset>
         <legend>Batteries</legend>
-        <div class="tmode" style="display:grid;gap:9px">
+        <div style="display:grid;gap:9px">
         <label class="check"><input type="checkbox" id="battOn"> Allow batteries (adds a 2nd circuit box)</label>
         <label class="check"><input type="checkbox" id="battShip" checked> Use the sub's own batteries (from the test file)</label>
         <p class="hint" id="battInfo"></p>
@@ -180,7 +174,6 @@ body.noscroll { overflow: hidden }
         <label class="row">Start charge rate %<input type="number" id="battRate" min="0" max="100" step="10" value="0"></label>
         <p class="hint">Batteries cover any shortfall on their own. A full battery can't absorb anything: to soak up surplus (overvoltage), the battery circuit has to raise <code>set_rate</code>, so keep the charge near 80 %.</p>
         </div>
-        <p class="hint smode" hidden>A sub practice round uses the sub's own batteries.</p>
         <label class="row">Box link<select id="linkMode"><option value="wire">Wire</option><option value="wifi">Wifi components</option></select></label>
         <label class="row wide">Battery circuit<select id="battCirc" aria-label="Battery circuit"></select></label>
       </fieldset>
@@ -218,7 +211,6 @@ body.noscroll { overflow: hidden }
           <button role="tab" data-tab="box" aria-selected="false">Circuit box</button>
           <button role="tab" data-tab="circ" aria-selected="false">Circuit (.circ)</button>
           <button role="tab" data-tab="files" aria-selected="false">In-game files</button>
-          <button role="tab" data-tab="sub" aria-selected="false" class="smode" hidden>Sub</button>
         </div>
         <div class="tabpane" data-pane="log">
           <div id="status" class="msg">Pick a test file and a circuit, then press Start.</div>
@@ -245,30 +237,6 @@ body.noscroll { overflow: hidden }
           <textarea id="circText" spellcheck="false" aria-label="Circuit source"></textarea>
           <div class="bar"><button id="btnApply" class="primary">Apply &amp; reset</button><button id="btnPins" title="Move the box pins around by trial and error until the reactor runs well">Find pins</button><button id="btnSaveCirc" data-dl>Save .circ</button><span id="circMsg" class="hint"></span></div>
         </div>
-        <div class="tabpane" data-pane="sub" hidden>
-          <div class="edbar">
-            <label class="check"><input type="checkbox" id="svPower" checked> Power wires</label>
-            <label class="check"><input type="checkbox" id="svSignal" checked> Signal wires</label>
-            <label class="check"><input type="checkbox" id="svLabels" checked> Power labels</label>
-            <label class="check" title="Solid walls, floors and the outer shell (what collides)"><input type="checkbox" id="svWalls" checked> Walls</label>
-            <label class="check" title="Background walls and decorative structures"><input type="checkbox" id="svBack"> Background</label>
-            <label class="check" title="Every other placed item: cabinets, ladders, decorations (outlines = hitboxes)"><input type="checkbox" id="svProps"> Props</label>
-            <label class="check" title="Gaps (openings between rooms, doors) and AI waypoints / spawn points"><input type="checkbox" id="svNav"> Gaps &amp; waypoints</label>
-            <label class="check" title="Room names and sizes"><input type="checkbox" id="svRooms" checked> Room names</label>
-            <label class="check" title="Every wifi component (loose or inside a circuit box), linked to the others on its channel"><input type="checkbox" id="svWifi"> Wifi channels</label>
-            <label class="check" title="A line every metre (100 units); every 10 m when zoomed out"><input type="checkbox" id="svGrid"> Grid</label>
-            <input type="text" id="svFind" placeholder="Find: battery, 7300, Engine…" aria-label="Find items, rooms or wifi channels" style="width:200px">
-            <span class="hint" id="svFindN"></span>
-            <button id="svMeasure" aria-pressed="false" title="Click two points to measure the distance (Esc clears)">Measure</button>
-            <span class="hint">Colours: each power grid has its own colour; dim = no power. Click anything.</span>
-          </div>
-          <div class="edgrid">
-            <div class="edwrap" id="svWrap"><svg id="svSvg" tabindex="0" aria-label="Submarine side view"></svg>
-              <div class="zoom"><button class="expand" title="Fill the window (Esc to close)">Expand</button><button id="svZin" aria-label="Zoom in">+</button><button id="svZout" aria-label="Zoom out">−</button><button id="svFit">Fit</button></div></div>
-            <div class="insp" id="svInsp"></div>
-          </div>
-          <p class="hint" id="svCoord" style="font-family:var(--f-mono)">Move over the sub for coordinates (sub units; 100 units = 1 m, y up).</p>
-        </div>
         <div class="tabpane" data-pane="files" hidden>
           <p class="hint">Blueprints-format files: load them in game with the Blueprints mod. Box pins are labelled with what to wire them to.</p>
           <div id="fileCards" style="display:grid;gap:10px"></div>
@@ -278,13 +246,14 @@ body.noscroll { overflow: hidden }
   </div>
 </div>
 
-<script>/*__SIM__*/</script>
-<script type="application/json" id="lib">/*__LIB__*/</script>
+<script src="lib/sim.js"></script>
+<script src="lib/circuits.js"></script>
+<script src="lib/profiles.js"></script>
 <script>
 (() => {
 'use strict';
 const E = self.BaroEngine, F = self.BaroFormat, P = self.BaroProject, A = self.BaroAutoPins;
-const LIB = JSON.parse(document.getElementById('lib').textContent);
+const LIB = { circuits: self.BaroCircuitLib.circuits, catalog: self.BaroCircuitLib.catalog, profiles: self.BaroProfiles };
 const $ = id => document.getElementById(id);
 const store = { get(k, d) { try { const v = localStorage.getItem('rcb.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('rcb.' + k, JSON.stringify(v)); } catch (e) { } } };
 let downloads = null;
@@ -413,16 +382,15 @@ function build() {
   try {
     model = /^\s*(#[^\n]*\n?\s*)*$/.test($('circText').value) ? { name: 'vanilla_autotemp', boxes: [], links: [], meta: {} } : F.parseCirc($('circText').value);
     if (cfg.vanilla) { model.boxes = model.boxes.filter(b => b.name !== 'reactor'); model.name = model.boxes.length ? 'vanilla+' + model.name : 'vanilla_autotemp'; }
-    if (!cfg.vanilla && !model.boxes.length && mode !== 'sub') throw new Error('the circuit has no components');
+    if (!cfg.vanilla && !model.boxes.length) throw new Error('the circuit has no components');
     cfg.circuitName = model.name;
-    if (mode === 'sub') sim = buildShip(cfg);
-    else sim = new E.Sim(P.substitute(model, P.placeholders(cfg)), cfg);
+    sim = new E.Sim(P.substitute(model, P.placeholders(cfg)), cfg);
     $('circMsg').textContent = model.boxes.length ? `${model.boxes.map(b => `${b.name}: ${b.components.length} components, ${b.wires.length} wires`).join(' · ')}` : '';
     const w = sim.warnings.length ? ' Warnings: ' + sim.warnings.join('; ') : '';
-    status(mode === 'sub' ? `Ready: ${sim.ship.name} practice round, reactor ${sim.reactor.maxPower} kW run by ${sim.reactor.autoTemp ? 'the crew\'s automatic control' : model.name}.${w}` : `Ready: ${model.name} on ${profile.name} with a ${cfg.reactorMaxKW} kW reactor.${w}`, !!w);
+    status(`Ready: ${model.name} on ${profile.name} with a ${cfg.reactorMaxKW} kW reactor.${w}`, !!w);
     $('log').textContent = 'Running produces the log here.';
   } catch (e) { sim = null; status('Circuit error: ' + e.message, true); }
-  renderFiles(); render(); draw(); edSync(); if (mode === 'sub') svRender();
+  renderFiles(); render(); draw(); edSync();
 }
 function status(t, err) { const s = $('status'); s.textContent = t; s.className = 'msg' + (err ? ' err' : ''); }
 function setRunLabel() { $('btnRun').textContent = running ? 'Pause' : (sim && sim.time > 0 && !finished ? 'Resume' : 'Start'); }
@@ -464,7 +432,7 @@ function render() {
   setTile('tF', `${n.fission.toFixed(1)}%`, 'sF', `→ ${n.tf.toFixed(1)}% ${n.fCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
   setTile('tU', `${n.turbine.toFixed(1)}%`, 'sU', `→ ${n.tt.toFixed(1)}% · ideal ${n.cto.toFixed(1)}% ${n.tCtl ? '' : '<span class="pill warn">NO SIGNAL</span>'}`);
   setTile('tFu', `${sim.metrics.fuel.toFixed(1)}`, 'sFu', `rod condition · ${R.rods.length} ${sim.fuelType} rod${R.rods.length > 1 ? 's' : ''}`);
-  edLive(); svLive();
+  edLive();
   if (sim.batteries.length) setTile('tB', `${n.batt.toFixed(1)}%`, 'sB', `charging ${Math.round(n.battIn)} · giving ${Math.round(n.battOut)} kW`, n.batt < 10 || n.batt > 95 ? 'warn' : '');
   else setTile('tB', 'off', 'sB', 'enable in settings');
 }
@@ -550,7 +518,6 @@ function edOpenModel(m, readonly, pinText) { // show any model, e.g. a circuit b
   edSetBoxButtons(); edRender(); edMsg(readonly ? 'Viewing a circuit box from the sub (read only). Live values show while the round runs.' : '');
 }
 function edSync(force) { // take the circuit under test into the editor unless the user has unsaved edits
-  if (ED.readonly && !force && mode === 'sub') { edRender(); return; }
   ED.readonly = false; ED.pinText = null;
   if (ED.dirty && !force) { edRender(); return; }
   ED.model = clone(model && model.boxes.length ? model : { name: 'my_circuit', boxes: [], links: [], meta: {} });
@@ -789,294 +756,10 @@ function edLive() { if (!ED.dirty && !$('edSvg').closest('[hidden]') && performa
   $('edBox').onclick = e => { const bt = e.target.closest('button'); if (!bt) return; ED.box = bt.dataset.b; ED.sel = ED.pend = null; ED.view = null; edSetBoxButtons(); edRender(); };
 })();
 
-// ---------- sub practice round: mode, sub list, side view ----------
-const SF = self.BaroSubFile, SH = self.BaroShip;
-let ships = Object.assign({}, LIB.ships || {}), mode = 'test';
-const SV = { view: null, sel: null, at: 0, drag: null };
-const KIND_COL = { reactor: '#c2412d', battery: '#2b7a3d', supercap: '#9a7b00', junction: '#0a7069', relay: '#3a7bd0', engine: '#6b4fb3', pump: '#1f78b4', nav: '#b86e00', turret: '#8a3b8f', discharger: '#8a3b8f', oxygen: '#2b8a8a', fabricator: '#7a6a50', circuitbox: '#e08a2c', logic: '#a0a0a0', light: '#c9b458', detector: '#6b7f88', button: '#d0453a', periscope: '#6b7f88', door: '#7d8b91', display: '#7d8b91', powered: '#7a6a50', terminal: '#b86e00', other: '#9aa' };
-const GRID_COL = ['#0a7069', '#c2412d', '#6b4fb3', '#b86e00', '#1f78b4', '#2b7a3d', '#8a3b8f', '#9a7b00', '#d0453a', '#3a7bd0'];
-function setMode(m) {
-  mode = m; store.set('mode', m);
-  document.querySelectorAll('#mode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m));
-  document.querySelectorAll('.tmode').forEach(e => e.hidden = m !== 'test'); document.querySelectorAll('.smode').forEach(e => e.hidden = m !== 'sub');
-  if (m !== 'sub' && document.querySelector('[role=tab][aria-selected=true]').dataset.tab === 'sub') showTab('log');
-}
-function refreshShips() { fillSelect($('subSel'), Object.keys(ships).sort().map(k => [k, k]), store.get('sub', null) || 'Dugong'); subInfo(); }
-function subInfo() {
-  const sh = ships[$('subSel').value]; if (!sh) { $('subInfo').textContent = ''; return; }
-  const cnt = id => sh.items.filter(i => i.identifier === id || i.kinds.includes(id)).length;
-  $('subInfo').textContent = `${sh.class || 'sub'}${sh.tier ? ', tier ' + sh.tier : ''} · ${sh.hulls.length} rooms · ${sh.items.length} electrical items · ${sh.wires.length} wires · ${cnt('junctionbox')} junction boxes, ${cnt('battery')} batteries, ${cnt('supercapacitor')} supercapacitors, ${cnt('RelayComponent')} relays, ${sh.items.filter(i => i.box).length} circuit boxes`;
-}
-function buildShip(cfg) {
-  const sh = ships[$('subSel').value]; if (!sh) throw new Error('pick a submarine');
-  const s = new SH.ShipSim(sh, { duration: Number($('subDur').value) || 600, rods: cfg.rods, fuelType: cfg.fuelType, start: cfg.start, seed: 12345,
-    scenario: { fights: $('subFights').checked, breachAt: $('subBreach').value === '' ? null : Number($('subBreach').value) } });
-  const own = !s.reactor.autoTemp; // the sub's own circuit already drives the reactor (e.g. Camel Overkill): don't plug a second one in
-  if (own) s.warnings.push("this sub's own circuit runs the reactor: the reactor circuit picked on the left is not used");
-  if (model.boxes.length && !own) {
-    const sum = k => s.batteries.reduce((a, b) => a + b[k], 0);
-    s.attachCircuit(P.substitute(model, { MAX: s.reactor.maxPower, BATT_N: s.batteries.length, BATT_KW: sum('maxRecharge'), BATT_OUT: sum('maxOut'), BATT_CAP: sum('capacity') }));
-  }
-  s.cfg.circuitName = own ? sh.name + ' (own circuits)' : model.name; SV.sel = null; SV.view = null;
-  return s;
-}
-// geometry: world (x right, y up) -> screen (y down)
-const svRect = r => ({ x: r[0], y: -r[1], w: r[2], h: r[3] });
-const GEO = self.BaroShellGeom || null; // structure collision shapes (sim/shellgeom.js)
-function svDev(id) { return sim && sim.byId ? sim.byId.get(id) : null; }
-function svGridOf(itemId, conn) { return sim && sim.connGrid ? sim.connGrid.get(itemId + '|' + conn) : null; }
-function svGridCol(g) { if (!g || !sim.grids) return '#888'; const i = sim.grids.indexOf(g); return GRID_COL[(i < 0 ? 0 : i) % GRID_COL.length]; }
-function svRender() {
-  const svg = $('svSvg'); if (!svg || !sim || !sim.ship) { if (svg) svg.innerHTML = '<text x="20" y="40" class="cb-m" font-size="14">Pick "Sub practice round" and a submarine.</text>'; return; }
-  const sh = sim.ship;
-  if (!SV.view) svFit();
-  const v = SV.view, o = [], k = v.w / ($('svWrap').clientWidth || 800); // world units per pixel
-  const fs = 11 * k;
-  const showW = $('svWalls').checked, showB = $('svBack').checked, showPr = $('svProps').checked, showN = $('svNav').checked;
-  const strRect = (st, fill, stroke, op) => { const r = svRect(st.rect); return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" fill-opacity="${op}" stroke="${stroke}" stroke-width="${k}" pointer-events="visibleFill" data-k="struct" data-id="${st.id}"${st.rotation ? ` transform="rotate(${-st.rotation} ${r.x + r.w / 2} ${r.y + r.h / 2})"` : ''}><title>${esc(st.name || st.identifier)} (${st.identifier}) #${st.id}</title></rect>`; };
-  if ($('svGrid').checked) { // 1 m grid (10 m when zoomed out), only what's in view
-    const step = v.w / 100 > 120 ? 1000 : 100, x0 = Math.floor(v.x / step) * step, y0 = Math.floor(v.y / step) * step;
-    for (let x = x0; x <= v.x + v.w; x += step) o.push(`<line x1="${x}" y1="${v.y}" x2="${x}" y2="${v.y + v.h}" stroke="var(--line)" stroke-width="${(x % (step * 10) === 0 ? 1.4 : .6) * k}" pointer-events="none"/>`);
-    for (let y = y0; y <= v.y + v.h; y += step) o.push(`<line x1="${v.x}" y1="${y}" x2="${v.x + v.w}" y2="${y}" stroke="var(--line)" stroke-width="${(y % (step * 10) === 0 ? 1.4 : .6) * k}" pointer-events="none"/>`);
-    o.push(`<text class="cb-m" x="${v.x + 8 * k}" y="${v.y + v.h - 8 * k}" font-size="${fs}" pointer-events="none">grid ${step / 100} m</text>`);
-  }
-  if (showB) for (const st of sh.structures || []) if (!st.solid) o.push(strRect(st, '#c9b8a0', 'none', .18));
-  // rooms
-  for (const h of sh.hulls) {
-    const r = svRect(h.rect), water = sim.hullWater[h.id] || 0, sel = SV.sel && SV.sel.hull === h.id;
-    o.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${water ? 'rgba(31,120,180,.28)' : 'var(--panel)'}" stroke="${sel ? 'var(--accent)' : 'var(--line)'}" stroke-width="${(sel ? 3 : 1.5) * k}" data-k="hull" data-id="${h.id}"/>`);
-  }
-  if (showW) for (const st of sh.structures || []) if (GEO ? GEO.solid(st) : st.solid) {
-    // the real collision body (rotated, offset, flipped as the game builds it); slopes also show their sprite box
-    if (!GEO) { o.push(strRect(st, '#5a5f66', '#3a3f46', .85)); continue; }
-    const b = GEO.body(st), pts = b.quad.map(p => p[0] + ',' + (-p[1])).join(' ');
-    if (Math.abs(Math.sin(b.angle)) > 0.01 && Math.abs(Math.cos(b.angle)) > 0.01) { const r = svRect(st.rect); o.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="#3a3f46" stroke-width="${k}" stroke-dasharray="${3 * k} ${3 * k}" opacity=".5" pointer-events="none"/>`); }
-    o.push(`<polygon points="${pts}" fill="#5a5f66" fill-opacity=".85" stroke="#3a3f46" stroke-width="${k}" data-k="struct" data-id="${st.id}"><title>${esc(st.name || st.identifier)} (${st.identifier}) #${st.id}</title></polygon>`);
-  }
-  if (showPr) for (const p of sh.props || []) { const r = svRect(p.rect); o.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#b07a3a" fill-opacity=".12" stroke="#b07a3a" stroke-width="${k}" stroke-dasharray="${4 * k} ${3 * k}" data-k="prop" data-id="${p.id}"><title>${esc(p.identifier)} #${p.id}</title></rect>`); }
-  if (showN) {
-    for (const g of sh.gaps || []) { const r = svRect(g.rect); o.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#19b5c9" fill-opacity=".35" stroke="#19b5c9" stroke-width="${k}"><title>gap #${g.id} (${g.horizontal ? 'horizontal' : 'vertical'})</title></rect>`); }
-    const wp = new Map((sh.waypoints || []).map(w => [w.id, w]));
-    for (const w of sh.waypoints || []) for (const l of w.links) { const b = wp.get(l); if (b && w.id < b.id) o.push(`<line x1="${w.x}" y1="${-w.y}" x2="${b.x}" y2="${-b.y}" stroke="#7a4fd0" stroke-width="${k}" opacity=".5" pointer-events="none"/>`); }
-    for (const w of sh.waypoints || []) { const sp = w.spawn !== 'Path'; o.push(`<circle cx="${w.x}" cy="${-w.y}" r="${(sp ? 6 : 3) * k}" fill="${sp ? '#e0457b' : '#7a4fd0'}"><title>${sp ? 'spawn: ' + esc(w.spawn) + (w.job ? ' (' + esc(w.job) + ')' : '') : 'waypoint'} #${w.id}</title></circle>`); }
-  }
-  // wires (real paths from the sub file)
-  const showP = $('svPower').checked, showS = $('svSignal').checked;
-  for (const w of sh.wires) {
-    const isP = /^power/.test(w.from.conn) && /^power/.test(w.to.conn); if (isP ? !showP : !showS) continue;
-    let pts = w.nodes;
-    const a = sh.items.find(i => i.id === w.from.item), b = sh.items.find(i => i.id === w.to.item);
-    if (!pts || pts.length < 2) { if (!a || !b) continue; pts = [[a.rect[0] + a.rect[2] / 2, a.rect[1] - a.rect[3] / 2], [b.rect[0] + b.rect[2] / 2, b.rect[1] - b.rect[3] / 2]]; }
-    const g = isP ? svGridOf(w.from.item, w.from.conn) : null, live = isP ? g && g.voltage >= 0.5 : true;
-    const col = isP ? svGridCol(g) : (w.color === 'bluewire' ? '#3a7bd0' : w.color === 'redwire' ? '#d0453a' : '#8a9aa0');
-    o.push(`<polyline points="${pts.map(p => p[0] + ',' + (-p[1])).join(' ')}" fill="none" stroke="${col}" stroke-width="${(isP ? 3 : 1.4) * k}" opacity="${live ? (isP ? .9 : .55) : .25}" pointer-events="none"/>`);
-  }
-  // devices
-  const showL = $('svLabels').checked;
-  for (const d of [...sim.byId.values()]) {
-    const it = d.it, r0 = svRect(it.rect), mn = 12 * k, r = { x: r0.x + r0.w / 2 - Math.max(r0.w, mn) / 2, y: r0.y + r0.h / 2 - Math.max(r0.h, mn) / 2, w: Math.max(r0.w, mn), h: Math.max(r0.h, mn) }, kind = d.kind || 'reactor', col = KIND_COL[kind] || KIND_COL.other, sel = SV.sel && SV.sel.id === it.id;
-    const kw = d.batt ? d.batt.cpc : d.cpc || 0, off = d.voltage !== undefined && d.voltage < 0.5 && kind !== 'logic' && kind !== 'circuitbox' && kind !== 'reactor' && kind !== 'battery' && kind !== 'supercap';
-    const over = d.overloaded;
-    o.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${3 * k}" fill="${col}" fill-opacity="${off ? .25 : .8}" stroke="${over ? '#ff2a1a' : sel ? 'var(--ink)' : 'none'}" stroke-width="${(over ? 4 : 3) * k}" data-k="dev" data-id="${it.id}"/>`);
-    if (showL && (kw >= 50 || kind === 'reactor' || kind === 'battery' || kind === 'supercap' || (kind === 'junction' && d.grid && (Math.abs(d.grid.voltage - 1) > 0.05 || sel)))) {
-      const t = kind === 'reactor' ? `${Math.round(-sim.reactor.cpc)} kW · ${sim.reactor.temp.toFixed(0)}°` : d.batt ? `${Math.round(d.batt.charge / d.batt.capacity * 100)}%` : kind === 'junction' && d.grid ? `${d.grid.voltage.toFixed(2)} V` : `${Math.round(kw)} kW`;
-      o.push(`<text class="cb-t" x="${r.x + r.w / 2}" y="${r.y - 4 * k}" font-size="${fs}" text-anchor="middle" pointer-events="none">${esc(t)}</text>`);
-    }
-  }
-  if ($('svRooms').checked) for (const h of sh.hulls) {
-    const r = svRect(h.rect), t = h.label || h.name || 'Room ' + h.id, f = Math.min(fs * 1.15, r.h / 4, r.w / Math.max(6, t.length) * 1.6);
-    if (f < fs * .45) continue; // too small to read at this zoom
-    o.push(`<text class="cb-t" x="${r.x + 6 * k}" y="${r.y + f + 5 * k}" font-size="${f}" font-weight="600" opacity=".75" pointer-events="none">${esc(t)}</text><text class="cb-m" x="${r.x + 6 * k}" y="${r.y + f * 2 + 7 * k}" font-size="${f * .75}" opacity=".7" pointer-events="none">${(h.rect[2] / 100).toFixed(1)} × ${(h.rect[3] / 100).toFixed(1)} m</text>`);
-  }
-  if ($('svWifi').checked) { // wifi network: one colour per channel, every member linked to the first one on that channel
-    const q = (SV.find || '').trim(), groups = svWifiGroups().filter(([ch]) => !/^\d+$/.test(q) || ch === q);
-    for (const [ch, ms] of groups) {
-      const hue = (Number(ch) * 137.5) % 360, col = `hsl(${hue} 75% 48%)`, a = ms[0];
-      for (const m of ms.slice(1)) o.push(`<line x1="${a.x}" y1="${a.y}" x2="${m.x}" y2="${m.y}" stroke="${col}" stroke-width="${1.5 * k}" stroke-dasharray="${6 * k} ${4 * k}" opacity=".7" pointer-events="none"/>`);
-      for (const m of ms) o.push(`<circle cx="${m.x}" cy="${m.y}" r="${5 * k}" fill="${col}" pointer-events="none"/><text x="${m.x + 7 * k}" y="${m.y - 5 * k}" font-size="${fs * .9}" fill="${col}" font-family="var(--f-mono)" font-weight="600" pointer-events="none">${esc(ch)}${m.chat ? ' chat' : ''}${m.n > 1 ? ' ×' + m.n : ''}</text>`);
-    }
-  }
-  const hits = svFindHits();
-  for (const r0 of hits) { const r = svRect(r0.rect), pad = 6 * k; o.push(`<rect x="${r.x - pad}" y="${r.y - pad}" width="${r.w + 2 * pad}" height="${r.h + 2 * pad}" rx="${4 * k}" fill="none" stroke="var(--amber)" stroke-width="${3 * k}" pointer-events="none"/>`); }
-  if (SV.measure && SV.measure.a) {
-    const [a, b] = [SV.measure.a, SV.measure.b || SV.measure.hover || SV.measure.a], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    o.push(`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="var(--accent)" stroke-width="${2 * k}" pointer-events="none"/><circle cx="${a[0]}" cy="${a[1]}" r="${4 * k}" fill="var(--accent)" pointer-events="none"/><circle cx="${b[0]}" cy="${b[1]}" r="${4 * k}" fill="var(--accent)" pointer-events="none"/>`);
-    o.push(`<text class="cb-v" x="${(a[0] + b[0]) / 2 + 6 * k}" y="${(a[1] + b[1]) / 2 - 6 * k}" font-size="${fs * 1.2}" font-weight="600" pointer-events="none">${Math.round(d)} (${(d / 100).toFixed(2)} m) · dx ${Math.round(Math.abs(b[0] - a[0]))} dy ${Math.round(Math.abs(b[1] - a[1]))}</text>`);
-  }
-  svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
-  svg.innerHTML = o.join('');
-  $('svFindN').textContent = SV.find ? `${hits.length} found${hits.length ? ' (Enter zooms)' : ''}` : '';
-  svInspector();
-}
-// wifi members: loose wifi components, and circuit boxes holding wifi (one dot per box per channel)
-function svWifiGroups() {
-  const sh = sim.ship, g = new Map(), add = (ch, it, chat) => { ch = String(ch); const r = svRect(it.rect), x = r.x + r.w / 2, y = r.y + r.h / 2; const list = g.get(ch) || []; const same = list.find(m => m.id === it.id); if (same) { same.n++; same.chat = same.chat || chat; } else list.push({ id: it.id, x, y, n: 1, chat }); g.set(ch, list); };
-  for (const it of sh.items) {
-    for (const w of (it.comps && it.comps.WifiComponent) || []) add(w.Channel ?? '1', it, String(w.LinkToChat).toLowerCase() === 'true');
-    if (it.box) for (const c of it.box.components) if (/wifi/i.test(c.item)) add(c.props.Channel ?? '1', it, String(c.props.LinkToChat).toLowerCase() === 'true');
-  }
-  return [...g.entries()].sort((a, b) => Number(a[0]) - Number(b[0]));
-}
-// search: items, props, structures and rooms by identifier, name, tags, ID; a number also finds wifi on that channel
-function svFindHits() {
-  const q = (SV.find || '').trim(); if (!q || !sim || !sim.ship) return [];
-  let re; try { re = new RegExp(q, 'i'); } catch (e) { re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); }
-  const sh = sim.ship, out = [], hit = (...t) => t.some(x => x !== undefined && x !== null && re.test(String(x)));
-  for (const it of sh.items) {
-    const chans = [...((it.comps && it.comps.WifiComponent) || []).map(w => w.Channel), ...(it.box ? it.box.components.filter(c => /wifi/i.test(c.item)).map(c => c.props.Channel) : [])];
-    if (hit(it.identifier, it.id, it.tags, it.name) || (/^\d+$/.test(q) && chans.some(c => String(c) === q))) out.push(it);
-  }
-  for (const p of sh.props || []) if (hit(p.identifier, p.id)) out.push(p);
-  for (const st of sh.structures || []) if (hit(st.identifier, st.name, st.id)) out.push(st);
-  for (const h of sh.hulls) if (hit(h.label, h.name, h.id)) out.push(h);
-  return out.slice(0, 500);
-}
-function svZoomTo(list) {
-  if (!list.length) return; const wrap = $('svWrap'), W = wrap.clientWidth || 800, H = wrap.clientHeight || 560;
-  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  for (const it of list) { const r = svRect(it.rect); x0 = Math.min(x0, r.x); x1 = Math.max(x1, r.x + r.w); y0 = Math.min(y0, r.y); y1 = Math.max(y1, r.y + r.h); }
-  const pad = 200, kk = Math.max((x1 - x0 + 2 * pad) / W, (y1 - y0 + 2 * pad) / H);
-  SV.view = { x: (x0 + x1) / 2 - W * kk / 2, y: (y0 + y1) / 2 - H * kk / 2, w: W * kk, h: H * kk }; svRender();
-}
-function svFit() {
-  const sh = sim && sim.ship, wrap = $('svWrap'), W = wrap.clientWidth || 800, H = wrap.clientHeight || 560;
-  if (!sh) { SV.view = { x: 0, y: 0, w: W, h: H }; return; }
-  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  for (const it of [...sh.hulls, ...sh.items]) { const r = svRect(it.rect); x0 = Math.min(x0, r.x); x1 = Math.max(x1, r.x + r.w); y0 = Math.min(y0, r.y); y1 = Math.max(y1, r.y + r.h); }
-  const pad = 60, kk = Math.max((x1 - x0 + 2 * pad) / W, (y1 - y0 + 2 * pad) / H);
-  SV.view = { x: (x0 + x1) / 2 - W * kk / 2, y: (y0 + y1) / 2 - H * kk / 2, w: W * kk, h: H * kk };
-}
-function svInspector() {
-  const el = $('svInsp'); if (!sim || !sim.ship) { el.innerHTML = ''; return; }
-  const s = SV.sel, R = sim.reactor;
-  if (!s) {
-    const rg = sim.reactorGrid || {};
-    let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity; for (const h of sim.ship.hulls) { bx0 = Math.min(bx0, h.rect[0]); bx1 = Math.max(bx1, h.rect[0] + h.rect[2]); by1 = Math.max(by1, h.rect[1]); by0 = Math.min(by0, h.rect[1] - h.rect[3]); }
-    const wg = svWifiGroups();
-    el.innerHTML = `<h3>${esc(sim.ship.name)}</h3><p class="hint">${esc(sim.ship.description || '')}</p>`
-      + `<label>Size (rooms)<div class="val">${Math.round(bx1 - bx0)} × ${Math.round(by1 - by0)} units · ${((bx1 - bx0) / 100).toFixed(1)} × ${((by1 - by0) / 100).toFixed(1)} m · ${sim.ship.hulls.length} rooms</div></label>`
-      + (wg.length ? `<label>Wifi channels<div class="val">${wg.map(([ch, ms]) => `<span style="color:hsl(${(Number(ch) * 137.5) % 360} 75% 48%)">■</span> ${esc(ch)}: ${ms.reduce((a, m) => a + m.n, 0)}${ms.some(m => m.chat) ? ' (chat)' : ''}`).join(' · ')}</div></label>` : '')
-      + `<label>Main grid<div class="val">${Math.round(rg.power || 0)} / ${Math.round(rg.load || 0)} kW · ${(rg.voltage || 0).toFixed(2)} V · ${(rg.consumers || []).length} devices</div></label>`
-      + `<label>Reactor<div class="val">${Math.round(-R.cpc)} kW of ${R.maxPower} · ${R.temp.toFixed(1)} ° · ${R.autoTemp ? 'crew automatic control' : 'run by the circuit'} · fire after ${R.fireDelay} s > 60°, meltdown after ${R.meltdownDelay} s > 70°</div></label>`
-      + `<label>Power grids<div class="val">${sim.grids.filter(g => g.consumers.length || g.sources.length || g.reactor).map((g, i) => `<span style="color:${svGridCol(g)}">■</span> ${g.reactor ? 'reactor grid' : g.sources.length ? 'battery/capacitor grid' : 'grid'}: ${Math.round(g.load)} kW, ${g.voltage.toFixed(2)} V`).join('<br>')}</div></label>`
-      + `<label>Oxygen (whole sub, approximate)<div class="val">${sim.o2.toFixed(1)} % · generator ran ${sim.time ? Math.round(sim.o2GenOnS / sim.time * 100) : 0} % of the time</div></label>`
-      + (sim.chat.length ? `<label>Radio chat (wifi LinkToChat)<div class="val">${sim.chat.slice(-8).map(c => `[${c.t.toFixed(0)}s ch${esc(c.ch)}] ${esc(c.text)}`).join('<br>')}</div></label>` : '')
-      + `<p class="hint">Click a device or room. Relays, lights, pumps and buttons can be switched, a room can be breached or set on fire, and terminals can be typed into.</p>`;
-    // parts list: every item type with its count (electrical first); click one to find it
-    const cnt = new Map(); for (const it of [...sim.ship.items, ...(sim.ship.props || [])]) cnt.set(it.identifier, (cnt.get(it.identifier) || 0) + 1);
-    const elec = new Set(sim.ship.items.map(i => i.identifier)), rows = [...cnt.entries()].sort((a, b) => (elec.has(b[0]) - elec.has(a[0])) || b[1] - a[1] || a[0].localeCompare(b[0]));
-    el.innerHTML += `<label>Parts list (${rows.length} kinds; click to find)<div class="val" style="max-height:260px;overflow:auto">${rows.map(([id, n]) => `<a href="#" data-find="${esc(id)}" style="color:${elec.has(id) ? 'var(--ink)' : 'var(--muted)'}">${esc(id)}</a> ×${n}`).join('<br>')}</div></label>`;
-    el.querySelectorAll('[data-find]').forEach(a => a.onclick = e => { e.preventDefault(); $('svFind').value = '^' + a.dataset.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'; SV.find = $('svFind').value; svZoomTo(svFindHits()); });
-    return;
-  }
-  if (s.struct || s.prop) {
-    const x = s.struct ? sim.ship.structures.find(t => t.id === s.struct) : sim.ship.props.find(t => t.id === s.prop); if (!x) { el.innerHTML = ''; return; }
-    const r = x.rect;
-    el.innerHTML = `<h3>${esc(x.name || x.identifier)}</h3><p class="hint">${s.struct ? (x.solid ? 'solid structure (wall / floor / shell: collides)' : 'background / decoration (no collision)') : 'placed item (not electrical)'}</p><label>Identifier<div class="val">${esc(x.identifier)} #${esc(x.id)}</div></label><label>Sprite box (sub coordinates, y up)<div class="val">x ${r[0]} … ${r[0] + r[2]}, y ${r[1] - r[3]} … ${r[1]} (${r[2]} × ${r[3]})${x.rotation ? ' · rotated ' + x.rotation + '°' : ''}${x.flippedx ? ' · flipped X' : ''}${x.flippedy ? ' · flipped Y' : ''}</div></label>`
-      + (s.struct && GEO && GEO.solid(x) ? (() => { const b = GEO.body(x); return `<label>Collision body (what you bump into)<div class="val">${Math.round(b.len)} × ${Math.round(b.thick)} at ${((b.angle * 180 / Math.PI) % 180 + 180) % 180 === 0 ? 0 : Math.round(((b.angle * 180 / Math.PI) % 180 + 180) % 180)}° · centre ${Math.round(b.cx)}, ${Math.round(b.cy)}</div></label>`; })() : '');
-    return;
-  }
-  if (s.hull) {
-    const h = sim.ship.hulls.find(x => x.id === s.hull), w = sim.hullWater[s.hull] || 0;
-    const smoke = !!sim.hullSmoke[s.hull], crew = sim.hullCrew[s.hull] || 0;
-    el.innerHTML = `<h3>${esc(h.label || h.name || 'Room ' + h.id)}</h3><p class="hint">hull #${esc(h.id)} · x ${h.rect[0]} … ${h.rect[0] + h.rect[2]}, y ${h.rect[1] - h.rect[3]} … ${h.rect[1]} · ${(h.rect[2] / 100).toFixed(1)} × ${(h.rect[3] / 100).toFixed(1)} m (floor at y ${h.rect[1] - h.rect[3]})</p><label>Water<div class="val">${w ? 'flooding (water detectors read ' + w + ' %)' : 'dry'}</div></label><label>Smoke<div class="val">${smoke ? 'FIRE (smoke detectors fire)' : 'clear'}</div></label><label>Crew here<div class="val">${crew} (motion detectors see them)</div></label><button id="svAct">${w ? 'Pump it dry' : 'Hull breach here'}</button> <button id="svFire">${smoke ? 'Put the fire out' : 'Start a fire here'}</button>`;
-    $('svAct').onclick = () => { if (w) delete sim.hullWater[s.hull]; else { sim.hullWater[s.hull] = 100; sim.metrics.ev('hull breach in ' + (h.name || 'room ' + h.id) + ' (by hand)'); } svRender(); };
-    $('svFire').onclick = () => { if (smoke) delete sim.hullSmoke[s.hull]; else { sim.hullSmoke[s.hull] = true; sim.metrics.ev('fire in ' + (h.name || 'room ' + h.id) + ' (by hand)'); } svRender(); };
-    return;
-  }
-  const d = svDev(s.id); if (!d) { SV.sel = null; return svInspector(); }
-  const it = d.it, st = d.state || {}, kw = d.batt ? d.batt.cpc : (d.kind === 'reactor' ? R.cpc : d.cpc) || 0;
-  const conns = sim.ship.wires.filter(w => w.from.item === it.id || w.to.item === it.id).map(w => {
-    const me = w.from.item === it.id ? w.from : w.to, other = w.from.item === it.id ? w.to : w.from, od = sim.ship.items.find(i => i.id === other.item);
-    const cn = (d.kind === 'reactor' ? R : d.sim) && (d.kind === 'reactor' ? R : d.sim).conns ? (d.kind === 'reactor' ? R : d.sim).conns[me.conn] : null;
-    return `${esc(me.conn)} ↔ ${esc(od ? od.identifier : '?')}#${other.item}.${esc(other.conn)}${cn && cn.last !== undefined ? ` <b>${esc(String(cn.last).slice(0, 14))}</b>` : ''}`;
-  });
-  let h = `<h3>${esc(it.identifier)} #${it.id}</h3><p class="hint">${esc(d.kind || 'reactor')}${d.grid ? ` · on a grid at ${d.grid.voltage.toFixed(2)} V` : ''}</p>`;
-  if (d.kind !== 'circuitbox' && d.kind !== 'logic') h += `<label>Power<div class="val">${d.kind === 'reactor' ? 'gives ' + Math.round(-R.cpc) : Math.round(kw)} kW${d.voltage !== undefined && d.kind !== 'reactor' ? ' · ' + d.voltage.toFixed(2) + ' V' : ''}</div></label>`;
-  const facts = [];
-  if (d.batt) facts.push(`charge ${Math.round(d.batt.charge / d.batt.capacity * 100)} % of ${d.batt.capacity} kW·min · recharge ${Math.round(d.batt.rate)} of ${d.batt.maxRecharge} kW · giving ${Math.round(d.batt.out)} kW${d.batt.disabled ? ' · output disabled' : ''}`);
-  if (d.kind === 'relay') facts.push(st.on ? 'closed (passes power)' : 'open');
-  if (d.kind === 'pump') facts.push(`${st.active ? 'on' : 'off'} · flow ${Math.round(st.flow || 0)} %${st.target !== null && st.target !== undefined ? ` · ballast ${Math.round(st.level)} % → ${Math.round(st.target)} %` : ''}`);
-  if (d.kind === 'engine') facts.push(`force ${Math.round(st.force || 0)} %`);
-  if (d.kind === 'nav') facts.push(`pilot target x ${Math.round(st.tx)} / y ${Math.round(st.ty)} · sonar ${st.sonarActive ? 'active' : 'passive'}`);
-  if (d.kind === 'junction' && d.grid) facts.push(`grid ${Math.round(d.grid.power)} / ${Math.round(d.grid.load)} kW · overload above ${d.sim.overloadV} V${d.overloaded ? ' · OVERLOADED' : ''}`);
-  if (d.kind === 'display' && st.text !== undefined) facts.push('shows "' + st.text + '"');
-  if (d.kind === 'circuitbox') facts.push(`${d.box.components.length} components, ${d.box.wires.length} wires`);
-  if (facts.length) h += `<label>State<div class="val">${facts.map(esc).join('<br>')}</div></label>`;
-  if (d.kind === 'terminal') h += `<label>Screen<div class="val term">${(st.lines || []).slice(-12).map(esc).join('<br>') || '(empty)'}</div></label><label>Type a line<input id="svType" type="text" placeholder="e.g. help" autocomplete="off"></label>`;
-  const acts = [];
-  if (d.kind === 'relay') acts.push(['Toggle relay', () => { st.on = !st.on; }]);
-  if (d.kind === 'pump') acts.push([st.active ? 'Turn pump off' : 'Turn pump on', () => { st.active = !st.active; }]);
-  if (d.press) acts.push(['Press', () => d.press()]);
-  if (d.kind === 'circuitbox') acts.push(['Open in the Circuit box tab', () => {
-    const pinText = {}; // what each box pin is wired to on the sub
-    for (const w of sim.ship.wires) { const me = w.from.item === it.id ? w.from : w.to.item === it.id ? w.to : null; if (!me) continue; const o = me === w.from ? w.to : w.from, od = sim.ship.items.find(i => i.id === o.item); const sp = F.shortPin(me.conn); pinText[sp] = (pinText[sp] ? pinText[sp] + ', ' : '') + `${od ? od.identifier : '?'}#${o.item}.${o.conn}`; }
-    edOpenModel({ name: it.identifier + '_' + it.id, boxes: [d.box], links: [], meta: {} }, true, pinText); showTab('box'); }]);
-  if (d.kind === 'circuitbox') acts.push(['Open in the sandbox', () => {
-    // the box as .sbx: a const device on every input the sub wires (set them by hand there) and a probe on every output
-    const ins = new Set(), outs = new Set(), what = {};
-    for (const w of sim.ship.wires) { const me = w.from.item === it.id ? w.from : w.to.item === it.id ? w.to : null; if (!me) continue; const o = me === w.from ? w.to : w.from, od = sim.ship.items.find(i => i.id === o.item), m = /^signal_(in|out)(\d)$/.exec(me.conn); if (!m) continue; (m[1] === 'in' ? ins : outs).add(m[2]); what[me.conn] = (what[me.conn] ? what[me.conn] + ', ' : '') + `${od ? od.identifier : '?'}.${o.conn}`; }
-    const body = F.toCirc({ name: 'x', boxes: [Object.assign({}, d.box, { name: 'box1' })], links: [], meta: {} }).split('\n').filter(l => !/^(name|set|link)\b/.test(l)).join('\n');
-    const L = [`# ${sim.ship.name}: circuit box #${it.id} (${it.identifier}), opened from the sub viewer`, `name ${sim.ship.name} box #${it.id}`, body.trim(), ''];
-    for (const n of [...ins].sort()) L.push(`dev in${n} const 0          # on the sub: ${what['signal_in' + n]}`, `wire in${n}.out box1.in${n}`);
-    for (const n of [...outs].sort()) L.push(`dev out${n} probe          # on the sub: ${what['signal_out' + n]}`, `wire box1.out${n} out${n}.in`);
-    L.push('', 'run 30');
-    try { localStorage.setItem('sbx.src', JSON.stringify(L.join('\n'))); localStorage.setItem('sbx.ex', JSON.stringify('')); } catch (e) { }
-    location.href = 'sandbox.html';
-  }]);
-  if (it.comps && it.comps.LightComponent && d.kind !== 'reactor') acts.push(['Toggle light', () => d.sim.recv('toggle', { v: '1', steps: 0, src: null })]);
-  h += acts.map((a, i) => `<button data-act="${i}">${esc(a[0])}</button>`).join(' ');
-  if (conns.length) h += `<label>Wires<div class="val">${conns.join('<br>')}</div></label>`;
-  el.innerHTML = h;
-  el.querySelectorAll('[data-act]').forEach(b => b.onclick = () => { acts[+b.dataset.act][1](); svRender(); });
-  const ti = $('svType'); if (ti) { if (SV.typing) { ti.value = SV.typing.v; ti.focus(); } ti.oninput = () => { SV.typing = { v: ti.value }; }; ti.onkeydown = e => { if (e.key === 'Enter' && ti.value.trim()) { d.type(ti.value.trim()); SV.typing = { v: '' }; svRender(); } }; ti.onblur = () => { if (SV.typing && !SV.typing.v) SV.typing = null; }; }
-}
-function svLive() { if (mode === 'sub' && !$('svSvg').closest('[hidden]') && performance.now() - SV.at > 250) { SV.at = performance.now(); svRender(); } }
-(() => {
-  const svg = $('svSvg');
-  const pt = e => { const r = svg.getBoundingClientRect(), v = SV.view; return [v.x + (e.clientX - r.left) / r.width * v.w, v.y + (e.clientY - r.top) / r.height * v.h]; };
-  svg.addEventListener('pointerdown', e => { if (!SV.view) return; SV.drag = { sx: e.clientX, sy: e.clientY, vx: SV.view.x, vy: SV.view.y, moved: false, t: e.target }; svg.setPointerCapture(e.pointerId); svg.classList.add('panning'); });
-  svg.addEventListener('pointermove', e => { const d = SV.drag; if (!d) return; const r = svg.getBoundingClientRect(); const dx = e.clientX - d.sx, dy = e.clientY - d.sy; if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true; SV.view.x = d.vx - dx / r.width * SV.view.w; SV.view.y = d.vy - dy / r.height * SV.view.h; svg.setAttribute('viewBox', `${SV.view.x} ${SV.view.y} ${SV.view.w} ${SV.view.h}`); });
-  const up = e => { const d = SV.drag; SV.drag = null; svg.classList.remove('panning'); if (!d || d.moved) return;
-    if (SV.measure) { const p = pt(e); if (!SV.measure.a || SV.measure.b) SV.measure = { a: p }; else SV.measure.b = p; svRender(); return; }
-    const t = d.t, k = t.dataset && t.dataset.k; SV.sel = k === 'dev' ? { id: t.dataset.id } : k === 'hull' ? { hull: t.dataset.id } : k === 'struct' ? { struct: t.dataset.id } : k === 'prop' ? { prop: t.dataset.id } : null; svRender(); };
-  svg.addEventListener('pointerup', up);
-  svg.addEventListener('pointermove', e => {
-    if (SV.drag || !SV.view || !sim || !sim.ship) return; const [x, y] = pt(e), gy = -y;
-    const room = sim.ship.hulls.find(h => x >= h.rect[0] && x <= h.rect[0] + h.rect[2] && gy <= h.rect[1] && gy >= h.rect[1] - h.rect[3]);
-    $('svCoord').textContent = `x ${Math.round(x)}, y ${Math.round(gy)}  (${(x / 100).toFixed(2)} m, ${(gy / 100).toFixed(2)} m)${room ? '  in ' + (room.label || room.name || 'room ' + room.id) + (room ? `, ${Math.round(gy - (room.rect[1] - room.rect[3]))} above its floor` : '') : '  outside the rooms'}`;
-    if (SV.measure && SV.measure.a && !SV.measure.b) { SV.measure.hover = [x, y]; if (performance.now() - (SV.mAt || 0) > 40) { SV.mAt = performance.now(); svRender(); } }
-  });
-  $('svMeasure').onclick = () => { SV.measure = SV.measure ? null : {}; $('svMeasure').setAttribute('aria-pressed', !!SV.measure); svRender(); };
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && SV.measure) { SV.measure = {}; svRender(); } });
-  $('svFind').oninput = () => { SV.find = $('svFind').value; svRender(); };
-  $('svFind').onkeydown = e => { if (e.key === 'Enter') svZoomTo(svFindHits()); }; svg.addEventListener('pointercancel', () => { SV.drag = null; svg.classList.remove('panning'); });
-  svg.addEventListener('wheel', e => { e.preventDefault(); if (!SV.view) return; const [px, py] = pt(e), f = e.deltaY > 0 ? 1.15 : 1 / 1.15, v = SV.view; v.x = px - (px - v.x) * f; v.y = py - (py - v.y) * f; v.w *= f; v.h *= f; svRender(); }, { passive: false });
-  const zoom = f => { const v = SV.view; if (!v) return; const cx = v.x + v.w / 2, cy = v.y + v.h / 2; v.x = cx - (cx - v.x) * f; v.y = cy - (cy - v.y) * f; v.w *= f; v.h *= f; svRender(); };
-  $('svZin').onclick = () => zoom(1 / 1.25); $('svZout').onclick = () => zoom(1.25); $('svFit').onclick = () => { SV.view = null; svRender(); };
-  for (const id of ['svPower', 'svSignal', 'svLabels', 'svWalls', 'svBack', 'svProps', 'svNav', 'svRooms', 'svWifi', 'svGrid']) $(id).onchange = svRender;
-  $('mode').onclick = e => { const b = e.target.closest('button'); if (b) { setMode(b.dataset.m); build(); } };
-  $('subSel').onchange = () => { store.set('sub', $('subSel').value); subInfo(); build(); };
-  for (const id of ['subDur', 'subFights', 'subBreach']) $(id).onchange = build;
-  $('subFile').onchange = async e => {
-    const file = e.target.files[0]; if (!file) return;
-    try {
-      let text;
-      const buf = new Uint8Array(await file.arrayBuffer());
-      if (buf[0] === 0x1f && buf[1] === 0x8b) text = await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-      else text = new TextDecoder().decode(buf);
-      const sh = SF.parseSub(text); ships[sh.name] = sh; refreshShips(); $('subSel').value = sh.name; store.set('sub', sh.name); subInfo(); build();
-      status(`Loaded ${sh.name}: ${sh.items.length} electrical items, ${sh.wires.length} wires.` + (sh.warnings.length ? ' ' + sh.warnings.slice(0, 3).join('; ') : ''));
-    } catch (err) { status('Could not read that sub: ' + err.message, true); }
-    e.target.value = '';
-  };
-})();
-
-// expand a view to the whole window (Esc or the button again closes it)
 function setExpanded(pane, on) {
   pane.classList.toggle('expanded', on); document.body.classList.toggle('noscroll', on);
   pane.querySelectorAll('.expand').forEach(b => b.textContent = on ? 'Close' : 'Expand');
-  if (pane.dataset.pane === 'sub') { SV.view = null; svRender(); } else { ED.view = null; edRender(); }
+  ED.view = null; edRender();
 }
 document.querySelectorAll('.expand').forEach(b => b.onclick = () => { const pane = b.closest('.tabpane'); setExpanded(pane, !pane.classList.contains('expanded')); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const p = document.querySelector('.tabpane.expanded'); if (p) setExpanded(p, false); } });
@@ -1126,10 +809,12 @@ if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEven
 
 // ---------- boot ----------
 { const t = store.get('custom', null); if (t) circuits['my_circuit'] = { circ: t, group: 'Edited' }; }
-loadSettings(); refreshLists(); selectProfile(); selectCircuit(); refreshShips(); setMode(store.get('mode', 'test'));
+loadSettings(); refreshLists(); selectProfile(); selectCircuit();
 const sp = store.get('speed', '1'); document.querySelectorAll('#speed button').forEach(x => x.setAttribute('aria-pressed', x.dataset.s === sp)); speed = sp;
 build(); autoCheckPins();
 syncDl();
 Promise.resolve(window.claude && window.claude.use ? window.claude.use('downloads') : null).then(d => { downloads = d; syncDl(); }).catch(() => { });
 })();
 </script>
+</body>
+</html>

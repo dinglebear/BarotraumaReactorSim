@@ -58,7 +58,7 @@
       props: new Set((ship.props || []).filter(p => !bp.has(p.id)).map(p => p.id)), structures: new Set((ship.structures || []).filter(s => !bs.has(s.id)).map(s => s.id)), hulls: new Set(ship.hulls.filter(h => !bh.has(h.id)).map(h => h.id)) };
   }
   // opts: { base, crop: [x0, y0, x1, y1] (sub coords, y up), width (px), wires: 'all'|'added'|'none', items: true, props: true,
-  //         nav: false (gaps, ladders' waypoints), labels: 'rooms'|'added'|'all'|'none', grid: false, title }
+  //         nav: false (gaps, ladders' waypoints), labels: 'rooms'|'added'|'all'|'none', grid: false, title, minItemPx: 10 }
   function render(ship, opts) {
     const o = Object.assign({ wires: 'all', items: true, props: true, nav: false, labels: 'rooms', grid: false, width: 2400, pad: 220 }, opts || {});
     const P = Object.assign({}, PALETTE, o.palette || {});
@@ -126,18 +126,18 @@
         let pts = w.nodes && w.nodes.length >= 2 ? w.nodes : null;
         if (!pts) { const a = byId.get(w.from.item), b = byId.get(w.to.item); if (!a || !b) continue; pts = [centre(a), centre(b)]; }
         const col = isNew ? P.addedWire : (WIRE[w.color] || WIRE.wire), op = D ? (isNew ? .95 : .25) : .8;
-        out.push(`<polyline points="${pts.map(p => r1(p[0]) + ',' + r1(-p[1])).join(' ')}" fill="none" stroke="${col}" stroke-width="${(isNew ? 2.2 : 1.6) * k}" opacity="${op}" stroke-linejoin="round" data-k="wire" data-id="${w.id}"/>`);
+        out.push(`<polyline points="${pts.map(p => r1(p[0]) + ',' + r1(-p[1])).join(' ')}" fill="none" stroke="${col}" stroke-width="${(isNew ? 2.2 : 1.6) * k}" opacity="${op}" stroke-linejoin="round" data-k="wire" data-id="${w.id}" data-a="${w.from.item}" data-b="${w.to.item}"${isNew ? ' data-new="1"' : ''}${/^power/.test(w.from.conn) || /^power/.test(w.to.conn) ? ' data-pw="1"' : ''}/>`);
       }
       out.push('</g>');
     }
     // electrical items
     if (o.items) {
       out.push('<g class="items">');
-      const mn = 10 * k;
+      const mn = (o.minItemPx === undefined ? 10 : o.minItemPx) * k; // tiny items stay visible
       for (const it of ship.items) {
         const r = it.rect, w = Math.max(r[2], mn), h = Math.max(r[3], mn), x = r[0] + r[2] / 2 - w / 2, y = r[1] - r[3] / 2 + h / 2, kind = itemKind(it), a = added(D && D.items, it.id);
         const big = w * h > 40000 ? .35 : 1; // engines, reactors: a lighter fill so the room still shows
-        out.push(`<rect x="${r1(x)}" y="${r1(-y)}" width="${r1(w)}" height="${r1(h)}" rx="${r1(2 * k)}" fill="${P.kind[kind]}" fill-opacity="${(D && !a ? .45 : .9) * big}" stroke="${a ? P.added : '#000'}" stroke-width="${r1((a ? 3 : .8) * k)}" data-k="item" data-id="${it.id}" data-kind="${kind}"><title>${esc(it.identifier)} #${it.id}</title></rect>`);
+        out.push(`<rect x="${r1(x)}" y="${r1(-y)}" width="${r1(w)}" height="${r1(h)}" rx="${r1(2 * k)}" fill="${P.kind[kind]}" fill-opacity="${(D && !a ? .45 : .9) * big}" stroke="${a ? P.added : '#000'}" stroke-width="${r1((a ? 3 : .8) * k)}" data-k="item" data-id="${it.id}" data-kind="${kind}"${a ? ' data-new="1"' : ''}><title>${esc(it.identifier)} #${it.id}</title></rect>`);
       }
       out.push('</g>');
     }

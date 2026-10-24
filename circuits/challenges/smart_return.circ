@@ -1,0 +1,170 @@
+# SMART RETURN. Press SAVE somewhere in the abyss, drive off, flip RETURN: the sub heads straight back to the saved
+# spot instead of retracing its path, slows down as it arrives, holds position there, and goes over or under rock its
+# wall sensors bump into. Tested in sandbox/world/smart_return.sbx (the Drone Range).
+#
+# Why it works this way (reference/VEHICLE_MECHANICS.md):
+#  * the nav terminal is the only source of position: current_position_x (m) and current_position_y (depth in m,
+#    positive down), plus current_velocity_x/y in km/h (y positive = sinking);
+#  * no signal can switch on the autopilot or give it a target, so the circuit steers through velocity_in "x,y"
+#    (y positive = down), which the terminal applies at once and keeps until the next signal;
+#  * there is no rangefinder: rock is seen by motion detectors set to Target=Wall, mounted outside the hull, and they
+#    only see rock while the sub is moving;
+#  * a sub has a lot of momentum and little drag, so the circuit asks for a SPEED (2.5 m/s at most, less as the spot
+#    gets close) and the engine only makes up the difference: it can stop within the 4 m its sensors look ahead.
+name smart_return
+box nav
+note "SMART RETURN: HOW IT WORKS" "SAVE (in5) opens two memories for 0.1 s: they keep the nav position at that moment (they also keep the starting spot until then).\nWanted speed = 0.15 x distance, at most 2.5 m/s across and 1.5 m/s up or down; engine and ballast = 60 x (wanted - actual speed). That stops the sub on the spot instead of overshooting.\nRock: while heading right and the right sensor (in7) sees rock (or left and in8), it is BLOCKED for 3 s: it backs off gently and goes up, or down if the spot is deeper or there's rock above (in9) and none below (in0). It remembers rock above for 6 s, so it doesn't turn back up into an overhang. After a detour it holds its depth for 6 s more while moving across, to get past the rock before heading for the spot again.\nOnly while RETURN (in6) is on does it drive (velocity_in). Switching it off sends 0,0 once, so the sub doesn't keep the last command.\nDisplays: status (MANUAL, RETURN, DETOUR, ARRIVED within 3 m) and distance."
+note "WIRING" "in1 <- nav current_position_x, in2 <- nav current_position_y, in3 <- nav current_velocity_x, in4 <- nav current_velocity_y\nin5 <- SAVE button, in6 <- RETURN lever (1 = go back)\nin7 <- wall sensor right, in8 <- wall sensor left, in9 <- wall sensor above, in0 <- wall sensor below (motion detectors, Target=Wall)\nout1 -> nav velocity_in, out2 -> status display, out3 -> distance display\nThe nav terminal's own velocity_x_out -> engine set_force and velocity_y_out -> ballast pumps set_targetlevel stay as in vanilla."
+# --- the saved spot
+c lk or TimeFrame=0.1
+c sx mem Value=0
+c sy mem Value=0
+w in5 lk.1
+w lk.out sx.lock_state sy.lock_state
+w in1 sx.in ex.2
+w in2 sy.in ey.2
+c ex sub
+c ey sub
+w sx.out ex.1
+w sy.out ey.1
+# --- speed control: wanted speed from the distance, engine from the speed error
+c kp mem Value=0.15
+c kms mem Value=0.2778
+c tvx mul ClampMin=-2.5 ClampMax=2.5
+c tvy mul ClampMin=-1.5 ClampMax=1.5
+w ex.out tvx.1
+w ey.out tvy.1
+w kp.out tvx.2 tvy.2
+c vx mul
+c vy mul
+w in3 vx.1
+w in4 vy.1
+w kms.out vx.2 vy.2
+c evx sub
+c evy sub
+w tvx.out evx.1
+w vx.out evx.2
+w tvy.out evy.1
+w vy.out evy.2
+c kv mem Value=60
+c cx mul ClampMin=-100 ClampMax=100
+c cy mul ClampMin=-100 ClampMax=100
+w evx.out cx.1
+w evy.out cy.1
+w kv.out cx.2 cy.2
+# --- rock ahead: blocked while heading into a side sensor that sees rock, held 3 s
+c zero mem Value=0
+c gR greater
+c gL greater
+w cx.out gR.1 gL.2
+w zero.out gR.2 gL.1
+c bR and
+c bL and
+w gR.out bR.1
+w in7 bR.2
+w gL.out bL.1
+w in8 bL.2
+c blk or TimeFrame=3
+w bR.out blk.1
+w bL.out blk.2
+# across: back off gently while blocked
+c kb mem Value=-0.15
+c bk mul
+w cx.out bk.1
+w kb.out bk.2
+c xm mux
+w blk.out xm.set_input
+w cx.out xm.signal_in0
+w bk.out xm.signal_in1
+# up or down around it: down if the spot is more than 5 m deeper or there was rock above in the last 6 s (so after
+# bumping into an overhang it keeps going under it), never into rock below
+c five mem Value=5
+c gD greater
+w ey.out gD.1
+w five.out gD.2
+c dn or TimeFrame=6
+w gD.out dn.1
+w in9 dn.2
+c nwd not
+w in0 nwd.in
+c ud and
+w dn.out ud.1
+w nwd.out ud.2
+c upv mem Value=-80
+c dnv mem Value=80
+c dm mux
+w ud.out dm.set_input
+w upv.out dm.signal_in0
+w dnv.out dm.signal_in1
+# after a detour: hold depth for 6 more seconds while moving across, so it passes the rock before homing again
+c hold or TimeFrame=9
+w bR.out hold.1
+w bL.out hold.2
+c km mem Value=-60
+c hy mul ClampMin=-100 ClampMax=100
+w vy.out hy.1
+w km.out hy.2
+c ym1 mux
+w hold.out ym1.set_input
+w cy.out ym1.signal_in0
+w hy.out ym1.signal_in1
+c ym mux
+w blk.out ym.set_input
+w ym1.out ym.signal_in0
+w dm.out ym.signal_in1
+# --- velocity_in, only while RETURN is on; 0,0 for 0.2 s when it's switched off
+c cat concat Separator=,
+w xm.out cat.1
+w ym.out cat.2
+c rel relay IsOn=false
+w in6 rel.set_state
+w cat.out rel.signal_in1
+w rel.signal_out1 out1
+c lvd delay Delay=0.2
+c nlv not
+c offE and
+w in6 lvd.in nlv.in
+w nlv.out offE.1
+w lvd.out offE.2
+c stop mem Value=0,0
+c rel2 relay IsOn=false
+w offE.out rel2.set_state
+w stop.out rel2.signal_in1
+w rel2.signal_out1 out1
+# --- displays: distance and status
+c ex2 mul
+c ey2 mul
+c ds add
+c sq sqrt
+c dr round
+w ex.out ex2.1 ex2.2
+w ey.out ey2.1 ey2.2
+w ex2.out ds.1
+w ey2.out ds.2
+w ds.out sq.in
+w sq.out dr.in ar.2
+c um mem Value=m
+c dcat concat Separator=" "
+w dr.out dcat.1
+w um.out dcat.2
+w dcat.out out3
+c three mem Value=3
+c ar greater
+w three.out ar.1
+c sRet mem Value=RETURN
+c sDet mem Value=DETOUR
+c sArr mem Value=ARRIVED
+c sMan mem Value=MANUAL
+c m1 mux
+c m2 mux
+c m3 mux
+w blk.out m1.set_input
+w sRet.out m1.signal_in0
+w sDet.out m1.signal_in1
+w ar.out m2.set_input
+w m1.out m2.signal_in0
+w sArr.out m2.signal_in1
+w in6 m3.set_input
+w sMan.out m3.signal_in0
+w m2.out m3.signal_in1
+w m3.out out2

@@ -1,7 +1,9 @@
 # PRE-PLAN for drones/shuttles: drive a drone from the mothership's nav terminal over wifi, and slave its gun to a
 # mothership periscope. A lever picks what the nav terminal steers: OFF = the mothership, ON = the drone.
-# Pattern: the selector is a pair of relays, so only ONE engine ever gets steering (the sandbox flags two senders
-# fighting over set_force). The drone side just listens: wifi -> engine / pump / turret.
+# Pattern: the selector multiplies the steering by the lever (x 1 or x 0), so the engine that ISN'T selected gets a
+# steady 0. A relay that simply stops passing signals is not enough: an engine and a pump keep the last set_force /
+# set_speed they got forever (Engine.cs, Pump.cs), so the mothership would keep driving while you fly the drone.
+# The drone side just listens: wifi -> engine / pump / turret.
 # Wifi channels 610-613. Range 20000 units = 200 m; the drone stops answering further out (not modelled here).
 name drone remote control
 dev nav nav 0,0
@@ -16,9 +18,11 @@ dev dDock dock 1
 dev docked display
 
 box mother
-note "MOTHERSHIP LINK" "in1 nav velocity_x_out, in2 nav velocity_y_out, in3 mode lever (1 = steer the drone), in4 periscope angle, in5 periscope trigger, in6 nav toggle_docking. out1/out2 -> own engine / pumps. Drone channels: 610 force, 611 pump, 612 gun angle, 613 gun trigger, 614 dock toggle, 615 dock state back"
-c own relay IsOn=true
-c far relay IsOn=false
+note "MOTHERSHIP LINK" "in1 nav velocity_x_out, in2 nav velocity_y_out, in3 mode lever (1 = steer the drone), in4 periscope angle, in5 periscope trigger, in6 nav toggle_docking. out1/out2 -> own engine / pumps. Drone channels: 610 force, 611 pump, 612 gun angle, 613 gun trigger, 614 dock toggle, 615 dock state back. Steering x lever goes to the drone, steering x (not lever) to the mothership: the one not selected gets 0, not silence."
+c ownF mul
+c ownP mul
+c farF mul
+c farP mul
 c nmode not
 c txF wifi Channel=610
 c txP wifi Channel=611
@@ -30,14 +34,14 @@ c lbl concat Separator=" "
 c pre mem Value="DRONE:"
 c dk equals Output=DOCKED FalseOutput=AWAY
 c one mem Value=1
-w in1 own.1 far.1
-w in2 own.2 far.2
-w in3 far.set_state nmode.in
-w nmode.out own.set_state
-w own.signal_out1 out1
-w own.signal_out2 out2
-w far.signal_out1 txF.in
-w far.signal_out2 txP.in
+w in1 ownF.1 farF.1
+w in2 ownP.1 farP.1
+w in3 farF.2 farP.2 nmode.in
+w nmode.out ownF.2 ownP.2
+w ownF.out out1
+w ownP.out out2
+w farF.out txF.in
+w farP.out txP.in
 w in4 txA.in
 w in5 txT.in
 w in6 txD.in
@@ -88,7 +92,7 @@ expect 1.5 mEng = 60
 expect 1.5 mPump = -20
 expect 1.5 dEng = 0
 expect 2.5 docked = "DRONE: AWAY"
-expect 4 mEng = 0          # the mothership lost steering (falls back to manual)
+expect 4 mEng = 0          # the mothership gets a steady 0 while the drone is steered
 expect 4 dEng = 60
 expect 4 dPump = -20
 expect 6 dGun.angle = 45

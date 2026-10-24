@@ -113,7 +113,7 @@ The sonar itself has **no signal outputs**.
 **`velocity_in "x,y"`**:
 - Must be exactly two comma-separated numbers; anything else sets (0,0). Values are clamped to ±100.
 - **y is inverted: +y means down.**
-- **Manual mode:** the value persists. The target velocity moves toward it at about 15.6 units/s.
+- **The target velocity is set at once** (`TargetVelocity = steeringInput` in `ReceiveSignal`) and persists until the next signal. Only a pilot's own steering ramps: in manual mode the target moves toward the input at 15.6 units/s (`steeringAdjustSpeed` 0.2: (1/0.8)² × 10).
 - **Autopilot:** `velocity_in` overrides it for 1 s after the last signal.
 
 **Autopilot modes:**

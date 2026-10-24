@@ -1,0 +1,100 @@
+# DRONE ESCORT. A drone that follows a diver on its own, keeps out of the rock, and lets its coilgun shoot monsters
+# but never the diver. Tested in sandbox/world/drone_escort.sbx (the Drone Range).
+#
+# What the game gives a drone to work with (reference/VEHICLE_MECHANICS.md):
+#  * nothing reports where a character is; a motion detector only says "someone is inside my box". So the diver is
+#    found by four big boxes around the drone (right, left, above, below, each set to Target=Human and
+#    MinimumVelocity=0, which makes them presence detectors). The gap between the boxes is where the drone waits.
+#  * rock is found by four small boxes (Target=Wall) just outside the hull, which only see rock while moving;
+#  * the coilgun's AutoOperate (with AllowAutoOperateWithWiring set in the sub editor) already aims at the nearest
+#    monster, never targets its own crew, and holds fire while a friendly diver is first in the line of fire. The
+#    circuit only switches it on while a monster box (Target=Monster) sees something; that wire doesn't pass this box.
+name drone_escort
+box follow
+note "DRONE ESCORT: HOW IT WORKS" "Wanted speed across = 2.5 m/s toward the side box that sees the diver (right minus left), up or down 1.5 m/s the same way. Nothing seen on an axis (the diver is close, or lost) = hold still on that axis.\nEngine and ballast = 60 x (wanted - actual speed), so the drone stops instead of drifting past.\nRock: heading into a wall box that sees rock stops that axis; blocked across, it climbs (or sinks, if there's rock above) to get around, for 1 s after the rock goes out of sight.\nStatus: FOLLOW, or DETOUR while going around rock."
+note "WIRING" "in1 <- nav current_velocity_x, in2 <- nav current_velocity_y\nin3 <- diver box right, in4 <- diver box left, in5 <- diver box above, in6 <- diver box below (motion detectors, Target=Human)\nin7 <- wall box right, in8 <- wall box left, in9 <- wall box above, in0 <- wall box below (Target=Wall)\nout1 -> nav velocity_in, out2 -> status display\nOutside the box: monster box (Target=Monster, big) state_out -> coilgun set_auto_operate."
+# measured speed in m/s (the nav terminal says km/h; y positive = sinking)
+c kms mem Value=0.2778
+c vx mul
+c vy mul
+w in1 vx.1
+w in2 vy.1
+w kms.out vx.2 vy.2
+# wanted speed toward the diver
+c hx sub
+c hy sub
+w in3 hx.1
+w in4 hx.2
+w in6 hy.1
+w in5 hy.2
+c k25 mem Value=2.5
+c k15 mem Value=1.5
+c tvx mul
+c tvy mul
+w hx.out tvx.1
+w k25.out tvx.2
+w hy.out tvy.1
+w k15.out tvy.2
+# rock in the way: stop that axis; blocked across = go around vertically
+c bR and
+c bL and
+c bD and
+c bU and
+w in3 bR.1
+w in7 bR.2
+w in4 bL.1
+w in8 bL.2
+w in6 bD.1
+w in0 bD.2
+w in5 bU.1
+w in9 bU.2
+c bX or TimeFrame=1
+c bY or TimeFrame=0.5
+w bR.out bX.1
+w bL.out bX.2
+w bD.out bY.1
+w bU.out bY.2
+c zero mem Value=0
+c xm mux
+w bX.out xm.set_input
+w tvx.out xm.signal_in0
+w zero.out xm.signal_in1
+c up mem Value=-1.2
+c down mem Value=1.2
+c dd mux
+w in9 dd.set_input
+w up.out dd.signal_in0
+w down.out dd.signal_in1
+c ym1 mux
+w bX.out ym1.set_input
+w tvy.out ym1.signal_in0
+w dd.out ym1.signal_in1
+c ym mux
+w bY.out ym.set_input
+w ym1.out ym.signal_in0
+w zero.out ym.signal_in1
+# engine and ballast from the speed error
+c evx sub
+c evy sub
+w xm.out evx.1
+w vx.out evx.2
+w ym.out evy.1
+w vy.out evy.2
+c kv mem Value=60
+c cx mul ClampMin=-100 ClampMax=100
+c cy mul ClampMin=-100 ClampMax=100
+w evx.out cx.1
+w evy.out cy.1
+w kv.out cx.2 cy.2
+c cat concat Separator=,
+w cx.out cat.1
+w cy.out cat.2
+w cat.out out1
+# status
+c sF mem Value=FOLLOW
+c sD mem Value=DETOUR
+c sm mux
+w bX.out sm.set_input
+w sF.out sm.signal_in0
+w sD.out sm.signal_in1
+w sm.out out2

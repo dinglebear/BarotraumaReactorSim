@@ -1,0 +1,53 @@
+# DRONE BASICS: a Kastrull-sized drone (3 x 1.5 m, 1550 kg) in open water above the seabed. The script plays the pilot:
+# full ahead, then brake and sink, then hover. Press Run and watch the World panel; type your own steering into the nav
+# terminal ("x,y", y up, -100..100) once the script is done.
+# What to notice (reference/VEHICLE_MECHANICS.md): the engine gives 20 x MaxForce newtons, so this drone tops out near
+# 8 m/s; the pilot's steering ramps at 15.6 units a second; the ballast pump fills a tank of 14 % of the hull, and
+# half full is neutral (the nav terminal's velocity_y_out goes straight to the pump's set_targetlevel).
+# Hovering by hand is hard for the same reason as in game: ballast sets an acceleration and drag is tiny, so a drone
+# keeps drifting. That's why circuits/challenges/smart_return.circ controls SPEED from the nav terminal's readings.
+name drone basics: buoyancy, drag and engine force
+world Top=0
+rock -3000,-2600,12000,-2000
+rock 9500,-2000,10100,300
+vehicle drone At=0,0 Size=300,150 Mass=1550 Volume=45000
+dev eng engine On=drone MaxForce=50
+dev bal pump On=drone MaxFlow=100
+dev nav nav On=drone
+dev depth display
+dev speed display
+
+box hud
+note "HUD" "Depth and speed from the nav terminal, short enough to fit a text display: in1 current_position_y (m), in2 current_velocity_x (km/h)."
+c dr round
+c sr round
+c um mem Value=m
+c uk mem Value=km/h
+c d1 concat Separator=" "
+c s1 concat Separator=" "
+w in1 dr.in
+w in2 sr.in
+w dr.out d1.1
+w um.out d1.2
+w sr.out s1.1
+w uk.out s1.2
+w d1.out out1
+w s1.out out2
+
+wire nav.velocity_x_out eng.set_force
+wire nav.velocity_y_out bal.set_targetlevel
+wire nav.current_position_y hud.in1
+wire nav.current_velocity_x hud.in2
+wire hud.out1 depth.set_text
+wire hud.out2 speed.set_text
+
+at 1 set nav 100,0     # full ahead
+at 9 set nav -100,-40  # brake and sink: the steering takes ~13 s to swing from full ahead to full astern
+at 13 set nav -100,0   # stop sinking... it doesn't, not soon: neutral ballast only stops the ACCELERATION
+at 22 set nav 0,0      # let go
+expect 9 drone.speed > 2.5
+expect 9 speed ~ ^[0-9]+ km/h$
+expect 15 drone.depth > 2
+expect 40 drone.speed > 0.2   # still drifting: almost no drag to stop it
+expect 40 drone.impacts = 0
+run 40

@@ -172,7 +172,8 @@ console.log('real-game checks passed');
 // circuit sandbox (sim/sandbox.js): every demo in sandbox/ passes, and the border/size limits are errors
 {
   const S = require('./sandbox');
-  for (const f of fs.readdirSync(path.join(ROOT, 'sandbox')).filter(f => f.endsWith('.sbx'))) {
+  const demos = [...fs.readdirSync(path.join(ROOT, 'sandbox')).filter(f => f.endsWith('.sbx')), ...fs.readdirSync(path.join(ROOT, 'sandbox/world')).filter(f => f.endsWith('.sbx')).map(f => 'world/' + f)];
+  for (const f of demos) {
     const { sb, report } = S.run(fs.readFileSync(path.join(ROOT, 'sandbox', f), 'utf8'), { readFile: q => fs.readFileSync(path.join(ROOT, q), 'utf8') });
     assert(sb.unexpectedErrors.length === 0 && sb.results.every(r => r.ok), `sandbox ${f}:\n${report}`);
   }
@@ -248,4 +249,35 @@ console.log('real-game checks passed');
   const reactorRoom = doc.hulls().find(H => H.x0 === -1648 && H.y1 === 40); assert.strictEqual(doc.ceiling(reactorRoom), -8, 'reactor room ceiling slab is 48 thick');
   const path1 = doc.route([-1500, -150], [-700, -150]); assert(path1.every(p => p[1] <= -16 && p[1] >= -216), 'route stays inside the room, under the slab');
   console.log('displays and stairs passed');
+}
+
+// the world (sim/world.js): vehicle physics against SubmarineBody.cs / Engine.cs / Pump.cs, sensors, turrets
+{
+  const S = require('./sandbox'), W = require('./world');
+  const run = (body, t) => { const sb = new S.Sandbox(S.parse(body + `\nrun ${t}`)); assert.deepStrictEqual(sb.errors, []); while (!sb.done) sb.step(); return sb; };
+  // an empty tank: b = 2 x 0.07 -> 1.4 m/s² up; terminal 5.3 m/s up (drag 0.05 v²)
+  let sb = run('vehicle d At=0,0 Size=300,150 Mass=1000 Volume=45000 Water=0', 1);
+  assert(Math.abs(sb.world.vehicles.get('d').vy / 100 - 1.4) < 0.08, 'empty tank rises at 1.4 m/s²');
+  sb = run('vehicle d At=0,0 Size=300,150 Mass=1000 Volume=45000 Water=0', 40); assert(Math.abs(sb.world.vehicles.get('d').vy / 100 - Math.sqrt(1.4 / 0.05)) < 0.05, 'terminal rise speed');
+  // 7 % of the volume as water: neutral
+  sb = run('vehicle d At=0,0 Size=300,150 Mass=1000 Volume=45000 Water=3150', 10); assert(Math.abs(sb.world.vehicles.get('d').vy) < 1, 'neutral at 7 % water');
+  // full thrust = 20 x MaxForce N; terminal speed sqrt(a / 0.01)
+  sb = run('vehicle d At=0,0 Size=300,150 Mass=1550 Volume=45000\ndev e engine On=d MaxForce=50\ndev k const 100\nwire k.out e.set_force', 60);
+  assert(Math.abs(sb.world.vehicles.get('d').vx / 100 - Math.sqrt(1000 / 1550 / 0.01)) < 0.1, 'drone top speed ' + sb.world.vehicles.get('d').vx / 100);
+  // the engine keeps its last force when signals stop (Engine.cs)
+  sb = run('dev e engine\ndev b button Output=70\nwire b.out e.set_force\nat 0.5 press b', 3); assert.strictEqual(sb.valueOf('e'), '70', 'engine keeps set_force');
+  // set_targetlevel -100..100 -> (v + 100) / 2 %
+  sb = run('vehicle d At=0,0 Size=300,150 Volume=45000\ndev p pump On=d MaxFlow=600\ndev k const 60\nwire k.out p.set_targetlevel', 5); assert(Math.abs(sb.world.vehicles.get('d').water / sb.world.vehicles.get('d').tank - 0.8) < 0.02, 'pump target level 60 -> 80 %');
+  // rock stops it, a fast hit counts as damage; a wall sensor only sees rock while moving
+  sb = run('rock 400,-500,600,500\nvehicle d At=0,0 Size=300,150 Mass=1550 Volume=45000\ndev e engine On=d MaxForce=500\ndev k const 100\nwire k.out e.set_force\ndev s motion On=d Offset=250,0 RangeX=100 RangeY=50 Target=Wall', 4);
+  const d = sb.world.vehicles.get('d'); assert(d.x + d.w / 2 <= 401 && d.impacts === 1, 'rock stops the drone (impacts ' + d.impacts + ')');
+  sb = run('rock 300,-500,600,500\nvehicle d At=0,0 Size=300,150 Volume=45000\ndev s motion On=d Offset=250,0 RangeX=100 RangeY=50 Target=Wall', 0.5); assert.strictEqual(sb.objs.s.s.value, '0', 'a still drone sees no rock');
+  // a coilgun on auto-operate shoots a crawler, holds fire while the diver is in the way
+  sb = run('vehicle d At=0,0 Size=300,150 Volume=45000 Water=3150\nmonster c Kind=crawler At=1500,0 Sight=10\ndev g turret On=d Kind=coilgun MinAngle=0 MaxAngle=360 AutoOperate=true', 4);
+  assert(!sb.world.chars.get('c').alive, 'auto coilgun kills a crawler');
+  sb = run('vehicle d At=0,0 Size=300,150 Volume=45000 Water=3150\ndiver p At=700,0 Speed=0\nmonster c Kind=crawler At=1500,0 Sight=10\ndev g turret On=d Kind=coilgun MinAngle=0 MaxAngle=360 AutoOperate=true', 4);
+  assert(sb.world.chars.get('c').alive && sb.world.friendly === 0 && sb.objs.g.s.shots === 0, 'no shot through the diver');
+  // turret angles: 0 = right, 90 = down; limits snap to the nearer end
+  assert.strictEqual(W.clampAngle(80, 180, 360), 360); assert.strictEqual(W.clampAngle(100, 180, 360), 180); assert.strictEqual(W.clampAngle(20, 180, 360), 360);
+  console.log('world passed');
 }

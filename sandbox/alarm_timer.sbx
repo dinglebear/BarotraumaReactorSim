@@ -1,0 +1,38 @@
+# ALARM TIMER (circuits/challenges/alarm_timer.circ): a countdown on a text display with zero-padded mm:ss, set from a
+# terminal or run with two buttons, and an alarm at zero. Also the fix for a countdown that showed "1:9": pad each
+# field with concat("0", n) and keep the last two characters with the regex (.{2})$.
+name alarm timer: set 1:05, start, pause, resume, time's up
+dev term terminal
+dev go button
+dev rst button
+dev screen display
+dev siren light
+
+box timer file=circuits/challenges/alarm_timer.circ
+
+wire term.signal_out timer.in1
+wire go.out timer.in2
+wire rst.out timer.in3
+wire timer.out1 screen.set_text
+wire timer.out2 screen.set_text_color
+wire timer.out3 siren.set_state
+wire timer.out4 term.signal_in
+
+at 0.5 type term set 1:05
+at 1 type term start
+at 11.2 press go          # pause at 0:55
+at 15 type term start      # resume
+at 30 type term hello
+expect 0.8 screen = 01:05
+expect 2.2 screen = 01:04
+expect 11.5 screen = 00:55
+expect 14.5 screen = 00:55
+expect 20.5 screen = 00:50
+expect 60 screen ~ ^00:1[01]$     # 45 s after resuming at 00:55
+expect 70.5 screen = TIME!
+expect 70.5 siren = on
+expect 31 term ~ ^Commands
+at 72 press rst
+expect 72.5 siren = off
+expect 72.5 screen = 01:05
+run 74

@@ -1,0 +1,50 @@
+# Dingle's countdown (context/community_circuits/Fixed_Textscrn_countdown.txt) with zero-padded minutes and seconds:
+# it used to show 1:9 for 69 s, now 01:09. Five parts added at the end; everything else is Dingle's, credit note kept.
+# Tested in sandbox/dingle_countdown.sbx.
+name dingle_countdown_padded
+box countdown
+label in0 Terminal
+label in2 Auto restart
+label in1 Reset button
+label out1 sprinkler
+label out0 textscrn
+c mod0 mod Modulus=60
+c osc1 osc
+c mem2 mem Value=0
+c sub3 sub
+c div4 div
+c mem5 mem Value=60
+c floor6 floor
+c mul7 mul
+c relay8 relay IsOn=false
+c check9 check Output=120 FalseOutput="" TargetSignal=1
+c concat10 concat Separator=:
+c delay11 delay Delay=0.009999999776482582
+w mem5.out div4.2 mul7.2
+w div4.out floor6.in
+w mul7.out check9.set_output
+w in0 mul7.1
+w concat10.out out0
+w in1 check9.in
+w check9.out mem2.in
+w delay11.out mod0.in div4.1 mem2.in
+w sub3.out delay11.in
+w osc1.out relay8.1
+w relay8.signal_out1 sub3.2
+w mem2.out relay8.2 relay8.set_state
+w relay8.signal_out2 sub3.1
+note "Made by dingle" "Please don't delete this, I would like to be credited for my time. I encorage downloading blueprint mod to save this and use on other servers! I have cheaper versions and vanilla versions. Msg me on discord @sirdinglebear"
+note Blueprints "Circuit made with Blueprints. \n \n Get it now on the steam workshop!"
+note "PADDING (added)" "concat(0, n), then the regex (.{2})$ keeps the last two characters: 9 -> 09, 12 -> 12."
+c z mem Value=0
+c pm concat
+c ps concat
+c rm regex Expression="(.{2})$" UseCaptureGroup=true Output=1 FalseOutput=""
+c rs regex Expression="(.{2})$" UseCaptureGroup=true Output=1 FalseOutput=""
+w z.out pm.1 ps.1
+w floor6.out pm.2
+w mod0.out ps.2
+w pm.out rm.in
+w ps.out rs.in
+w rm.out concat10.1
+w rs.out concat10.2

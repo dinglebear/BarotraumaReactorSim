@@ -281,3 +281,14 @@ console.log('real-game checks passed');
   assert.strictEqual(W.clampAngle(80, 180, 360), 360); assert.strictEqual(W.clampAngle(100, 180, 360), 180); assert.strictEqual(W.clampAngle(20, 180, 360), 360);
   console.log('world passed');
 }
+
+// reactor modes (circuits/reactor_modes.circ): reactive is steadier, eco burns less fuel, on the same demand
+{
+  const E = require('./engine'), F = require('./format'), P = require('./project');
+  const prof = E.parseProfile(fs.readFileSync(path.join(ROOT, 'load_profiles/synthetic_ramps.csv'), 'utf8'), 'synthetic_ramps');
+  const runMode = v => { const model = F.parseCirc(fs.readFileSync(path.join(ROOT, 'circuits/reactor_modes.circ'), 'utf8').replace(/^pin in8 const\.1$/m, 'pin in8 const.' + v)), cfg = Object.assign(JSON.parse(fs.readFileSync(path.join(ROOT, 'sim.config.json'), 'utf8')), { profile: prof, reactorMaxKW: prof.reactorMaxKW || 5000 }); const sim = new E.Sim(P.substitute(model, P.placeholders(cfg)), cfg); return sim.runToEnd(); };
+  const re = runMode(1), eco = runMode(0);
+  assert(re.score_reliability > eco.score_reliability + 2, `reactive steadier (${re.score_reliability} vs ${eco.score_reliability})`);
+  assert(eco.fuel_rods_used < re.fuel_rods_used * 0.93, `eco saves fuel (${eco.fuel_rods_used} vs ${re.fuel_rods_used} rods)`);
+  console.log('reactor modes passed');
+}

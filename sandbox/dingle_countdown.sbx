@@ -1,0 +1,22 @@
+# Dingle's text-screen countdown, before and after zero padding. The terminal sets the minutes, the reset button
+# loads them, and the screen counts down once a second. The original showed "1:9"; the padded one shows "01:09".
+name Dingle's countdown: original vs zero-padded
+dev term terminal
+dev reset button
+dev old display
+dev new display
+
+box orig file=context/community_circuits/Fixed_Textscrn_countdown.txt
+box padded file=circuits/dingle/countdown_padded.circ
+
+wire term.signal_out orig.in0 padded.in0
+wire reset.out orig.in1 padded.in1
+wire orig.out0 old.set_text
+wire padded.out0 new.set_text
+
+at 0.5 type term 2
+at 1 press reset
+expect 52.5 old = 1:9
+expect 52.5 new = 01:09
+expect 121.5 new = 00:00
+run 122

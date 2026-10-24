@@ -1634,6 +1634,8 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
     const a = sub.attrs;
     const ship = { name: a.name || 'sub', description: a.description || '', class: a.class || '', tier: num(a.tier), dimensions: a.dimensions || '', hulls: [], items: [], wires: [], warnings: [],
       structures: [], gaps: [], waypoints: [], props: [] }; // structures/gaps/waypoints/props: for the viewer and for building subs
+    // the sub selection screen's picture (base64 PNG): the game's own render of the sub (sim/preview.js lines it up)
+    if (a.previewimage) Object.defineProperty(ship, 'previewImage', { value: a.previewimage, enumerable: false, writable: true });
     const byId = new Map(), wireItems = new Map();
     for (const n of sub.children) {
       if (n.tag === 'Hull') { const name = n.attrs.roomname || n.attrs.RoomName || ''; ship.hulls.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), name, label: roomLabel(name), linked: n.attrs.linked || '' }); }
@@ -1734,6 +1736,7 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
 // ships/templates/structure_prefabs.json.
 //
 //   body(st)      -> { quad: 4 corners, seg: long-axis end points, cx, cy, len, thick, angle } in sub coordinates (y up)
+//   visual(st)    -> the polygon its sprite covers (what you see), for drawing; body() is what it collides with
 //   solid(st)     -> does it collide (walls, shells, slopes; not backgrounds or decoration)
 //   leaks(ship)   -> rays from every room that escape without hitting anything solid (a watertight check)
 //   slopePieces() -> the slanted shell pieces as segment vectors, for the sub builder's corner smoothing
@@ -1786,6 +1789,37 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
     const ux = Math.cos(angle), uy = Math.sin(angle), vx = -uy, vy = ux;
     const quad = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [cx + ux * i * L / 2 + vx * j * T / 2, cy + uy * i * L / 2 + vy * j * T / 2]);
     return { quad, seg: [[cx - ux * L / 2, cy - uy * L / 2], [cx + ux * L / 2, cy + uy * L / 2]], cx, cy, len: L, thick: T, angle, horiz: true, stairs: right ? 'Right' : 'Left' };
+  }
+  // What the piece LOOKS like (its sprite), as opposed to what it collides with. A sprite fills its rectangle (rotated
+  // with the structure); a slanted shell piece's sprite is a plate running corner to corner, cut flush by the
+  // rectangle's edges, so it meets its neighbours instead of sticking out past them like its collision bar does. The
+  // plate is drawn as the body's band (a third thicker: a straight shell's sprite is 96 tall for a 72 body) clipped
+  // to the rectangle. Returns a polygon [[x, y], ...] in sub coordinates (y up).
+  function visual(st) {
+    const p = prefab(st.identifier) || {}, [x, top, w, h] = st.rect, rot = rad(st.rotation || 0);
+    const cx = x + w / 2, cy = top - h / 2, c = Math.cos(-rot), s = Math.sin(-rot);
+    const rect = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].map(([u, v]) => [cx + u * c - v * s, cy + u * s + v * c]);
+    if (!p.body || p.stairs) return rect;
+    const b = body(st), tilt = Math.abs(((b.angle * 180 / Math.PI) % 90 + 90) % 90);
+    if (tilt < 2 || tilt > 88) return rect; // straight pieces: the whole sprite
+    const ux = Math.cos(b.angle), uy = Math.sin(b.angle), vx = -uy, vy = ux, L = 4 * Math.hypot(w, h), T = b.thick * 1.33 / 2;
+    const band = [[-L, -T], [L, -T], [L, T], [-L, T]].map(([u, v]) => [b.cx + ux * u + vx * v, b.cy + uy * u + vy * v]);
+    return clip(band, rect);
+  }
+  // Sutherland-Hodgman: polygon `subj` clipped by the convex polygon `clipper` (both counter-clockwise or both clockwise)
+  function clip(subj, clipper) {
+    let out = subj; const n = clipper.length;
+    const area = clipper.reduce((a, p, i) => { const q = clipper[(i + 1) % n]; return a + p[0] * q[1] - q[0] * p[1]; }, 0), sgn = area >= 0 ? 1 : -1;
+    for (let i = 0; i < n && out.length; i++) {
+      const A = clipper[i], B = clipper[(i + 1) % n], inside = P => sgn * ((B[0] - A[0]) * (P[1] - A[1]) - (B[1] - A[1]) * (P[0] - A[0])) >= -1e-9;
+      const cross = (P, Q) => { const dx = Q[0] - P[0], dy = Q[1] - P[1], ex = B[0] - A[0], ey = B[1] - A[1], den = dx * ey - dy * ex; if (Math.abs(den) < 1e-12) return P; const t = ((A[0] - P[0]) * ey - (A[1] - P[1]) * ex) / den; return [P[0] + dx * t, P[1] + dy * t]; };
+      const inp = out; out = [];
+      for (let j = 0; j < inp.length; j++) {
+        const P = inp[j], Q = inp[(j + 1) % inp.length], pi = inside(P), qi = inside(Q);
+        if (pi) out.push(P); if (pi !== qi) out.push(cross(P, Q));
+      }
+    }
+    return out;
   }
   const SOLID_NAME = /^(Shell|Shuttle Shell|Large (Horizontal|Vertical) Inside Wall|Large Inside Wall Cap|Platform|Submarine Bow|Stairs)/i;
   function solid(st) { const p = prefab(st.identifier); if (p) return !!p.body && !p.platform && !p.stairs; return SOLID_NAME.test(st.name || ''); }
@@ -1847,7 +1881,7 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
     const cx = mx - ox, cy = my - oy;
     return { identifier: piece.id, rect: [Math.round(cx - piece.w / 2), Math.round(cy + piece.h / 2), Math.round(piece.w), Math.round(piece.h)], flippedx, flippedy };
   }
-  return { body, solid, leaks, slopePieces, place, prefab, isHorizontal, setCatalog: c => { P = c.prefabs || {}; for (const k of Object.keys(P)) lc[k.toLowerCase()] = P[k]; } };
+  return { body, visual, clip, solid, leaks, slopePieces, place, prefab, isHorizontal, setCatalog: c => { P = c.prefabs || {}; for (const k of Object.keys(P)) lc[k.toLowerCase()] = P[k]; } };
 });
 
 ;
@@ -2644,15 +2678,15 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
 ;
 // ---- sim/subrender.js
 // Draws a submarine as SVG, the same picture for the command line (`node sim/cli.js sub render`) and the web Sub Studio.
-// What you see is the game's geometry, not a sketch:
-//   * the outer shape = every exterior piece's real collision body (sim/shellgeom.js: rotated, offset and flipped like
-//     Structure.cs), so slopes, humps and caps look like the sub's silhouette in game;
-//   * inside walls, floor slabs, platforms and stairs the same way;
-//   * rooms (hulls) as the space you walk in, with their names and sizes;
-//   * doors, hatches and ladders; electrical items coloured by job; props (cabinets, deco) as outlines;
-//   * wires along their saved nodes in the game's wire colours.
-// The textures aren't part of the game's open-source code, so purely decorative sprites (fins, boards, bow plates with no
-// collision) are drawn as their sprite boxes, clearly marked.
+//   * Underneath: the sub's own picture (the previewimage every .sub carries, rendered by the game with its real
+//     sprites), lined up with the sub's coordinates by sim/preview.js. That is what the sub really looks like.
+//   * Walls: each piece as its sprite covers it (sim/shellgeom.js visual(): a straight piece fills its rectangle, a
+//     slope is a plate cut flush by its rectangle), so with no picture the outline still reads like the hull in game.
+//     The collision bodies (hitboxes) are a separate, optional layer.
+//   * Rooms (hulls), doors, hatches and ladders; electrical items coloured by job; props as outlines; wires along their
+//     saved nodes in the game's wire colours.
+// The game's textures aren't public, so a sub with no picture (one built here from scratch) is drawn from shapes only,
+// and decorative pieces with no collision (fins, boards, bow plates) are their sprite boxes, dashed.
 // Pass `base` (another parsed ship, e.g. the vanilla sub) to highlight what was ADDED: new items get an orange outline,
 // new wires are drawn bright and the originals dimmed (or hidden with wires: 'added').
 (function (root, factory) {
@@ -2667,7 +2701,7 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
   const PALETTE = {
     sea: '#0a1c27', room: '#2a3a44', roomWet: '#24465a', roomText: '#c9d6dc', shell: '#8d7360', shellEdge: '#3a2c22', wall: '#7c8a93', wallEdge: '#3a454c',
     platform: '#9aa7ae', deco: 'rgba(141,115,96,.28)', decoEdge: 'rgba(141,115,96,.7)', gap: 'rgba(57,197,214,.55)', door: '#b7c2c8', ladder: '#d9b45a',
-    added: '#ff8a3d', addedWire: '#ffb347', prop: 'rgba(200,190,170,.35)', grid: 'rgba(255,255,255,.06)',
+    added: '#ff8a3d', collision: '#ff4fd8', pictureSea: '#080d13', addedWire: '#ffb347', prop: 'rgba(200,190,170,.35)', grid: 'rgba(255,255,255,.06)',
     kind: { power: '#e8b13c', battery: '#7fd16a', reactor: '#ff6b4a', logic: '#5ed0c8', circuitbox: '#4fb3e8', light: '#f4e27a', door: '#b7c2c8', machine: '#b48cf0', sensor: '#7ac8ff', terminal: '#9be89b', weapon: '#e86a8a', other: '#c0c8cc' },
   };
   const EXTERIOR = /shell|bow|front|tail|fin|hatchcap|^ext|sshell/i;
@@ -2703,6 +2737,7 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
       props: new Set((ship.props || []).filter(p => !bp.has(p.id)).map(p => p.id)), structures: new Set((ship.structures || []).filter(s => !bs.has(s.id)).map(s => s.id)), hulls: new Set(ship.hulls.filter(h => !bh.has(h.id)).map(h => h.id)) };
   }
   // opts: { base, crop: [x0, y0, x1, y1] (sub coords, y up), width (px), wires: 'all'|'added'|'none', items: true, props: true,
+  //         picture: { href, box } (the sub's own picture: sim/preview.js), collision: false|true|'hidden' (hitboxes),
   //         nav: false (gaps, ladders' waypoints), labels: 'rooms'|'added'|'all'|'none', grid: false, title, minItemPx: 10 }
   function render(ship, opts) {
     const o = Object.assign({ wires: 'all', items: true, props: true, nav: false, labels: 'rooms', grid: false, width: 2400, pad: 220 }, opts || {});
@@ -2713,7 +2748,14 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
     const out = [];
     const rectPath = (r, extra) => `<rect x="${r1(r[0])}" y="${r1(-r[1])}" width="${r1(r[2])}" height="${r1(r[3])}" ${extra || ''}/>`;
     const poly = (q, extra) => `<polygon points="${q.map(p => r1(p[0]) + ',' + r1(-p[1])).join(' ')}" ${extra || ''}/>`;
-    out.push(`<rect x="${r1(bx0)}" y="${r1(-by1)}" width="${r1(W)}" height="${r1(H)}" fill="${P.sea}"/>`);
+    const pic = o.picture && o.picture.href && o.picture.box ? o.picture : null;
+    out.push(`<rect class="sea" x="${r1(bx0)}" y="${r1(-by1)}" width="${r1(W)}" height="${r1(H)}" fill="${pic ? P.pictureSea : P.sea}"/>`);
+    // the game's own picture of the sub (sim/preview.js lines it up), under everything else
+    if (pic) { const [p0, q0, p1, q1] = pic.box; out.push(`<image class="picture" href="${esc(pic.href)}" x="${r1(p0)}" y="${r1(-q1)}" width="${r1(p1 - p0)}" height="${r1(q1 - q0)}" preserveAspectRatio="none"/>`); }
+    // drawn over the picture: rooms as outlines, walls as faint outlines, items see-through (the CLI picture; the Sub
+    // Studio styles the same classes itself). Walls added against the base stay solid: the picture is from the last
+    // time the sub was saved in the game's editor, so it doesn't have them.
+    if (pic && o.pictureStyle !== false) out.push(`<style>.rooms rect{fill-opacity:0;stroke:#9fb3bc;stroke-opacity:.35;stroke-width:${r1(k)}}.walls polygon:not([data-new]){fill-opacity:0;stroke-opacity:.45}.deco{display:none}.props rect{stroke-opacity:.3}[data-k=item]{fill-opacity:.32}</style>`);
     if (o.grid) { // 1 m grid, every 5 m stronger
       const g = []; for (let x = Math.ceil(bx0 / 100) * 100; x <= bx1; x += 100) g.push(`<line x1="${x}" y1="${-by1}" x2="${x}" y2="${-by0}" stroke="${P.grid}" stroke-width="${(x % 500 ? 1 : 2.5) * k}"/>`);
       for (let y = Math.ceil(by0 / 100) * 100; y <= by1; y += 100) g.push(`<line x1="${bx0}" y1="${-y}" x2="${bx1}" y2="${-y}" stroke="${P.grid}" stroke-width="${(y % 500 ? 1 : 2.5) * k}"/>`);
@@ -2728,7 +2770,8 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
     out.push('<g class="deco">');
     for (const s of structs) if (!G.solid(s) && EXTERIOR.test(s.identifier) && !insideAnyHull(ship, s.rect)) out.push(rectPath(s.rect, `fill="${P.deco}" stroke="${P.decoEdge}" stroke-width="${k}" stroke-dasharray="${4 * k} ${3 * k}" data-k="struct" data-id="${s.id}"`));
     out.push('</g>');
-    // solid structure: shell (exterior) and inside walls, by their real bodies
+    // solid structure: shell (exterior) and inside walls, drawn as their sprites cover them (shellgeom.visual: a slope's
+    // plate cut flush by its rectangle), not as their collision bodies
     out.push('<g class="walls">');
     for (const s of structs) {
       const sp = G.prefab(s.identifier);
@@ -2742,9 +2785,15 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
       const pf = sp || {}, b = G.body(s), ext = EXTERIOR.test(s.identifier) || /shell/i.test(s.name || '');
       if (pf.platform) { out.push(poly(b.quad, `fill="none" stroke="${P.platform}" stroke-width="${3 * k}" data-k="struct" data-id="${s.id}"`)); continue; }
       const a = added(D && D.structures, s.id);
-      out.push(poly(b.quad, `fill="${ext ? P.shell : P.wall}" stroke="${a ? P.added : ext ? P.shellEdge : P.wallEdge}" stroke-width="${(a ? 3 : 1) * k}" data-k="struct" data-id="${s.id}"`));
+      out.push(poly(G.visual(s), `fill="${ext ? P.shell : P.wall}" stroke="${a ? P.added : ext ? P.shellEdge : P.wallEdge}" stroke-width="${(a ? 3 : 1) * k}" data-k="struct" data-id="${s.id}"${a ? ' data-new="1"' : ''}`));
     }
     out.push('</g>');
+    // what collides (the hitboxes): the bodies of every solid piece, platform and stair, as dashed outlines
+    if (o.collision) {
+      out.push(`<g class="collision"${o.collision === 'hidden' ? ' style="display:none"' : ''}>`);
+      for (const s of structs) { const sp = G.prefab(s.identifier); if (!(G.solid(s) || (sp && (sp.stairs || sp.platform)))) continue; out.push(poly(G.body(s).quad, `fill="none" stroke="${P.collision}" stroke-width="${1.5 * k}" stroke-dasharray="${5 * k} ${3 * k}"`)); }
+      out.push('</g>');
+    }
     if (o.nav) { // gaps (openings) and the AI path
       out.push('<g class="nav">');
       for (const g of ship.gaps || []) out.push(rectPath(g.rect, `fill="${P.gap}"`));
@@ -2806,6 +2855,108 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
   }
   function insideAnyHull(ship, r) { const cx = r[0] + r[2] / 2, cy = r[1] - r[3] / 2; return ship.hulls.some(h => cx > h.rect[0] && cx < h.rect[0] + h.rect[2] && cy < h.rect[1] && cy > h.rect[1] - h.rect[3]); }
   return { render, itemKind, bounds, diff, PALETTE, WIRE };
+});
+
+;
+// ---- sim/preview.js
+// The sub's own picture. Every .sub carries the image the sub editor renders for the selection screen (previewimage, a
+// 640 x 368 PNG drawn with the game's real sprites: SubEditorScreen.CreateImage). It is the only place the game's
+// textures are available to us, so the Sub Studio and `sub render` draw it under everything else.
+//
+// CreateImage fits Submarine.CalculateDimensions(onlyHulls: false) into the image, centred. Our copy of that box (walls,
+// items that aren't wires or inside something, rooms, gaps) comes out about 6 % smaller than the game's (turret barrels
+// and things we don't model widen it), and an old picture can lag behind the sub. So instead of trusting the formula
+// we line the picture up: start from the formula and search scale and offset for the best overlap between the
+// picture's drawn pixels and the sub's pieces (intersection over union).
+//
+//   decodePng(buffer)                 -> { w, h, rgba }  (Node; the browser draws the image on a canvas instead)
+//   register(rgba, w, h, ship)        -> { box: [x0, y0, x1, y1], scale, score }: the sub coordinates the image covers
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.BaroPreview = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+  // ---------- a small PNG reader (8-bit greyscale, RGB, RGBA, grey+alpha; no interlace) ----------
+  function decodePng(buf) {
+    const zlib = require('zlib');
+    if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error('not a PNG');
+    let p = 8, w = 0, h = 0, depth = 0, type = 0, inter = 0; const idat = [];
+    while (p < buf.length) {
+      const len = buf.readUInt32BE(p), t = buf.toString('ascii', p + 4, p + 8), d = buf.subarray(p + 8, p + 8 + len);
+      if (t === 'IHDR') { w = d.readUInt32BE(0); h = d.readUInt32BE(4); depth = d[8]; type = d[9]; inter = d[12]; }
+      else if (t === 'IDAT') idat.push(d);
+      else if (t === 'IEND') break;
+      p += 12 + len;
+    }
+    const ch = { 0: 1, 2: 3, 4: 2, 6: 4 }[type];
+    if (depth !== 8 || !ch || inter) throw new Error(`PNG type ${type}/${depth}${inter ? ' interlaced' : ''} not supported`);
+    const raw = zlib.inflateSync(Buffer.concat(idat)), stride = w * ch, out = Buffer.alloc(h * stride);
+    for (let y = 0; y < h; y++) {
+      const f = raw[y * (stride + 1)], src = y * (stride + 1) + 1, dst = y * stride;
+      for (let x = 0; x < stride; x++) {
+        const a = x >= ch ? out[dst + x - ch] : 0, b = y ? out[dst - stride + x] : 0, c = x >= ch && y ? out[dst - stride + x - ch] : 0, v = raw[src + x];
+        let r;
+        if (f === 0) r = v; else if (f === 1) r = v + a; else if (f === 2) r = v + b; else if (f === 3) r = v + ((a + b) >> 1);
+        else { const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c); r = v + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c); }
+        out[dst + x] = r & 255;
+      }
+    }
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < w * h; i++) {
+      const s = i * ch;
+      if (ch >= 3) { rgba[i * 4] = out[s]; rgba[i * 4 + 1] = out[s + 1]; rgba[i * 4 + 2] = out[s + 2]; rgba[i * 4 + 3] = ch === 4 ? out[s + 3] : 255; }
+      else { rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = out[s]; rgba[i * 4 + 3] = ch === 2 ? out[s + 1] : 255; }
+    }
+    return { w, h, rgba };
+  }
+  // the rectangles CalculateDimensions looks at (as far as our model goes), in sub coordinates (y up)
+  function pieces(ship) {
+    const r = [];
+    for (const s of ship.structures || []) r.push(s.rect);
+    for (const it of ship.items || []) r.push(it.rect);
+    for (const it of ship.props || []) r.push(it.rect);
+    for (const h of ship.hulls || []) r.push(h.rect);
+    for (const g of ship.gaps || []) r.push(g.rect);
+    return r.filter(x => x && x[2] > 0 && x[3] > 0);
+  }
+  function register(rgba, w, h, ship) {
+    const R = pieces(ship); if (!R.length) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const r of R) { x0 = Math.min(x0, r[0]); x1 = Math.max(x1, r[0] + r[2]); y1 = Math.max(y1, r[1]); y0 = Math.min(y0, r[1] - r[3]); }
+    // what the picture drew: anything that isn't the editor's background colour (the top-left pixel)
+    const bg = [rgba[0], rgba[1], rgba[2]], mask = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) mask[i] = Math.abs(rgba[i * 4] - bg[0]) + Math.abs(rgba[i * 4 + 1] - bg[1]) + Math.abs(rgba[i * 4 + 2] - bg[2]) > 12 ? 1 : 0;
+    // the sub's pieces on a grid of G units
+    const G = 8, MW = Math.ceil((x1 - x0) / G) + 1, MH = Math.ceil((y1 - y0) / G) + 1, M = new Uint8Array(MW * MH);
+    for (const r of R) {
+      const a = Math.floor((r[0] - x0) / G), b = Math.ceil((r[0] + r[2] - x0) / G), c = Math.floor((y1 - r[1]) / G), d = Math.ceil((y1 - r[1] + r[3]) / G);
+      for (let yy = Math.max(0, c); yy < Math.min(MH, d); yy++) M.fill(1, yy * MW + Math.max(0, a), yy * MW + Math.min(MW, b));
+    }
+    const s0 = Math.min(w / (x1 - x0), h / (y1 - y0)), cx0 = (x0 + x1) / 2, cy0 = (y0 + y1) / 2;
+    const score = (s, dx, dy, step) => { // image pixel (px, py) shows sub point ((px - w/2 - dx) / s + cx0, -(py - h/2 - dy) / s + cy0)
+      let inter = 0, uni = 0;
+      for (let py = 0; py < h; py += step) {
+        const wy = -((py + 0.5 - h / 2 - dy) / s) + cy0, my = Math.floor((y1 - wy) / G), rowOk = my >= 0 && my < MH;
+        for (let px = 0; px < w; px += step) {
+          const wx = (px + 0.5 - w / 2 - dx) / s + cx0, mx = Math.floor((wx - x0) / G);
+          const m = rowOk && mx >= 0 && mx < MW ? M[my * MW + mx] : 0, c = mask[py * w + px];
+          if (m && c) inter++; if (m || c) uni++;
+        }
+      }
+      return uni ? inter / uni : 0;
+    };
+    let best = { sc: -1 };
+    for (let k = 0.86; k <= 1.021; k += 0.01) for (let dx = -48; dx <= 48; dx += 4) for (let dy = -48; dy <= 48; dy += 4) {
+      const sc = score(s0 * k, dx, dy, 4); if (sc > best.sc) best = { sc, k, dx, dy };
+    }
+    const c = best; best = Object.assign({}, c, { sc: score(s0 * c.k, c.dx, c.dy, 2) }); // finer sampling from here on
+    for (let k = c.k - 0.01; k <= c.k + 0.0101; k += 0.002) for (let dx = c.dx - 4; dx <= c.dx + 4; dx++) for (let dy = c.dy - 4; dy <= c.dy + 4; dy++) {
+      const sc = score(s0 * k, dx, dy, 2); if (sc > best.sc) best = { sc, k, dx, dy };
+    }
+    const s = s0 * best.k, cx = cx0 - best.dx / s, cy = cy0 + best.dy / s;
+    return { box: [cx - w / 2 / s, cy - h / 2 / s, cx + w / 2 / s, cy + h / 2 / s].map(v => Math.round(v * 10) / 10), scale: s, score: Math.round(best.sc * 1000) / 1000, formula: s0 };
+  }
+  return { decodePng, register, pieces };
 });
 
 ;

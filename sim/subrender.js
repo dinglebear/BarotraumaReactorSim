@@ -1,13 +1,13 @@
 // Draws a submarine as SVG, the same picture for the command line (`node sim/cli.js sub render`) and the web Sub Studio.
-// What you see is the game's geometry, not a sketch:
-//   * the outer shape = every exterior piece's real collision body (sim/shellgeom.js: rotated, offset and flipped like
-//     Structure.cs), so slopes, humps and caps look like the sub's silhouette in game;
-//   * inside walls, floor slabs, platforms and stairs the same way;
-//   * rooms (hulls) as the space you walk in, with their names and sizes;
-//   * doors, hatches and ladders; electrical items coloured by job; props (cabinets, deco) as outlines;
-//   * wires along their saved nodes in the game's wire colours.
-// The textures aren't part of the game's open-source code, so purely decorative sprites (fins, boards, bow plates with no
-// collision) are drawn as their sprite boxes, clearly marked.
+//   * Underneath: the sub's own picture (the previewimage every .sub carries, rendered by the game with its real
+//     sprites), lined up with the sub's coordinates by sim/preview.js. That is what the sub really looks like.
+//   * Walls: each piece as its sprite covers it (sim/shellgeom.js visual(): a straight piece fills its rectangle, a
+//     slope is a plate cut flush by its rectangle), so with no picture the outline still reads like the hull in game.
+//     The collision bodies (hitboxes) are a separate, optional layer.
+//   * Rooms (hulls), doors, hatches and ladders; electrical items coloured by job; props as outlines; wires along their
+//     saved nodes in the game's wire colours.
+// The game's textures aren't public, so a sub with no picture (one built here from scratch) is drawn from shapes only,
+// and decorative pieces with no collision (fins, boards, bow plates) are their sprite boxes, dashed.
 // Pass `base` (another parsed ship, e.g. the vanilla sub) to highlight what was ADDED: new items get an orange outline,
 // new wires are drawn bright and the originals dimmed (or hidden with wires: 'added').
 (function (root, factory) {
@@ -22,7 +22,7 @@
   const PALETTE = {
     sea: '#0a1c27', room: '#2a3a44', roomWet: '#24465a', roomText: '#c9d6dc', shell: '#8d7360', shellEdge: '#3a2c22', wall: '#7c8a93', wallEdge: '#3a454c',
     platform: '#9aa7ae', deco: 'rgba(141,115,96,.28)', decoEdge: 'rgba(141,115,96,.7)', gap: 'rgba(57,197,214,.55)', door: '#b7c2c8', ladder: '#d9b45a',
-    added: '#ff8a3d', addedWire: '#ffb347', prop: 'rgba(200,190,170,.35)', grid: 'rgba(255,255,255,.06)',
+    added: '#ff8a3d', collision: '#ff4fd8', pictureSea: '#080d13', addedWire: '#ffb347', prop: 'rgba(200,190,170,.35)', grid: 'rgba(255,255,255,.06)',
     kind: { power: '#e8b13c', battery: '#7fd16a', reactor: '#ff6b4a', logic: '#5ed0c8', circuitbox: '#4fb3e8', light: '#f4e27a', door: '#b7c2c8', machine: '#b48cf0', sensor: '#7ac8ff', terminal: '#9be89b', weapon: '#e86a8a', other: '#c0c8cc' },
   };
   const EXTERIOR = /shell|bow|front|tail|fin|hatchcap|^ext|sshell/i;
@@ -58,6 +58,7 @@
       props: new Set((ship.props || []).filter(p => !bp.has(p.id)).map(p => p.id)), structures: new Set((ship.structures || []).filter(s => !bs.has(s.id)).map(s => s.id)), hulls: new Set(ship.hulls.filter(h => !bh.has(h.id)).map(h => h.id)) };
   }
   // opts: { base, crop: [x0, y0, x1, y1] (sub coords, y up), width (px), wires: 'all'|'added'|'none', items: true, props: true,
+  //         picture: { href, box } (the sub's own picture: sim/preview.js), collision: false|true|'hidden' (hitboxes),
   //         nav: false (gaps, ladders' waypoints), labels: 'rooms'|'added'|'all'|'none', grid: false, title, minItemPx: 10 }
   function render(ship, opts) {
     const o = Object.assign({ wires: 'all', items: true, props: true, nav: false, labels: 'rooms', grid: false, width: 2400, pad: 220 }, opts || {});
@@ -68,7 +69,14 @@
     const out = [];
     const rectPath = (r, extra) => `<rect x="${r1(r[0])}" y="${r1(-r[1])}" width="${r1(r[2])}" height="${r1(r[3])}" ${extra || ''}/>`;
     const poly = (q, extra) => `<polygon points="${q.map(p => r1(p[0]) + ',' + r1(-p[1])).join(' ')}" ${extra || ''}/>`;
-    out.push(`<rect x="${r1(bx0)}" y="${r1(-by1)}" width="${r1(W)}" height="${r1(H)}" fill="${P.sea}"/>`);
+    const pic = o.picture && o.picture.href && o.picture.box ? o.picture : null;
+    out.push(`<rect class="sea" x="${r1(bx0)}" y="${r1(-by1)}" width="${r1(W)}" height="${r1(H)}" fill="${pic ? P.pictureSea : P.sea}"/>`);
+    // the game's own picture of the sub (sim/preview.js lines it up), under everything else
+    if (pic) { const [p0, q0, p1, q1] = pic.box; out.push(`<image class="picture" href="${esc(pic.href)}" x="${r1(p0)}" y="${r1(-q1)}" width="${r1(p1 - p0)}" height="${r1(q1 - q0)}" preserveAspectRatio="none"/>`); }
+    // drawn over the picture: rooms as outlines, walls as faint outlines, items see-through (the CLI picture; the Sub
+    // Studio styles the same classes itself). Walls added against the base stay solid: the picture is from the last
+    // time the sub was saved in the game's editor, so it doesn't have them.
+    if (pic && o.pictureStyle !== false) out.push(`<style>.rooms rect{fill-opacity:0;stroke:#9fb3bc;stroke-opacity:.35;stroke-width:${r1(k)}}.walls polygon:not([data-new]){fill-opacity:0;stroke-opacity:.45}.deco{display:none}.props rect{stroke-opacity:.3}[data-k=item]{fill-opacity:.32}</style>`);
     if (o.grid) { // 1 m grid, every 5 m stronger
       const g = []; for (let x = Math.ceil(bx0 / 100) * 100; x <= bx1; x += 100) g.push(`<line x1="${x}" y1="${-by1}" x2="${x}" y2="${-by0}" stroke="${P.grid}" stroke-width="${(x % 500 ? 1 : 2.5) * k}"/>`);
       for (let y = Math.ceil(by0 / 100) * 100; y <= by1; y += 100) g.push(`<line x1="${bx0}" y1="${-y}" x2="${bx1}" y2="${-y}" stroke="${P.grid}" stroke-width="${(y % 500 ? 1 : 2.5) * k}"/>`);
@@ -83,7 +91,8 @@
     out.push('<g class="deco">');
     for (const s of structs) if (!G.solid(s) && EXTERIOR.test(s.identifier) && !insideAnyHull(ship, s.rect)) out.push(rectPath(s.rect, `fill="${P.deco}" stroke="${P.decoEdge}" stroke-width="${k}" stroke-dasharray="${4 * k} ${3 * k}" data-k="struct" data-id="${s.id}"`));
     out.push('</g>');
-    // solid structure: shell (exterior) and inside walls, by their real bodies
+    // solid structure: shell (exterior) and inside walls, drawn as their sprites cover them (shellgeom.visual: a slope's
+    // plate cut flush by its rectangle), not as their collision bodies
     out.push('<g class="walls">');
     for (const s of structs) {
       const sp = G.prefab(s.identifier);
@@ -97,9 +106,15 @@
       const pf = sp || {}, b = G.body(s), ext = EXTERIOR.test(s.identifier) || /shell/i.test(s.name || '');
       if (pf.platform) { out.push(poly(b.quad, `fill="none" stroke="${P.platform}" stroke-width="${3 * k}" data-k="struct" data-id="${s.id}"`)); continue; }
       const a = added(D && D.structures, s.id);
-      out.push(poly(b.quad, `fill="${ext ? P.shell : P.wall}" stroke="${a ? P.added : ext ? P.shellEdge : P.wallEdge}" stroke-width="${(a ? 3 : 1) * k}" data-k="struct" data-id="${s.id}"`));
+      out.push(poly(G.visual(s), `fill="${ext ? P.shell : P.wall}" stroke="${a ? P.added : ext ? P.shellEdge : P.wallEdge}" stroke-width="${(a ? 3 : 1) * k}" data-k="struct" data-id="${s.id}"${a ? ' data-new="1"' : ''}`));
     }
     out.push('</g>');
+    // what collides (the hitboxes): the bodies of every solid piece, platform and stair, as dashed outlines
+    if (o.collision) {
+      out.push(`<g class="collision"${o.collision === 'hidden' ? ' style="display:none"' : ''}>`);
+      for (const s of structs) { const sp = G.prefab(s.identifier); if (!(G.solid(s) || (sp && (sp.stairs || sp.platform)))) continue; out.push(poly(G.body(s).quad, `fill="none" stroke="${P.collision}" stroke-width="${1.5 * k}" stroke-dasharray="${5 * k} ${3 * k}"`)); }
+      out.push('</g>');
+    }
     if (o.nav) { // gaps (openings) and the AI path
       out.push('<g class="nav">');
       for (const g of ship.gaps || []) out.push(rectPath(g.rect, `fill="${P.gap}"`));

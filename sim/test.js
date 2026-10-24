@@ -251,6 +251,29 @@ console.log('real-game checks passed');
   console.log('displays and stairs passed');
 }
 
+// how walls look (shellgeom.visual) and the sub's own picture lined up under them (sim/preview.js)
+{
+  const G = require('./shellgeom'), SF = require('./subfile'), PV = require('./preview'), R = require('./subrender'), zlib = require('zlib');
+  const sub = f => { const b = fs.readFileSync(path.join(ROOT, f)); return SF.parseSub((b[0] === 0x1f ? zlib.gunzipSync(b) : b).toString('utf8')); };
+  // a hump slope is a plate from corner to corner, cut flush by its sprite's rectangle; its collision body pokes out
+  const slope = { identifier: 'shella52deg', rect: [39, 759, 285, 338] }, [x, y, w, h] = slope.rect, inRect = p => p[0] >= x - 0.5 && p[0] <= x + w + 0.5 && p[1] <= y + 0.5 && p[1] >= y - h - 0.5;
+  assert(G.visual(slope).length >= 4 && G.visual(slope).every(inRect), 'slope drawn inside its sprite rect');
+  assert(!G.body(slope).quad.every(inRect), 'its collision body pokes out of it');
+  // the picture lines up with the rooms; the game's box is about 6 % wider than ours (turret barrels and the like)
+  const camel = sub('ships/vanilla/Camel.sub'), img = PV.decodePng(Buffer.from(camel.previewImage, 'base64'));
+  assert.deepStrictEqual([img.w, img.h], [640, 368], 'the editor saves a 640 x 368 picture');
+  const reg = PV.register(img.rgba, img.w, img.h, camel);
+  assert(reg.score > 0.85 && Math.abs(reg.scale / reg.formula - 0.94) < 0.02, `Camel picture lines up (overlap ${reg.score}, scale x${(reg.scale / reg.formula).toFixed(3)})`);
+  // Camel Overkill kept the Camel's picture and its outline: it lands in the same place
+  const ok = sub('ships/custom/Camel_Overkill.sub'), img2 = PV.decodePng(Buffer.from(ok.previewImage, 'base64')), reg2 = PV.register(img2.rgba, img2.w, img2.h, ok);
+  assert(reg2.box.every((v, i) => Math.abs(v - reg.box[i]) < 20), 'Camel Overkill picture lines up with the Camel');
+  // the render draws it under everything; the hitboxes are their own layer
+  const svg = R.render(camel, { width: 600, picture: { href: 'previews/Camel.png', box: reg.box }, collision: 'hidden' }).svg;
+  assert(svg.indexOf('<image class="picture"') > 0 && svg.indexOf('<image') < svg.indexOf('class="rooms"') && /class="collision" style="display:none"/.test(svg), 'picture underneath, collision layer hidden');
+  assert(!/class="collision"/.test(R.render(camel, { width: 600 }).svg), 'no collision layer unless asked');
+  console.log('wall look and sub pictures passed');
+}
+
 // the world (sim/world.js): vehicle physics against SubmarineBody.cs / Engine.cs / Pump.cs, sensors, turrets
 {
   const S = require('./sandbox'), W = require('./world');

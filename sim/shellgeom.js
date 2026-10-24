@@ -4,6 +4,7 @@
 // ships/templates/structure_prefabs.json.
 //
 //   body(st)      -> { quad: 4 corners, seg: long-axis end points, cx, cy, len, thick, angle } in sub coordinates (y up)
+//   visual(st)    -> the polygon its sprite covers (what you see), for drawing; body() is what it collides with
 //   solid(st)     -> does it collide (walls, shells, slopes; not backgrounds or decoration)
 //   leaks(ship)   -> rays from every room that escape without hitting anything solid (a watertight check)
 //   slopePieces() -> the slanted shell pieces as segment vectors, for the sub builder's corner smoothing
@@ -56,6 +57,37 @@
     const ux = Math.cos(angle), uy = Math.sin(angle), vx = -uy, vy = ux;
     const quad = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [cx + ux * i * L / 2 + vx * j * T / 2, cy + uy * i * L / 2 + vy * j * T / 2]);
     return { quad, seg: [[cx - ux * L / 2, cy - uy * L / 2], [cx + ux * L / 2, cy + uy * L / 2]], cx, cy, len: L, thick: T, angle, horiz: true, stairs: right ? 'Right' : 'Left' };
+  }
+  // What the piece LOOKS like (its sprite), as opposed to what it collides with. A sprite fills its rectangle (rotated
+  // with the structure); a slanted shell piece's sprite is a plate running corner to corner, cut flush by the
+  // rectangle's edges, so it meets its neighbours instead of sticking out past them like its collision bar does. The
+  // plate is drawn as the body's band (a third thicker: a straight shell's sprite is 96 tall for a 72 body) clipped
+  // to the rectangle. Returns a polygon [[x, y], ...] in sub coordinates (y up).
+  function visual(st) {
+    const p = prefab(st.identifier) || {}, [x, top, w, h] = st.rect, rot = rad(st.rotation || 0);
+    const cx = x + w / 2, cy = top - h / 2, c = Math.cos(-rot), s = Math.sin(-rot);
+    const rect = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].map(([u, v]) => [cx + u * c - v * s, cy + u * s + v * c]);
+    if (!p.body || p.stairs) return rect;
+    const b = body(st), tilt = Math.abs(((b.angle * 180 / Math.PI) % 90 + 90) % 90);
+    if (tilt < 2 || tilt > 88) return rect; // straight pieces: the whole sprite
+    const ux = Math.cos(b.angle), uy = Math.sin(b.angle), vx = -uy, vy = ux, L = 4 * Math.hypot(w, h), T = b.thick * 1.33 / 2;
+    const band = [[-L, -T], [L, -T], [L, T], [-L, T]].map(([u, v]) => [b.cx + ux * u + vx * v, b.cy + uy * u + vy * v]);
+    return clip(band, rect);
+  }
+  // Sutherland-Hodgman: polygon `subj` clipped by the convex polygon `clipper` (both counter-clockwise or both clockwise)
+  function clip(subj, clipper) {
+    let out = subj; const n = clipper.length;
+    const area = clipper.reduce((a, p, i) => { const q = clipper[(i + 1) % n]; return a + p[0] * q[1] - q[0] * p[1]; }, 0), sgn = area >= 0 ? 1 : -1;
+    for (let i = 0; i < n && out.length; i++) {
+      const A = clipper[i], B = clipper[(i + 1) % n], inside = P => sgn * ((B[0] - A[0]) * (P[1] - A[1]) - (B[1] - A[1]) * (P[0] - A[0])) >= -1e-9;
+      const cross = (P, Q) => { const dx = Q[0] - P[0], dy = Q[1] - P[1], ex = B[0] - A[0], ey = B[1] - A[1], den = dx * ey - dy * ex; if (Math.abs(den) < 1e-12) return P; const t = ((A[0] - P[0]) * ey - (A[1] - P[1]) * ex) / den; return [P[0] + dx * t, P[1] + dy * t]; };
+      const inp = out; out = [];
+      for (let j = 0; j < inp.length; j++) {
+        const P = inp[j], Q = inp[(j + 1) % inp.length], pi = inside(P), qi = inside(Q);
+        if (pi) out.push(P); if (pi !== qi) out.push(cross(P, Q));
+      }
+    }
+    return out;
   }
   const SOLID_NAME = /^(Shell|Shuttle Shell|Large (Horizontal|Vertical) Inside Wall|Large Inside Wall Cap|Platform|Submarine Bow|Stairs)/i;
   function solid(st) { const p = prefab(st.identifier); if (p) return !!p.body && !p.platform && !p.stairs; return SOLID_NAME.test(st.name || ''); }
@@ -117,5 +149,5 @@
     const cx = mx - ox, cy = my - oy;
     return { identifier: piece.id, rect: [Math.round(cx - piece.w / 2), Math.round(cy + piece.h / 2), Math.round(piece.w), Math.round(piece.h)], flippedx, flippedy };
   }
-  return { body, solid, leaks, slopePieces, place, prefab, isHorizontal, setCatalog: c => { P = c.prefabs || {}; for (const k of Object.keys(P)) lc[k.toLowerCase()] = P[k]; } };
+  return { body, visual, clip, solid, leaks, slopePieces, place, prefab, isHorizontal, setCatalog: c => { P = c.prefabs || {}; for (const k of Object.keys(P)) lc[k.toLowerCase()] = P[k]; } };
 });

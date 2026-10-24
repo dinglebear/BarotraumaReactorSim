@@ -177,7 +177,7 @@ const COMMANDS = {
   // sub catalog <sub> [regex]          structures (walls/shells/backgrounds/deco) and items you can place, with sizes
   // sub audit <sub> [--base <sub>]     everything that broke in game before: box size, loose items, items in walls, moved originals
   // sub leaks <sub>                    watertight check with the game's collision shapes (sim/shellgeom.js)
-  // sub render <sub> [--base <sub>]    picture of the sub (true shapes, rooms, items, wires; what was added in orange) -> renders/<sub>.png
+  // sub render <sub> [--base <sub>]    picture of the sub (its own game picture underneath, rooms, items, wires; what was added in orange) -> renders/<sub>.png
   sub(a) {
     const zlib = require('zlib'), SE = require('./subedit'), SF = require('./subfile');
     const [what, name, arg] = a._;
@@ -185,12 +185,16 @@ const COMMANDS = {
     const readSub = f => { const b = fs.readFileSync(f); return (b[0] === 0x1f && b[1] === 0x8b ? zlib.gunzipSync(b) : b).toString('utf8'); };
     const f = what === 'templates' ? null : find(name || ''); if (!f && what !== 'templates') throw new Error(`no sub "${name}" (ships/custom, ships/vanilla or a path)`);
     const text = f ? readSub(f) : '';
-    if (what === 'render') { // sub render <sub> [--base <sub>] [--out f.png|f.svg] [--wires all|added|none] [--crop x0,y0,x1,y1] [--room name] [--width px] [--nav] [--grid] [--labels rooms|added|all|none]
+    if (what === 'render') { // sub render <sub> [--base <sub>] [--out f.png|f.svg] [--wires all|added|none] [--crop x0,y0,x1,y1] [--room name] [--width px] [--nav] [--grid] [--labels rooms|added|all|none] [--no-picture] [--collision]
       const R = require('./subrender'), sh = SF.parseSub(text), bf = a.base ? find(a.base) : null, base = bf ? SF.parseSub(readSub(bf)) : null;
       let crop = a.crop ? String(a.crop).split(',').map(Number) : null;
       if (a.room) { const re = new RegExp(a.room, 'i'), hs = sh.hulls.filter(h => re.test(h.label || h.name) || h.id === a.room); if (!hs.length) throw new Error('no room matches ' + a.room);
         const xs = hs.flatMap(h => [h.rect[0], h.rect[0] + h.rect[2]]), ys = hs.flatMap(h => [h.rect[1], h.rect[1] - h.rect[3]]); crop = [Math.min(...xs) - 150, Math.min(...ys) - 150, Math.max(...xs) + 150, Math.max(...ys) + 150]; }
-      const r = R.render(sh, { base, crop, width: Number(a.width) || (crop ? 1600 : 2400), wires: a.wires || 'all', nav: !!a.nav, grid: !!a.grid, labels: a.labels || (base ? 'added' : 'rooms'), title: sh.name + (base ? '  (orange = added vs ' + path.basename(bf, '.sub') + ')' : '') });
+      // the sub's own picture under everything (what it looks like in game), unless --no-picture or the file has none
+      let picture = null;
+      if (sh.previewImage && !a['no-picture']) { const PV = require('./preview'), png = Buffer.from(sh.previewImage, 'base64'), img = PV.decodePng(png), reg = PV.register(img.rgba, img.w, img.h, sh); if (reg) picture = { href: 'data:image/png;base64,' + sh.previewImage, box: reg.box }; }
+      const r = R.render(sh, { base, crop, picture, collision: !!a.collision, width: Number(a.width) || (crop ? 1600 : 2400), wires: a.wires || 'all', nav: !!a.nav, grid: !!a.grid, labels: a.labels || (base ? 'added' : 'rooms'), title: sh.name + (base ? '  (orange = added vs ' + path.basename(bf, '.sub') + ')' : '') });
+      if (!picture) console.log(sh.previewImage ? 'drawn from shapes (--no-picture)' : 'this sub has no preview picture (save it once in the game\'s sub editor to get one): drawn from shapes');
       const out = path.resolve(a.out || path.join(ROOT, 'renders', sh.name.replace(/[^\w.-]+/g, '_') + (a.room ? '_' + String(a.room).replace(/\W+/g, '_') : '') + '.png'));
       fs.mkdirSync(path.dirname(out), { recursive: true });
       const svgOut = out.replace(/\.png$/i, '.svg'); fs.writeFileSync(svgOut, r.svg);

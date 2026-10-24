@@ -46,6 +46,15 @@ details.layers .menu { position: absolute; z-index: 20; top: calc(100% + 6px); l
 .view svg [data-k=item][data-new] { stroke-width: 1.5 }
 /* layer switches (classes on the svg; nothing is redrawn) */
 svg.no-rooms .rooms, svg.no-walls .walls, svg.no-deco .deco, svg.no-items .items, svg.no-props .props, svg.no-nav .nav, svg.no-live #live, svg.no-live #water { display: none }
+svg:not(.pic) .picture, svg:not(.coll) .collision { display: none }
+svg.pic { background: #080d13 }
+/* over the game's picture: rooms and walls are outlines (the picture shows what they look like), items see-through */
+svg.pic .rooms rect { fill-opacity: .07; stroke: #9fb3bc; stroke-opacity: .28; stroke-width: 1px; vector-effect: non-scaling-stroke }
+svg.pic .walls polygon:not([data-new]) { fill-opacity: 0; stroke: #d8c4b0; stroke-opacity: .3 }
+svg.pic .walls polygon:hover { stroke-opacity: .9 }
+svg.pic .walls path, svg.pic .deco { display: none }
+svg.pic [data-k=item] { fill-opacity: .32 }
+svg.pic .props rect { fill-opacity: .25; stroke-opacity: .35 }
 svg.w-none .wires { display: none }
 svg.w-power [data-k=wire]:not([data-pw]), svg.w-signal [data-k=wire][data-pw], svg.w-added [data-k=wire]:not([data-new]) { display: none }
 svg.focus [data-k=wire] { opacity: .07 }
@@ -124,11 +133,13 @@ code { font-family: var(--f-mono); font-size: 12px; background: var(--sunk); pad
         </div>
         <details class="layers" id="layers"><summary>Layers</summary>
           <div class="menu">
+            <label class="check" id="lyPicRow"><input type="checkbox" id="lyPic" checked> The sub's own picture (as in game)</label>
             <label class="check"><input type="checkbox" id="lyRooms" checked> Rooms (hulls)</label>
             <label class="check"><input type="checkbox" id="lyWalls" checked> Walls, floors, stairs</label>
             <label class="check"><input type="checkbox" id="lyDeco" checked> Outside decoration (no collision)</label>
             <label class="check"><input type="checkbox" id="lyItems" checked> Items</label>
             <label class="check"><input type="checkbox" id="lyProps" checked> Ladders, doors, cabinets</label>
+            <label class="check"><input type="checkbox" id="lyColl"> Collision (hitboxes)</label>
             <label class="check"><input type="checkbox" id="lyNav"> Gaps and AI waypoints</label>
             <label class="check"><input type="checkbox" id="lyNames" checked> Room names</label>
             <label class="check"><input type="checkbox" id="lyItemNames" checked> Item names when zoomed in</label>
@@ -195,7 +206,8 @@ code { font-family: var(--f-mono); font-size: 12px; background: var(--sunk); pad
 <script>
 (() => {
 'use strict';
-const R = self.BaroSubRender, SH = self.BaroShip, SF = self.BaroSubFile, F = self.BaroFormat, P = self.BaroProject, L = self.BaroLabel, G = self.BaroShellGeom;
+const R = self.BaroSubRender, SH = self.BaroShip, SF = self.BaroSubFile, F = self.BaroFormat, P = self.BaroProject, L = self.BaroLabel, G = self.BaroShellGeom, PV = self.BaroPreview;
+const LAYERS = ['lyPic', 'lyRooms', 'lyWalls', 'lyDeco', 'lyItems', 'lyProps', 'lyColl', 'lyNav', 'lyNames', 'lyItemNames', 'lyGrid', 'lyLive'];
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const store = { get(k, d) { try { const v = localStorage.getItem('bw.subs.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('bw.subs.' + k, JSON.stringify(v)); } catch (e) { } } };
@@ -253,7 +265,8 @@ function meta() {
 // ---------- the picture: drawn once per sub (and compare choice); pan and zoom only move the viewBox ----------
 function drawStatic() {
   const sh = S.ship, b = R.bounds(sh, 400), W = b[2] - b[0];
-  const r = R.render(sh, { base: S.base, wires: 'all', nav: true, props: true, labels: 'none', width: W, crop: b });
+  const pic = sh.picture ? { href: sh.picture.href || sh.picture.file, box: sh.picture.box } : null;
+  const r = R.render(sh, { base: S.base, wires: 'all', nav: true, props: true, labels: 'none', width: W, crop: b, picture: pic, pictureStyle: false, collision: true });
   S.D = r.diff; S.full = b;
   let inner = r.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
   inner = inner.replace('</g><g class="deco">', '</g><g id="water"></g><g class="deco">');
@@ -265,10 +278,12 @@ function drawStatic() {
   layers(); focusWires(); live(true); marks();
 }
 function layers() {
-  const on = id => $(id).checked;
+  const on = id => $(id).checked, pic = !!S.ship.picture && on('lyPic');
+  svg.classList.toggle('pic', pic); svg.classList.toggle('coll', on('lyColl')); $('lyPicRow').hidden = !S.ship.picture;
+  const sea = svg.querySelector('.sea'); if (sea) sea.setAttribute('fill', pic ? R.PALETTE.pictureSea : R.PALETTE.sea);
   svg.classList.toggle('no-rooms', !on('lyRooms')); svg.classList.toggle('no-walls', !on('lyWalls')); svg.classList.toggle('no-deco', !on('lyDeco'));
   svg.classList.toggle('no-items', !on('lyItems')); svg.classList.toggle('no-props', !on('lyProps')); svg.classList.toggle('no-nav', !on('lyNav')); svg.classList.toggle('no-live', !on('lyLive'));
-  store.set('layers', ['lyRooms', 'lyWalls', 'lyDeco', 'lyItems', 'lyProps', 'lyNav', 'lyNames', 'lyItemNames', 'lyGrid', 'lyLive'].filter(on));
+  store.set('layers2', LAYERS.filter(on));
   labels(); grid();
 }
 function setWires(w) {
@@ -507,7 +522,7 @@ function inspector() {
     else h += '<p class="hint">Nothing matches. Try an item name (battery, wifi), an ID (#1835), a wifi channel (7300), a kind (logic, sensor) or a room.</p>';
   }
   if (!sel) {
-    h += `<h2>${esc(sh.name)}</h2><p class="hint">Click an item, a wire, a wall or a room to see what it is and what it's wired to. The picture is the game's own geometry: walls, slopes and stairs are their collision shapes, rooms are the hulls you walk in, and wires follow their saved nodes.</p>`;
+    h += `<h2>${esc(sh.name)}</h2><p class="hint">Click an item, a wire, a wall or a room to see what it is and what it's wired to. ${sh.picture ? "Underneath is the sub as the game draws it: the picture saved in the .sub, lined up with the rooms. " : "This sub has no saved picture, so walls are drawn as their sprites cover them. "}Rooms are the hulls you walk in, wires follow their saved nodes, and Layers has the collision (hitboxes).</p>`;
     if (S.base) h += `<div class="note">Orange = added compared with <b>${esc(S.base.name)}</b>: ${S.D.items.size} items, ${S.D.wires.size} wires${S.D.structures.size ? `, ${S.D.structures.size} walls` : ''}${S.D.hulls.size ? `, ${S.D.hulls.size} rooms` : ''}. Pick <b>Added</b> above to see only the new wiring.</div>`;
     h += legend();
   } else if (sel.k === 'item') {
@@ -557,7 +572,7 @@ function legend() {
   const wc = {}; for (const w of sh.wires) wc[w.color] = (wc[w.color] || 0) + 1;
   return `<h3>Items by kind</h3><ul class="list">${Object.keys(KIND_NAMES).filter(k => counts[k]).map(k => `<li class="go" data-kind="${k}"><span><span class="sw" style="background:${R.PALETTE.kind[k]}"></span>${KIND_NAMES[k]}</span><span class="n">${counts[k]}</span></li>`).join('')}</ul>
     <h3>Wires by colour</h3><ul class="list">${Object.entries(wc).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<li><span><span class="sw" style="background:${R.WIRE[c] || R.WIRE.wire}"></span>${esc(WIRE_NAMES[c] || c)}</span><span class="n">${n}</span></li>`).join('')}</ul>
-    <h3>Walls</h3><ul class="list"><li><span><span class="sw" style="background:${R.PALETTE.shell}"></span>Outer shell (true collision shape)</span></li><li><span><span class="sw" style="background:${R.PALETTE.wall}"></span>Inside walls and floors</span></li><li><span><span class="sw" style="background:${R.PALETTE.platform}"></span>Platforms and stairs</span></li><li><span><span class="sw" style="background:${R.PALETTE.decoEdge}"></span>Outside decoration, dashed (no collision)</span></li></ul>`;
+    <h3>Walls</h3>${S.ship.picture ? '<p class="hint">Underneath is the picture the game saved in this .sub (its real sprites, lined up automatically). The outlines over it are what you can click.</p>' : ''}<ul class="list"><li><span><span class="sw" style="background:${R.PALETTE.shell}"></span>Outer shell (as the sprites cover it)</span></li><li><span><span class="sw" style="background:${R.PALETTE.wall}"></span>Inside walls and floors</span></li><li><span><span class="sw" style="background:${R.PALETTE.platform}"></span>Platforms and stairs</span></li><li><span><span class="sw" style="background:${R.PALETTE.decoEdge}"></span>Outside decoration, dashed (no collision)</span></li><li><span><span class="sw" style="background:${R.PALETTE.collision}"></span>Collision (hitboxes), dashed: Layers menu</span></li></ul>`;
 }
 
 // ---------- overview ----------
@@ -708,7 +723,7 @@ function showTab(t) {
 }
 document.querySelector('.side .tabs').onclick = e => { const b = e.target.closest('[role=tab]'); if (b) showTab(b.dataset.tab); };
 $('wireMode').onclick = e => { const b = e.target.closest('button'); if (b && !b.disabled) setWires(b.dataset.w); };
-for (const id of ['lyRooms', 'lyWalls', 'lyDeco', 'lyItems', 'lyProps', 'lyNav', 'lyNames', 'lyItemNames', 'lyGrid', 'lyLive']) $(id).onchange = layers;
+for (const id of LAYERS) $(id).onchange = layers;
 document.addEventListener('click', e => { const d = $('layers'); if (d.open && !d.contains(e.target)) d.open = false; });
 $('btnZin').onclick = () => zoomAt(1 / 1.3); $('btnZout').onclick = () => zoomAt(1.3); $('btnFit').onclick = () => fit();
 const expand = on => { viewEl.classList.toggle('expanded', on); document.body.style.overflow = on ? 'hidden' : ''; $('btnExpand').textContent = on ? 'Close' : 'Expand'; setTimeout(() => setView(S.view), 0); };
@@ -720,6 +735,7 @@ document.addEventListener('keydown', e => {
   else if (S.measure) { S.measure = {}; marks(); } else if (S.sel) select(null);
 });
 $('subSel').onchange = () => selectSub($('subSel').value);
+addEventListener('hashchange', () => { const n = Object.keys(ships).find(n => '#' + tok(n) === location.hash); if (n && n !== S.ship.name) selectSub(n); });
 $('baseSel').onchange = () => { store.set('base.' + S.ship.name, $('baseSel').value); S.base = $('baseSel').value ? ships[$('baseSel').value] : null; drawStatic(); inspector(); };
 $('subFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -728,12 +744,19 @@ $('subFile').onchange = async e => {
     if (buf[0] === 0x1f && buf[1] === 0x8b) buf = new Uint8Array(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
     const sh = SF.parseSub(new TextDecoder().decode(buf)); sh.opened = true; if (ships[sh.name] && !ships[sh.name].opened) sh.name += ' (opened)';
     ships[sh.name] = sh; fillSubs(sh.name); selectSub(sh.name);
+    // the picture the game saved in the file: line it up with the sub (a second or so), then draw it underneath
+    if (sh.previewImage && PV) {
+      const href = 'data:image/png;base64,' + sh.previewImage, img = new Image(); img.src = href; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+      const reg = PV.register(x.getImageData(0, 0, c.width, c.height).data, c.width, c.height, sh);
+      if (reg) { sh.picture = { href, box: reg.box, w: c.width, h: c.height }; if (S.ship === sh) drawStatic(); }
+    }
   } catch (err) { $('insp').innerHTML = `<div class="note bad">Could not read ${esc(f.name)}: ${esc(err.message)}. Pick a .sub file saved by Barotrauma.</div>`; showTab('insp'); }
   e.target.value = '';
 };
 
 {
-  const ly = store.get('layers', null); if (ly) for (const id of ['lyRooms', 'lyWalls', 'lyDeco', 'lyItems', 'lyProps', 'lyNav', 'lyNames', 'lyItemNames', 'lyGrid', 'lyLive']) $(id).checked = ly.includes(id);
+  const ly = store.get('layers2', null); if (ly) for (const id of LAYERS) $(id).checked = ly.includes(id);
   S.speed = store.get('speed', '1'); for (const x of $('speed').querySelectorAll('button')) x.setAttribute('aria-pressed', x.dataset.s === S.speed);
   const fromHash = Object.keys(ships).find(n => '#' + tok(n) === location.hash);
   const first = fromHash || (ships[store.get('sub', '')] ? store.get('sub', '') : ships['Camel Overkill'] ? 'Camel Overkill' : Object.keys(ships)[0]);

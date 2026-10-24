@@ -30,7 +30,9 @@ section > p.hint { font-size: 13.5px; max-width: 75ch; margin-bottom: 12px }
 .subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px }
 .sub { display: grid; text-decoration: none; color: var(--ink); overflow: hidden }
 .sub .pic { background: var(--table); aspect-ratio: 16 / 7; display: grid; place-items: center; overflow: hidden }
-.sub .pic img { width: 100%; height: 100%; object-fit: contain; display: block }
+.sub .pic img { width: 100%; height: 100%; object-fit: contain; display: block; grid-area: 1 / 1 }
+.sub .pic.game, .feature .game { background: #080d13 }
+.feature .game { display: grid } .feature .game img { grid-area: 1 / 1 }
 .sub .cap { padding: 8px 12px 10px; display: grid; gap: 2px }
 .sub .cap b { font: 600 14.5px var(--f-display); letter-spacing: .02em }
 .sub .cap span { font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums }
@@ -81,7 +83,7 @@ wire @btn.signal_out @brain.signal_in1
 <span class="c"># apply it, then look at what you made</span>
 node sim/cli.js sub patch Dugong my_patch
 node sim/cli.js sub render My_Dugong --base Dugong</pre>
-        <p>The render shows the true hull and every new item and wire in orange. <code>sub audit</code> lists anything loose, inside a wall or over a box's 64-part limit.</p></div>
+        <p>The render puts the sub's own picture underneath and every new item and wire in orange. <code>sub audit</code> lists anything loose, inside a wall or over a box's 64-part limit.</p></div>
       <div class="panel"><h3>Test it like a round</h3>
 <pre><span class="c"># a practice round with the sub's own circuits</span>
 node sim/cli.js ship My_Dugong --transcript
@@ -95,25 +97,27 @@ npm test</pre>
     </div>
   </section>
 
-  <footer class="fine">Rules come from Barotrauma's published source code (FakeFishGames/Barotrauma) and are noted in <code>reference/</code>. Textures aren't part of that code, so subs are drawn from their collision shapes, rooms and items. Built by Claude with Dinglebear, who tests it in game.</footer>
+  <footer class="fine">Rules come from Barotrauma's published source code (FakeFishGames/Barotrauma) and are noted in <code>reference/</code>. Textures aren't part of that code, so subs are shown with the picture the game saves inside every .sub; a sub without one is drawn from its wall shapes. Built by Claude with Dinglebear, who tests it in game.</footer>
 </main>
 
 <script>
 (() => {
 'use strict';
-const THUMBS = [{"name":"Camel","file":"thumbs/Camel.svg","base":null,"vanilla":true,"rooms":26,"items":186,"wires":113,"boxes":2,"w":640,"h":285},{"name":"Dugong","file":"thumbs/Dugong.svg","base":null,"vanilla":true,"rooms":16,"items":167,"wires":131,"boxes":1,"w":640,"h":175},{"name":"Humpback","file":"thumbs/Humpback.svg","base":null,"vanilla":true,"rooms":18,"items":171,"wires":129,"boxes":1,"w":640,"h":160},{"name":"Typhon2","file":"thumbs/Typhon2.svg","base":null,"vanilla":true,"rooms":28,"items":366,"wires":308,"boxes":2,"w":640,"h":224},{"name":"Camel Overkill","file":"thumbs/Camel_Overkill.svg","base":"Camel","vanilla":false,"rooms":26,"items":350,"wires":273,"boxes":38,"w":640,"h":285},{"name":"Claude's Test Capsule","file":"thumbs/Claude_s_Test_Capsule.svg","base":null,"vanilla":false,"rooms":6,"items":28,"wires":25,"boxes":1,"w":640,"h":272},{"name":"Dugong Toolkit Test","file":"thumbs/Dugong_Toolkit_Test.svg","base":"Dugong","vanilla":false,"rooms":16,"items":171,"wires":140,"boxes":2,"w":640,"h":175}], PAGES = [{"file":"index.html","nav":"Home"},{"file":"subs.html","nav":"Sub Studio"},{"file":"sandbox.html","nav":"Circuit Lab"},{"file":"world.html","nav":"Drone Range"},{"file":"bench.html","nav":"Reactor Bench"}];
+const THUMBS = [{"name":"Camel","file":"thumbs/Camel.svg","base":null,"vanilla":true,"rooms":26,"items":186,"wires":113,"boxes":2,"picture":"previews/Camel.png","w":640,"h":368},{"name":"Dugong","file":"thumbs/Dugong.svg","base":null,"vanilla":true,"rooms":16,"items":167,"wires":131,"boxes":1,"picture":"previews/Dugong.png","w":640,"h":368},{"name":"Humpback","file":"thumbs/Humpback.svg","base":null,"vanilla":true,"rooms":18,"items":171,"wires":129,"boxes":1,"picture":"previews/Humpback.png","w":640,"h":368},{"name":"Typhon2","file":"thumbs/Typhon2.svg","base":null,"vanilla":true,"rooms":28,"items":366,"wires":308,"boxes":2,"picture":"previews/Typhon2.png","w":640,"h":368},{"name":"Camel Overkill","file":"thumbs/Camel_Overkill.svg","base":"Camel","vanilla":false,"rooms":26,"items":350,"wires":273,"boxes":38,"picture":"previews/Camel_Overkill.png","w":640,"h":368},{"name":"Claude's Test Capsule","file":"thumbs/Claude_s_Test_Capsule.svg","base":null,"vanilla":false,"rooms":6,"items":28,"wires":25,"boxes":1,"w":640,"h":272},{"name":"Dugong Toolkit Test","file":"thumbs/Dugong_Toolkit_Test.svg","base":"Dugong","vanilla":false,"rooms":16,"items":171,"wires":140,"boxes":2,"picture":"previews/Dugong_Toolkit_Test.png","w":640,"h":368}], PAGES = [{"file":"index.html","nav":"Home"},{"file":"subs.html","nav":"Sub Studio"},{"file":"sandbox.html","nav":"Circuit Lab"},{"file":"world.html","nav":"Drone Range"},{"file":"bench.html","nav":"Reactor Bench"}];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const tok = n => String(n).replace(/[^A-Za-z0-9]+/g, '_');
 const TOOLS = {
-  'subs.html': ['Look, find, run', 'Sub Studio', 'Every sub drawn from its real collision shapes. Filter wires by power, signal or what was added, click anything to see where it goes, then run a practice round with floods, fires and fights.'],
+  'subs.html': ['Look, find, run', 'Sub Studio', 'Every sub as the game draws it, with its rooms, items and wiring on top. Filter wires by power, signal or what was added, click anything to see where it goes, then run a practice round with floods, fires and fights.'],
   'sandbox.html': ['Circuits', 'Circuit Lab', 'Wire circuit boxes, loose components and devices together, script what happens over time, and get warned about the mistakes that cost a round.'],
   'world.html': ['Vehicles', 'Drone Range', 'A small sub or drone in a cave with real buoyancy, drag and engine force: test autopilots, return-to-position circuits and turret logic against walls, a diver and monsters.'],
   'bench.html': ['Reactor', 'Reactor Bench', 'Run a reactor circuit against a recorded round\'s power demand and score it for steady voltage, fuel per rod and how the batteries were used.'],
 };
 document.getElementById('tools').innerHTML = PAGES.filter(p => TOOLS[p.file]).map(p => { const [tag, h, d] = TOOLS[p.file]; return `<a class="panel tool" href="${p.file}"><span class="tag">${tag}</span><h3>${h}</h3><p>${d}</p><span class="go">Open ${h} →</span></a>`; }).join('');
 const order = THUMBS.slice().sort((a, b) => (a.vanilla - b.vanilla) || b.boxes - a.boxes || a.name.localeCompare(b.name));
-document.getElementById('subs').innerHTML = order.map(t => `<a class="panel sub" href="subs.html#${tok(t.name)}"><span class="pic"><img src="${t.file}" alt="Side view of ${esc(t.name)}" loading="lazy" width="${t.w}" height="${t.h}"></span><span class="cap"><b>${esc(t.name)}</b><span>${t.vanilla ? 'vanilla' : t.base ? 'from ' + esc(t.base) : 'built from scratch'} · ${t.rooms} rooms · ${t.items} items · ${t.boxes} circuit box${t.boxes === 1 ? '' : 'es'}</span></span></a>`).join('');
+// a sub's picture: the one the game saved in the .sub, with a see-through layer on top marking what was added
+const pic = (t, lazy) => t.picture ? `<span class="pic game"><img src="${t.picture}" alt="${esc(t.name)} as the game draws it" ${lazy}width="${t.w}" height="${t.h}"><img src="${t.file}" alt="" ${lazy}width="${t.w}" height="${t.h}"></span>` : `<span class="pic"><img src="${t.file}" alt="Side view of ${esc(t.name)}" ${lazy}width="${t.w}" height="${t.h}"></span>`;
+document.getElementById('subs').innerHTML = order.map(t => `<a class="panel sub" href="subs.html#${tok(t.name)}">${pic(t, 'loading="lazy" ')}<span class="cap"><b>${esc(t.name)}</b><span>${t.vanilla ? 'vanilla' : t.base ? 'from ' + esc(t.base) : 'built from scratch'} · ${t.rooms} rooms · ${t.items} items · ${t.boxes} circuit box${t.boxes === 1 ? '' : 'es'}</span></span></a>`).join('');
 const f = THUMBS.find(t => t.name === 'Camel Overkill') || order[0];
-if (f) { const el = document.getElementById('feature'); el.href = 'subs.html#' + tok(f.name); el.innerHTML = `<img src="${f.file}" alt="Side view of ${esc(f.name)}" width="${f.w}" height="${f.h}"><figcaption><b>${esc(f.name)}</b><span>${f.boxes} circuit boxes · ${f.wires} wires · orange = added to the ${esc(f.base || 'vanilla')}</span></figcaption>`; }
+if (f) { const el = document.getElementById('feature'); el.href = 'subs.html#' + tok(f.name); el.innerHTML = `${pic(f, '')}<figcaption><b>${esc(f.name)}</b><span>${f.boxes} circuit boxes · ${f.wires} wires · orange = added to the ${esc(f.base || 'vanilla')}</span></figcaption>`; }
 })();
 </script>

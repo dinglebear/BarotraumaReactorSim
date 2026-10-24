@@ -21,9 +21,9 @@
 //   run <seconds>
 // Endpoints: pin shorthands work as in .circ (1 = signal_in1, out = signal_out, in = signal_in).
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine'), require('./components'), require('./format'));
-  else root.BaroSandbox = factory(root.BaroEngine, root.BaroComponents, root.BaroFormat);
-})(typeof self !== 'undefined' ? self : this, function (E, C, F) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine'), require('./components'), require('./format'), require('./label'));
+  else root.BaroSandbox = factory(root.BaroEngine, root.BaroComponents, root.BaroFormat, root.BaroLabel);
+})(typeof self !== 'undefined' ? self : this, function (E, C, F, LBL) {
   'use strict';
   const STEP = E.STEP;
   const HELP = "File format (.sbx), one statement per line, '#' comments:\n  name <title>\n  dev <id> <type> [Prop=value ...]     button | switch | const | terminal | light | display | probe | door\n                                       | motion | water | smoke | oxygen   (see DEVICES below)\n  part <id> <component> [Prop=value]   a component outside any box (same types as .circ: and, mem, regex, wifi...)\n  box <name>                           a circuit box; then .circ lines (c / w / note / label) until the next\n  ...                                  top-level statement. Box pins: <box>.in0..in9 / <box>.out0..out9 (current boxes have 10 each)\n  box <name> file=<path> [box=N] [K=V] load a box from a .circ or Blueprints .txt file (path from the repo root;\n                                       the web page knows circuits/**), filling $K placeholders\n                                       (e.g. file=circuits/camel/camel_door.circ ROOM=Medbay). box=N picks the Nth box.\n  wire <a> <b> [<c> ...]               world wires: <dev>.<pin>, <part>.<pin>, <box>.in3 / <box>.out2\n  at <t> press|set|toggle|type|say <target> [value]     scripted input at t seconds\n  watch <endpoint> ...                 print every change on these pins\n  expect <t> <endpoint|dev> <op> <value>   check at t: op = | != | > | < | ~ (regex) ; dev value = its state/text\n  expectwarn <regex> / expecterror <regex>   this run must report a matching warning/error (for pitfall demos);\n                                       a matched error doesn't fail the run\n  run <seconds>\nEndpoints: pin shorthands work as in .circ (1 = signal_in1, out = signal_out, in = signal_in).";
@@ -134,7 +134,7 @@
     addDev(d) {
       if (this.objs[d.id]) { this.errors.push(`line ${d.ln}: duplicate name "${d.id}"`); return; }
       const it = this.mkItem('dev:' + d.id, {}), s = { on: false, text: '', color: '', lines: [], value: d.arg !== undefined ? d.arg : (d.props.Value !== undefined ? d.props.Value : '0') };
-      const o = { kind: 'dev', type: d.type, it, s, props: d.props }; this.objs[d.id] = o; this.devs.push(o);
+      const o = { kind: 'dev', id: d.id, type: d.type, it, s, props: d.props }; this.objs[d.id] = o; this.devs.push(o);
       const send = (pin, v) => this.send(it, pin, String(v)), P = d.props;
       // log changes; a device that changes more than 8 times in a second is fighting senders: warn once, mute it for that second
       const fl = { sec: -1, n: 0 }, log = m => {
@@ -158,7 +158,7 @@
           if (pin === 'toggle') { if (v !== '0' && v !== '') { s.on = !s.on; if (T !== 'switch') log(`${T === 'door' ? (s.on ? 'opens' : 'closes') : (s.on ? 'on' : 'off')} (toggle)`); } }
           else if (pin === 'set_state') { const n = v !== '0'; if (n !== s.on && T !== 'switch') log(T === 'door' ? (n ? 'opens' : 'closes') : (n ? 'on' : 'off')); s.on = n; }
           else if (pin === 'set_color') { if (v !== s.color) { s.color = v; log(`colour ${v}`); } }
-        } else if (T === 'display') { if (pin === 'set_text' && v !== s.text) { s.text = v; log(`shows "${v}"`); } else if (pin === 'set_text_color') s.color = v; }
+        } else if (T === 'display') { if (pin === 'set_text' && v !== s.text) { s.text = v; log(`shows "${v}"`); (s.hist = s.hist || [{ t: 0, text: '' }]).length < 20000 && s.hist.push({ t: this.time, text: v }); } else if (pin === 'set_text_color') s.color = v; }
         else if (T === 'terminal') { if (pin === 'signal_in' && v !== '') { s.lines.push(v); log(`< ${v}`); } else if (pin === 'clear_text' && v !== '0') { s.lines = []; log('(cleared)'); } }
         else if (T === 'probe') { if (v !== s.last) log(`${pin} = "${v}"`); s.last = v; }
         else if (T === 'turret') {
@@ -293,6 +293,8 @@
     // end of the script: check expectwarn/expecterror (a pitfall demo passes when the sandbox catches the pitfall)
     finish() {
       if (this.finished) return; this.finished = true;
+      // a display a player could never read to the end (a long text that keeps changing: sim/label.js)
+      if (LBL) for (const o of this.devs) if (o.type === 'display' && o.s.hist) { const r = LBL.check(o.s.hist, this.time); if (!r.ok) this.warns.push(`display ${o.id}: ${r.reason}`); }
       const warns = this.allWarnings;
       for (const m of this.spec.msgExpects) {
         const list = m.kind === 'warning' ? warns : this.errors, re = new RegExp(m.re, 'i'), hit = list.filter(e => re.test(e));

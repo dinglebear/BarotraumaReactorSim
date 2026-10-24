@@ -70,10 +70,12 @@ say('wire 787.power_value_out @humpP.signal_in6');
 say('wire @humpP.signal_out2 @hump1.signal_in8');
 
 // ---------------------------------------------------------------- 2b. THE SCREEN WALL (reactor room)
-say('\n# === 2b. SCREEN WALL: 14 text displays fed by three dashboard boxes (reactor, fuel, ship) ===');
-say('box @dashR at -1400,-40 from camel/camel_dash_reactor');
-say('box @dashF at -1400,-80 from camel/camel_dash_fuel');
-say('box @dashS at -1400,-120 from camel/camel_dash_ship');
+say('\n# === 2b. SCREEN WALLS: readouts fed by three dashboard boxes, each a fixed caption display and a short value display ===');
+// Reactor room: reactor and fuel readouts on the wall left of the stairs (3 display columns fit before the stair).
+// Engineering: the ship readouts (wifi only, so the box can live anywhere).
+say('box @dashR at -1398,-70 from camel/camel_dash_reactor');
+say('box @dashF at -1398,-108 from camel/camel_dash_fuel');
+say('box @dashS at 300,96 from camel/camel_dash_ship');
 say('wire 787.power_value_out @dashR.signal_in1');
 say('wire 787.temperature_out @dashR.signal_in2');
 say('wire @hump1.signal_out1 @dashR.signal_in3');
@@ -82,13 +84,23 @@ say('wire 787.fuel_out @dashF.signal_in1');
 say('wire 787.fuel_percentage_left @dashF.signal_in2');
 say('wire @hump1.signal_out1 @dashF.signal_in3');
 say('wire 787.power_value_out @dashF.signal_in4');
-const WALL = [['dashR', [1, 2, 4, 5]], ['dashF', [1, 2, 3, 4, 5]], ['dashS', [1, 2, 3, 4]]];
-WALL.forEach(([bx, outs], col) => outs.forEach((o, row) => {
-  const x = -1590 + col * 66, y = -40 - row * 26, h = `scr${bx}${o}`;
-  say(`add @${h} textdisplay at ${x},${y} ItemLabel.Text="booting..."`);
+// A value that changes must fit its display (about 7 characters): a longer one scrolls, and the game snaps the scroll
+// back on every change, so its end is never seen (reference/TEXT_DISPLAYS.md). So the caption is a display of its own.
+// [box, value output, caption, colour output]; 'side' = caption left of the value, 'stack' = caption above it
+const readout = ([bx, o, cap, colour], cx, cy, vx, vy) => {
+  const h = `scr${bx}${o}`;
+  say(`add @cap${bx}${o} textdisplay at ${cx},${cy} "ItemLabel.Text=${cap}" ItemLabel.TextColor=150,190,200,255`);
+  say(`add @${h} textdisplay at ${vx},${vy} ItemLabel.Text=...`);
   say(`wire @${bx}.signal_out${o} @${h}.set_text`);
-  if (bx === 'dashR' && o === 2) say(`wire @${bx}.signal_out3 @${h}.set_text_color`);
-}));
+  if (colour) say(`wire @${bx}.signal_out${colour} @${h}.set_text_color`);
+};
+// the top row starts 58 under the ceiling slab (-8), below the wire bundles
+[['dashR', 1, 'OUTPUT'], ['dashR', 2, 'CORE', 3], ['dashR', 4, 'FISSION'], ['dashR', 5, 'TURBINE'], ['dashF', 1, 'RODS'], ['dashF', 2, 'FUEL']]
+  .forEach((r, i) => readout(r, -1592, -66 - i * 26, -1526, -66 - i * 26));
+[['dashF', 3, 'RUNTIME'], ['dashF', 4, 'ENERGY'], ['dashF', 5, 'kWh/ROD']]
+  .forEach((r, i) => readout(r, -1460, -66 - i * 52, -1460, -92 - i * 52));
+[['dashS', 1, 'BATTERY'], ['dashS', 2, 'LASTS'], ['dashS', 3, 'AIR', 4], ['dashS', 5, 'ROUND'], ['dashS', 6, 'NEWS']]
+  .forEach((r, i) => readout(r, 170, 182 - i * 26, 236, 182 - i * 26));
 
 // ---------------------------------------------------------------- 3. GOVERNOR (power room)
 say('\n# === 3. HUMP-2 GOVERNOR: oxygen generator on a relay (85 %..97 % hysteresis) + load shedding ===');
@@ -117,6 +129,8 @@ say('wire @hump2.signal_out2 611.set_state');
 say('\n# === 4. SENSOR NETWORK: per room a water + smoke detector that transmit the ROOM NAME (7400 flood / 7401 fire) ===');
 const ROOMS = [[57, 'Workshop'], [67, 'EngineRoom'], [128, 'Reactor'], [130, 'LowerDeck'], [132, 'Quarters'], [133, 'Medbay'], [134, 'PowerRoom'], [135, 'Bridge'], [195, 'DivingBay'], [544, 'ForeHall'], [59, 'FwdHump'], [894, 'AftHump']];
 const sensorOf = {};
+// the AIR readout on the screen wall shows the room's name, so the air nodes use names short enough to fit a display
+const AIRNAME = { Workshop: 'Shop', EngineRoom: 'Engine', Reactor: 'Reactor', LowerDeck: 'Deck', Quarters: 'Bunks', Medbay: 'Medbay', PowerRoom: 'Power', Bridge: 'Bridge', DivingBay: 'Diving', ForeHall: 'Fore', FwdHump: 'Hump F', AftHump: 'Hump A' };
 for (const [hid, name] of ROOMS) {
   const b = bounds(hull(hid)), x = Math.round(b.x0 + (b.x1 - b.x0) * 0.62);
   say(`add @w${name} waterdetector at ${x},${b.floor + 8} WaterDetector.Output=${name} WaterDetector.FalseOutput=""`);
@@ -128,7 +142,7 @@ for (const [hid, name] of ROOMS) {
   sensorOf[hid] = name;
   // air node: this room's own oxygen detector and a tiny box that reports the room by name when its air runs low
   say(`add @ox${name} oxygendetector at ${x - 40},${Math.round((b.floor + b.top) / 2)}`);
-  say(`box @air${name} at ${x - 80},${Math.round((b.floor + b.top) / 2)} from camel/camel_airnode ROOM=${name}`);
+  say(`box @air${name} at ${x - 80},${Math.round((b.floor + b.top) / 2)} from camel/camel_airnode "ROOM=${AIRNAME[name]}"`);
   say(`wire @ox${name}.signal_out @air${name}.signal_in1`);
 }
 

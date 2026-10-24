@@ -7,7 +7,7 @@ const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 // structure prefab geometry (only what has a collision body) for the sub viewer's true wall shapes
 const prefabs = JSON.parse(read('ships/templates/structure_prefabs.json')).prefabs, bodies = {};
 for (const [k, v] of Object.entries(prefabs)) if (v.body || v.platform) bodies[k] = v;
-const sim = ['self.BaroStructurePrefabs = ' + JSON.stringify({ prefabs: bodies }) + ';', ...['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/project.js', 'sim/autopins.js', 'sim/subfile.js', 'sim/shellgeom.js', 'sim/ship.js'].map(read)].join('\n;\n');
+const sim = ['self.BaroStructurePrefabs = ' + JSON.stringify({ prefabs: bodies }) + ';', ...['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/project.js', 'sim/autopins.js', 'sim/subfile.js', 'sim/shellgeom.js', 'sim/label.js', 'sim/ship.js'].map(read)].join('\n;\n');
 const lib = { circuits: {}, profiles: {}, ships: {} };
 const list = d => fs.existsSync(path.join(ROOT, d)) ? fs.readdirSync(path.join(ROOT, d)).sort() : [];
 for (const f of list('circuits')) {
@@ -53,7 +53,7 @@ const html = read('web/app.html').replace('/*__SIM__*/', () => sim.replace(/<\/s
 fs.writeFileSync(path.join(ROOT, 'web/index.html'), html);
 // the circuit sandbox page: engine + sandbox, the example scripts, and every .circ under circuits/ (for box file=)
 {
-  const sbxSim = ['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/sandbox.js'].map(read).join('\n;\n');
+  const sbxSim = ['sim/components.js', 'sim/format.js', 'sim/engine.js', 'sim/label.js', 'sim/sandbox.js'].map(read).join('\n;\n');
   const files = {}, walk = d => { for (const f of list(d)) { const p = d + '/' + f; if (fs.statSync(path.join(ROOT, p)).isDirectory()) walk(p); else if (/\.(circ|txt)$/.test(f)) files[p] = read(p); } };
   walk('circuits');
   const examples = {}; for (const f of list('sandbox')) if (f.endsWith('.sbx')) examples[f.replace(/\.sbx$/, '')] = read('sandbox/' + f);

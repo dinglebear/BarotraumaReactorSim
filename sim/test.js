@@ -139,6 +139,10 @@ console.log('real-game checks passed');
   assert(sim.o2Min > 80, 'oxygen stays above 80 %');
   assert(sim.termLog.some(l => l.dir === '<' && /^Saved/.test(l.text)), 'CamelOS settings answer');
   assert(sim.termLog.filter(l => l.dir === '<' && l.t > 104 && l.t < 106).length === 1, 'CamelOS fun pack answers once');
+  // every text display can be read to the end: changing values fit, the ticker restarts each message from the beginning
+  const unreadable = sim.displayIssues(); assert(unreadable.length === 0, 'unreadable displays: ' + unreadable.map(x => x.id + ' ' + x.reason).join('; '));
+  const dispTexts = sim.devs.filter(d => d.kind === 'display').map(d => d.state.text);
+  assert(dispTexts.some(t => /^\d+ kW$/.test(t)) && dispTexts.some(t => /^\d\d:\d\d:\d\d$/.test(t)), 'screen wall values: ' + dispTexts.join(' | '));
   // nothing new sits inside a floor or wall (turrets and their periscope/loader excepted: they replace vanilla parts)
   const doc = new SE.SubDoc(text), vanillaIds = new Set(new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8')).items.keys());
   const inBoxes = new Set(); for (const n of doc.items.values()) if (n.children.some(c => c.tag === 'CircuitBox')) for (const c of n.children) if (c.tag === 'ItemContainer') for (const id of (c.attrs.find(a => a[0] === 'contained') || [0, ''])[1].split(/[,;]/)) inBoxes.add(id);
@@ -218,4 +222,30 @@ console.log('real-game checks passed');
   assert.strictEqual(G.leaks(cap).length, 0, 'capsule watertight');
   assert(cap.structures.filter(s => G.solid(s) && G.body(s).angle % (Math.PI / 2) !== 0).length >= 4, 'capsule has slopes');
   console.log('hull smoothing passed');
+}
+
+// what a player sees on a text display (sim/label.js, reference/TEXT_DISPLAYS.md) and stairs as the game builds them
+{
+  const L = require('./label'), G = require('./shellgeom'), SF = require('./subfile'), zlib = require('zlib');
+  const every = (n, dt, f) => Array.from({ length: n }, (_, i) => ({ t: i * dt, text: f(i) }));
+  assert(L.fits('1000 kW') && !L.fits('Reactor output: 1000 kW'), 'about 7 characters fit');
+  assert(!L.check(every(60, 1, i => 'Reactor output: ' + (1000 + i) + ' kW'), 60).ok, 'long text changing every second never shows its end');
+  assert(L.check(every(60, 1, i => (1000 + i) + ' kW'), 60).ok, 'a short changing value is fine');
+  assert(L.check([{ t: 0, text: 'Reactor output: 1000 kW' }], 60).ok, 'a long text that holds still scrolls fine');
+  // the snap-back: after a change the scroll keeps its place (clamped to the new text), so a new message starts midway...
+  const m = new L.Marquee(); m.set('Chief Engineer Dingle: certified JESTER. Not a clown.'); for (let i = 0; i < 600; i++) m.tick(1 / 60);
+  m.set('Forecast: wet, dark, with a chance of mudraptors.'); assert(m.idx > 0, 'scroll position kept across a change');
+  // ...unless a text that fits comes in between: that resets it (the Camel's ticker sends a space for 0.5 s)
+  m.set(' '); m.set('Forecast: wet, dark, with a chance of mudraptors.'); assert.strictEqual(m.idx, 0, 'a short text resets the scroll');
+  // stairs: one 10 px plank at 45 degrees in the square at the bottom of the rect; a flip swaps the direction
+  const st = G.body({ identifier: 'stairsleft3', rect: [-1425, 121, 254, 343], flippedx: true });
+  assert.deepStrictEqual(st.seg.map(p => p.map(Math.round)), [[-1425, -222], [-1171, 32]], 'flipped left stairs rise to the right');
+  assert.strictEqual(G.body({ identifier: 'stairsleft3', rect: [-921, -134, 254, 343] }).stairs, 'Left');
+  // the renderer draws them, and the wire router keeps its bundles under the real ceiling slab
+  const R = require('./subrender'), camel = SF.parseSub(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8'));
+  const svg = R.render(camel, { width: 800 }).svg; assert((svg.match(/data-k="struct"/g) || []).length > 50 && /<polygon/.test(svg) && (svg.match(/data-k="item"/g) || []).length > 100, 'sub render has structures and items');
+  const SE = require('./subedit'), doc = new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8'));
+  const reactorRoom = doc.hulls().find(H => H.x0 === -1648 && H.y1 === 40); assert.strictEqual(doc.ceiling(reactorRoom), -8, 'reactor room ceiling slab is 48 thick');
+  const path1 = doc.route([-1500, -150], [-700, -150]); assert(path1.every(p => p[1] <= -16 && p[1] >= -216), 'route stays inside the room, under the slab');
+  console.log('displays and stairs passed');
 }

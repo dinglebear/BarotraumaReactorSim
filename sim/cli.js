@@ -145,7 +145,7 @@ const COMMANDS = {
     if (a.circuit) model = loadModel(resolve(a.circuit, CIRC_DIRS), a['battery-circuit'] && resolve(a['battery-circuit'], CIRC_DIRS));
     if (model) { const sum = k => sim.batteries.reduce((x, b) => x + b[k], 0); sim.attachCircuit(P.substitute(model, { MAX: sim.reactor.maxPower, BATT_N: sim.batteries.length, BATT_KW: sum('maxRecharge'), BATT_OUT: sum('maxOut'), BATT_CAP: sum('capacity') })); }
     sim.cfg.circuitName = model ? model.name : sim.reactor.autoTemp ? 'crew_autotemp' : 'own_circuits';
-    const r = sim.runToEnd(); r.profile = ship.name + '_practice'; r.warnings = sim.warnings;
+    const r = sim.runToEnd(); r.profile = ship.name + '_practice'; r.warnings = sim.warnings.concat(sim.displayIssues().map(x => `text display #${x.id}: ${x.reason}`));
     const out = path.join(ROOT, 'logs', `${r.circuit}__${r.profile}.log`); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, P.fmtReport(r));
     process.stdout.write(P.fmtReport(r));
     console.log(`oxygen_min_pct=${sim.o2Min.toFixed(1)}\noxygen_generator_on_pct=${(sim.o2GenOnS / sim.time * 100).toFixed(1)}`);

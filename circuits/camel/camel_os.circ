@@ -3,7 +3,7 @@
 # replies on the terminal (and on radio for radio commands). Commands live in this box, the SETTINGS box and the FUN box.
 name camel_os
 box battery
-note "HUMP-4 CamelOS 2.0: HOW IT WORKS" "Terminal line (in1) or radio line 'camel <command>' (in2) -> command bus 7300. Every box listens to the bus and acts on its own commands; answers come back on the reply bus 7310 and are printed here.\nThis box answers: help, status, alert ..., lockdown, unlock, o2 ..., shed ..., spit, lights ..., say <text>, and 'Unknown command' (one regex lists every command of every box: add new commands there too).\nStatus line = a concat chain of telemetry latches (7206 reactor kW, 7207 load, 7202 propulsion %, 7201 oxygen %, 7203 generator, 7204 shedding, 7205 alert), broadcast on 7210 for the displays.\nRadio: for 1 s after a radio command, answers also go to radio chat (out2)."
+note "HUMP-4 CamelOS 2.0: HOW IT WORKS" "Terminal line (in1) or radio line 'camel <command>' (in2) -> command bus 7300. Every box listens to the bus and acts on its own commands; answers come back on the reply bus 7310 and are printed here.\nThis box answers: help, status, alert ..., lockdown, unlock, o2 ..., shed ..., spit, lights ..., say <text>, and 'Unknown command' (one regex lists every command of every box: add new commands there too).\nStatus line = a concat chain of telemetry latches (7206 reactor kW, 7207 load, 7202 propulsion %, 7201 oxygen %, 7203 generator, 7204 shedding, 7205 alert), answered to 'status'. The room displays get it on 7210 as a pager instead: one short page (kW, load, bat %, O2 %, alert) every 2.5 s, so no page ever scrolls.\nRadio: for 1 s after a radio command, answers also go to radio chat (out2)."
 note "WIRING" "in1 <- terminal signal_out\nin2 <- radio wifi (channel 0, LinkToChat) signal_out\nout1 -> terminal signal_in\nout2 -> chat wifi (LinkToChat) signal_in"
 c txc wifi Channel=7300
 c txs wifi Channel=7210
@@ -79,7 +79,55 @@ c sp regex Expression="^(?i)spit$" FalseOutput="" ContinuousOutput=false Output=
 c li regex Expression="^(?i)lights (party|normal|claude)$" FalseOutput="" ContinuousOutput=false Output="Lighting updated."
 c sy regex Expression="^(?i)say (.+)$" UseCaptureGroup=true FalseOutput="" ContinuousOutput=false Output=1
 c un regex Expression="^(?i)(help|help fun|status|alert (red|yellow|green|auto)|lockdown|unlock|o2 (on|auto)|shed (on|off|auto)|spit|lights (party|normal|claude)|say .+|settings|set (o2 low|o2 high|battery) [0-9]+|(alerts|siren|announce) (on|off)|doors auto (on|off)|ping|joke|8ball.*|pet|feed|coffee|dance|weather|uptime|hump|whoami|credits|sudo.*|rm .*|moo|hello|hi|jester|clowns?|honk|dingle|claude|secret)$" Output="" FalseOutput="Unknown command. Type help. (The camel is judging you.)" ContinuousOutput=false
-w s7.out txs.in st.set_output
+w s7.out st.set_output
+# --- status pager for the room displays (7210): a short page every 2.5 s. The whole line above is ~80 characters and
+# changes every tick, so on a display it would scroll and snap back forever; each page fits and never scrolls.
+c pg osc OutputType=Pulse Frequency=0.4
+c pn mem Value=0
+c padd add
+c pm5 mod Modulus=5
+w pn.out padd.1
+w pg.out padd.2
+w padd.out pm5.in
+w pm5.out pn.in
+c pmx mux
+w pn.out pmx.set_input
+c nr1 round
+c nr2 round
+c nr3 round
+c nr4 round
+w vp.out nr1.in
+w vl.out nr2.in
+w vb.out nr3.in
+w vo.out nr4.in
+c lkw mem Value=kW
+c lld mem Value=load
+c lbt mem Value=bat
+c lo2 mem Value=O2
+c lpc mem Value=%
+c g1 concat Separator=" "
+c g2 concat Separator=" "
+c g3 concat Separator=" "
+c g3p concat
+c g4 concat Separator=" "
+c g4p concat
+w nr1.out g1.1
+w lkw.out g1.2
+w lld.out g2.1
+w nr2.out g2.2
+w lbt.out g3.1
+w nr3.out g3.2
+w g3.out g3p.1
+w lo2.out g4.1
+w nr4.out g4.2
+w g4.out g4p.1
+w lpc.out g3p.2 g4p.2
+w g1.out pmx.signal_in0
+w g2.out pmx.signal_in1
+w g3p.out pmx.signal_in2
+w g4p.out pmx.signal_in3
+w va.out pmx.signal_in4
+w pmx.out txs.in
 w in1 st.in hp.in hp2.in al.in lk.in
 w in1 ul.in ox.in sh.in sp.in li.in
 w in1 sy.in un.in

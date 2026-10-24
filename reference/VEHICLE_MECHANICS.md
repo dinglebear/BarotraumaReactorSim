@@ -131,3 +131,97 @@ The sonar itself has **no signal outputs**.
 - **Main tunnel:** clearance radius 6500 px (7000–10 000 in some biomes), clamped to [1.15 × sub size, 16 000]. That makes the main path about 130–200 m wide. Side tunnels use a radius of 1000–6000.
 - **Level size:** 70 000–300 000 px wide, 50 000–100 000 px tall.
 - **Abyss:** below about −5000.
+
+## 6. Motion sensor (Items/Components/Signal/MotionSensor.cs; vanilla `motiondetector`)
+**Settings:**
+- `range="100"`: RangeX = RangeY = 100. These are **half-extents of an axis-aligned rectangle**, editable 0–1000.
+- DetectOffset moves the rectangle (clamped to ±range; negated on a flipped sub).
+- Target flags: Human=1, Monster=2, Wall=4, Pet=8. The default is Any.
+- MinimumVelocity defaults to 0.
+- UpdateInterval is 0.1 s; the first check is at a random time in [0, interval).
+- Output "1", FalseOutput "0".
+
+**Behaviour:**
+- `state_out` sends the latched result every frame. No power is needed.
+- **Characters:** a limb circle must overlap the rectangle. Limbs are checked against MinimumVelocity, and with MinimumVelocity 0 the test never fails, so it **works as a presence detector**. "Human" includes human NPCs.
+- **Walls:**
+  - Detected only if Target includes Wall and the sensor is outside every hull (mounted on the outside of the drone).
+  - **Only while the sensor's own sub moves** faster than MinimumVelocity: a drone at exactly 0 m/s sees no walls.
+  - A level wall counts when the sensor is inside a solid cell, or a cell edge crosses a side of the rectangle. An edge lying entirely inside the rectangle is missed.
+- **Other subs:** detected by relative motion.
+
+## 7. What a circuit can know about the outside
+- **No rangefinder exists.** The sonar has no signal outputs, and a transducer only sends a handshake every 0.5 s.
+- **No item outputs the position of a character or item.**
+- **Position:** the nav terminal is the only source (section 4).
+- **Following a player:** use an array of motion detectors (Target Human, MinimumVelocity 0, different DetectOffsets) to get a coarse bearing and distance.
+- **Wifi:** range 20 000 px.
+
+## 8. Turrets (Items/Components/Turret.cs) and periscopes (Machines/Controller.cs)
+**Angles:**
+- Absolute world angle in degrees: barrel direction (cos R, −sin R), so **0° = right, 90° = down, 180° = left, 270° = up**.
+- To aim at an offset (dx, dy) with y up: `deg = atan2(-dy, dx)` wrapped to [0, 360).
+- `position_in` takes any value in degrees.
+- Coilgun and chaingun limits are 180–360 (the upper half). A target outside the limits snaps to the nearer limit.
+
+**Rotation:** a damped spring per frame:
+```
+ω += (diff*k − ω*c)*dt; clamp ω to ±vmax; R += ω*dt
+```
+With no character as sender:
+
+| Turret | k | c | vmax |
+|---|---|---|---|
+| Coilgun | 26 | 5.25 | 4.5 rad/s |
+| Chaingun | — | — | 3.0 rad/s (×0.6 when spun up) |
+
+**`trigger_in`** (any value other than "0"):
+- **Coilgun:** reload 0.25 s, 4 shots/s, 1000 kW·s (power units) per shot.
+- **Chaingun:** charge must build for 1 s first, so the trigger has to be sent **every frame**. Then it fires 10/s at 400 per shot with ±4.75° spread.
+- **Power:** comes only from batteries or supercapacitors wired straight to power_in, and needs `Σ min(charge*3600, MaxOutPut/60) ≥ consumption`. One battery is not enough for a coilgun shot; a supercapacitor is.
+- **Ammo:** from the linked loader.
+
+**Bolts:**
+- Travel at 60.8 m/s (6080 px/s), with almost no drag.
+- Live 3 s (coilgun) or 2 s (chaingun).
+- The sub's velocity is not added.
+- Damage:
+
+  | Bolt | Lacerations | Bleeding |
+  |---|---|---|
+  | Coilgun | 15 | 1 |
+  | Chaingun | 12 | 2 |
+
+**Auto-operate:**
+- Set in the sub editor (AutoOperate, AllowAutoOperateWithWiring). `set_auto_operate` / `toggle_auto_operate` only work when wiring is allowed.
+- Runs only while no character is using the turret, and only with power to shoot.
+- **Targets:** live characters within 3500 px and inside the limits, nearest first. Same-team characters are never targeted. Humans are targeted only when TargetHumans is on and they're not on the friendly team. Monsters are targeted if TargetMonsters is on.
+- **Fires** when the aim error is within 10° (coilgun) or 30° (chaingun), and a ray from the turret centre hits the target first.
+  - A **friendly diver who is first in the line blocks the shot**.
+  - The ray is cached for 0.5 s and ignores the muzzle offset and chaingun spread, so it's not perfect.
+- No lead: it aims at the target's current position.
+
+**Periscope:**
+- `position_out`: degrees in the same convention, measured from the turret pivot, every frame while someone holds the periscope.
+- `trigger_out`: "1" every frame while the fire key is held.
+
+## 9. Creatures (Content/Characters)
+| | Swim speed | Health | Attack |
+|---|---|---|---|
+| Human diver | 1.5 m/s (2.5 sprinting); diving suit ×1, abyss suit ×0.8 | 100 | — |
+| Crawler | 4 m/s (8 fast) | 80 | Bite range 150 px, every 3 s, 12 damage + bleeding. Flees below 10 HP. |
+| Mudraptor | 2.5 m/s (6.5 fast) | 150 | Armour plates take ×0.1. Bite range 100 px, every 3 s, 30 damage. Never flees. |
+
+- Monsters see roughly 250–1000 px. Firing a coilgun makes noise heard up to 8000 px.
+
+## 10. Docking port (Items/Components/DockingPort.cs)
+**Outputs:**
+- `state_out`, every frame: "1" when locked.
+- `proximity_sensor`, every frame while undocked: "1" when a matching port is within 200×64 (port) or 64×200 (hatch).
+- `on_dock` / `on_undock`: "1" once.
+
+**Inputs:**
+- `toggle`: any value other than "0" flips the docked state.
+- `set_state`: a value other than "0" means docked.
+
+Both have a 0.1 s cooldown. Docking pulls the subs together for up to 1 s, then locks.

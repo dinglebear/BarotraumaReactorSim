@@ -1,0 +1,38 @@
+# The text display trap (reference/TEXT_DISPLAYS.md): a long text that changes every second never shows its end,
+# because the game keeps the scroll position on every change and clamps it back. Keep the changing value short
+# (about 7 characters) and put the caption on a display of its own. The run passes when the sandbox catches the
+# long one and stays quiet about the short one.
+name text display: long changing text vs short value + caption
+dev bad display
+dev caption display
+dev good display
+
+box meter
+note "A FAKE REACTOR METER" "A 1 Hz pulse counts up from 1000 kW. out1 = the long text (unreadable), out2 = the short value (fine)."
+c tick osc OutputType=Pulse Frequency=1
+c n mem Value=1000
+c inc add
+w n.out inc.1 short.1 long.2
+w tick.out inc.2
+w inc.out n.in
+c head mem Value="Reactor output:"
+c unit mem Value=kW
+c long concat Separator=" "
+c long2 concat Separator=" "
+w head.out long.1
+w long.out long2.1
+w unit.out long2.2 short.2
+w long2.out out1
+c short concat Separator=" "
+w short.out out2
+c cap mem Value=OUTPUT
+w cap.out out3
+
+wire meter.out1 bad.set_text
+wire meter.out2 good.set_text
+wire meter.out3 caption.set_text
+
+expectwarn display bad: .*snaps the scroll back
+expect 20 good ~ ^10[0-9][0-9] kW$
+expect 20 caption = OUTPUT
+run 30

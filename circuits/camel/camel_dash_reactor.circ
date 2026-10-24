@@ -1,33 +1,22 @@
-# CAMEL OVERKILL: DASH-1 "REACTOR WALL". Four text displays on the reactor room wall: output, core temperature (with a
-# colour), fission/turbine, and an output bar graph.
+# CAMEL OVERKILL: DASH-1 "REACTOR WALL". Four readouts on the reactor room wall. Each is two text displays: a caption
+# that never changes and a short value. A value never scrolls: a long text that changes every second never shows its
+# end in game (the scroll snaps back on every change, reference/TEXT_DISPLAYS.md).
 name camel_dash_reactor
 box battery
-note "DASH-1 REACTOR WALL: HOW IT WORKS" "out1 REACTOR 2310 kW / 5000 (46%): power_value_out, and power / 50 rounded.\nout2 CORE 50.2 C OPTIMAL: temperature_out / 10, rounded, / 10. Status: index = 2 x (t > 60) + (40 > t) picks OPTIMAL / COLD / HOT from a multiplexer; out3 is the matching text colour (green / blue / red).\nout4 FISSION 12% | TURBINE 46%: what HUMP-1 is asking for (its out1/out2).\nout5 a 10-step bar graph of output: floor(percent / 10) picks one of 10 strings."
-note "WIRING" "in1 <- reactor power_value_out, in2 <- reactor temperature_out\nin3 <- HUMP-1 out1 (fission), in4 <- HUMP-1 out2 (turbine)\nout1, out2, out4, out5 -> text displays (set_text); out3 -> the temperature display's set_text_color"
+note "DASH-1 REACTOR WALL: HOW IT WORKS" "Every value is about 7 characters at most, so it fits its display and never scrolls. The captions (OUTPUT, CORE, ...) are separate displays that never change.\nout1 OUTPUT: power_value_out + ' kW'.\nout2 CORE: temperature_out / 10, rounded, / 10, + ' C'. out3 is its colour: index = 2 x (t > 60) + (40 > t) picks green (optimal) / blue (cold) / red (hot) from a multiplexer.\nout4 FISSION and out5 TURBINE: what HUMP-1 asks for, rounded, + '%'."
+note "WIRING" "in1 <- reactor power_value_out, in2 <- reactor temperature_out\nin3 <- HUMP-1 out1 (fission), in4 <- HUMP-1 out2 (turbine)\nout1, out2, out4, out5 -> value displays (set_text); out3 -> the CORE value display's set_text_color"
 c k10 mem Value=10
-c k50 mem Value=50
-c h1 mem Value="REACTOR "
-c t1 mem Value="%)"
-c pdiv div
-c pct round
-c a1 concat
-c a2 concat Separator=" kW / 5000 ("
-c a3 concat
-w in1 pdiv.1 a1.2
-w k50.out pdiv.2
-w pdiv.out pct.in
-w h1.out a1.1
-w a1.out a2.1
-w pct.out a2.2 bdiv.1
-w a2.out a3.1
-w t1.out a3.2
-w a3.out out1
+c ukw mem Value=kW
+c a1 concat Separator=" "
+w in1 a1.1
+w ukw.out a1.2
+w a1.out out1
 # temperature
 c t10 div
 c tr round
 c tc div
 w in2 t10.1
-w k10.out t10.2 tc.2 bdiv.2
+w k10.out t10.2 tc.2
 w t10.out tr.in
 w tr.out tc.1
 c k60 mem Value=60
@@ -44,71 +33,30 @@ w hot.out h2.1
 w k2.out h2.2
 w h2.out idx.1
 w cold.out idx.2
-c s0 mem Value=OPTIMAL
-c s1 mem Value="COLD (warming up)"
-c s2 mem Value="HOT! (cooling)"
-c smux mux
 c g0 mem Value="120,255,140,255"
 c g1 mem Value="120,180,255,255"
 c g2 mem Value="255,80,60,255"
 c gmux mux
-w idx.out smux.set_input gmux.set_input
-w s0.out smux.signal_in0
-w s1.out smux.signal_in1
-w s2.out smux.signal_in2 smux.signal_in3
+w idx.out gmux.set_input
 w g0.out gmux.signal_in0
 w g1.out gmux.signal_in1
 w g2.out gmux.signal_in2 gmux.signal_in3
 w gmux.out out3
-c h3 mem Value="CORE "
-c b1 concat
-c b2 concat Separator=" C  "
-w h3.out b1.1
-w tc.out b1.2
-w b1.out b2.1
-w smux.out b2.2
-w b2.out out2
+c uc mem Value=C
+c b1 concat Separator=" "
+w tc.out b1.1
+w uc.out b1.2
+w b1.out out2
 # fission / turbine
 c fr round
 c tu round
-c h4 mem Value="FISSION "
-c t4 mem Value="%"
+c pc mem Value=%
 c d1 concat
-c d2 concat Separator="% | TURBINE "
-c d3 concat
+c d2 concat
 w in3 fr.in
 w in4 tu.in
-w h4.out d1.1
-w fr.out d1.2
-w d1.out d2.1
-w tu.out d2.2
-w d2.out d3.1
-w t4.out d3.2
-w d3.out out4
-# bar graph
-c bdiv div ClampMin=0 ClampMax=9.99
-c bf floor
-c bmux mux
-w bdiv.out bf.in
-w bf.out bmux.set_input
-c q0 mem Value="OUTPUT [|.........]"
-c q1 mem Value="OUTPUT [||........]"
-c q2 mem Value="OUTPUT [|||.......]"
-c q3 mem Value="OUTPUT [||||......]"
-c q4 mem Value="OUTPUT [|||||.....]"
-c q5 mem Value="OUTPUT [||||||....]"
-c q6 mem Value="OUTPUT [|||||||...]"
-c q7 mem Value="OUTPUT [||||||||..]"
-c q8 mem Value="OUTPUT [|||||||||.]"
-c q9 mem Value="OUTPUT [||||||||||]"
-w q0.out bmux.signal_in0
-w q1.out bmux.signal_in1
-w q2.out bmux.signal_in2
-w q3.out bmux.signal_in3
-w q4.out bmux.signal_in4
-w q5.out bmux.signal_in5
-w q6.out bmux.signal_in6
-w q7.out bmux.signal_in7
-w q8.out bmux.signal_in8
-w q9.out bmux.signal_in9
-w bmux.out out5
+w fr.out d1.1
+w tu.out d2.1
+w pc.out d1.2 d2.2
+w d1.out out4
+w d2.out out5

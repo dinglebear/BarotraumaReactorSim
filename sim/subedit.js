@@ -181,12 +181,21 @@
     // Wire path like a tidy builder would run it (the nodes are what you see in game; they don't change what the wire does):
     // up from the device to a cable lane under its room's ceiling, along the lane, down/up along the wall of the target
     // room to that room's lane, along it, then down to the target. Parallel wires in a lane are spread 6 apart.
+    // underside of the ceiling slab over the middle of room H (the hull rect includes part of the slab)
+    ceiling(H) {
+      this._ceil = this._ceil || new Map(); const key = H.x0 + ',' + H.y1; if (this._ceil.has(key)) return this._ceil.get(key);
+      const m = (H.x0 + H.x1) / 2; let c = H.y1;
+      for (const s of this.solids()) if (s.x0 < m + 48 && s.x1 > m - 48 && s.y0 < H.y1 && s.y0 > H.y1 - 80 && s.y1 >= H.y1 - 4) c = Math.min(c, s.y0);
+      this._ceil.set(key, c); return c;
+    }
     route(pa, pb) {
       const R = v => Math.round(v), hull = p => this.hulls().find(H => p[0] >= H.x0 && p[0] <= H.x1 && p[1] >= H.y0 && p[1] <= H.y1);
       const ha = hull(pa), hb = hull(pb);
       if (!ha || !hb) { const my = R((pa[1] + pb[1]) / 2); return [[R(pa[0]), R(pa[1])], [R(pa[0]), my], [R(pb[0]), my], [R(pb[0]), R(pb[1])]]; } // outside the rooms: the old dog-leg
       this._lanes = this._lanes || new Map();
-      const lane = H => { const base = H.y1 - 64, k = this._lanes.get(base) || 0; this._lanes.set(base, k + 1); return Math.max(H.y0 + 30, base - 6 * (k % 8)); };
+      // up to 8 lanes, 5 apart, starting 8 below the room's real ceiling (the slab's underside, not the hull rect's top):
+      // keep wall-mounted displays and boxes at least 50 below the ceiling and the bundles never cross them
+      const lane = H => { const base = this.ceiling(H) - 8, k = this._lanes.get(base) || 0; this._lanes.set(base, k + 1); return Math.max(H.y0 + 30, base - 5 * (k % 8)); };
       const la = lane(ha), pts = [[pa[0], pa[1]], [pa[0], la]];
       if (ha === hb || Math.abs(ha.y1 - hb.y1) < 1 && Math.abs(ha.y0 - hb.y0) < 1) { pts.push([pb[0], la], [pb[0], pb[1]]); }
       else {

@@ -65,10 +65,10 @@ wire 787.load_value_out @humpP.signal_in3
 wire 787.power_value_out @humpP.signal_in6
 wire @humpP.signal_out2 @hump1.signal_in8
 
-# === 2b. SCREEN WALL: 14 text displays fed by three dashboard boxes (reactor, fuel, ship) ===
-box @dashR at -1400,-40 from camel/camel_dash_reactor
-box @dashF at -1400,-80 from camel/camel_dash_fuel
-box @dashS at -1400,-120 from camel/camel_dash_ship
+# === 2b. SCREEN WALLS: readouts fed by three dashboard boxes, each a fixed caption display and a short value display ===
+box @dashR at -1398,-70 from camel/camel_dash_reactor
+box @dashF at -1398,-108 from camel/camel_dash_fuel
+box @dashS at 300,96 from camel/camel_dash_ship
 wire 787.power_value_out @dashR.signal_in1
 wire 787.temperature_out @dashR.signal_in2
 wire @hump1.signal_out1 @dashR.signal_in3
@@ -77,33 +77,50 @@ wire 787.fuel_out @dashF.signal_in1
 wire 787.fuel_percentage_left @dashF.signal_in2
 wire @hump1.signal_out1 @dashF.signal_in3
 wire 787.power_value_out @dashF.signal_in4
-add @scrdashR1 textdisplay at -1590,-40 ItemLabel.Text="booting..."
+add @capdashR1 textdisplay at -1592,-66 "ItemLabel.Text=OUTPUT" ItemLabel.TextColor=150,190,200,255
+add @scrdashR1 textdisplay at -1526,-66 ItemLabel.Text=...
 wire @dashR.signal_out1 @scrdashR1.set_text
-add @scrdashR2 textdisplay at -1590,-66 ItemLabel.Text="booting..."
+add @capdashR2 textdisplay at -1592,-92 "ItemLabel.Text=CORE" ItemLabel.TextColor=150,190,200,255
+add @scrdashR2 textdisplay at -1526,-92 ItemLabel.Text=...
 wire @dashR.signal_out2 @scrdashR2.set_text
 wire @dashR.signal_out3 @scrdashR2.set_text_color
-add @scrdashR4 textdisplay at -1590,-92 ItemLabel.Text="booting..."
+add @capdashR4 textdisplay at -1592,-118 "ItemLabel.Text=FISSION" ItemLabel.TextColor=150,190,200,255
+add @scrdashR4 textdisplay at -1526,-118 ItemLabel.Text=...
 wire @dashR.signal_out4 @scrdashR4.set_text
-add @scrdashR5 textdisplay at -1590,-118 ItemLabel.Text="booting..."
+add @capdashR5 textdisplay at -1592,-144 "ItemLabel.Text=TURBINE" ItemLabel.TextColor=150,190,200,255
+add @scrdashR5 textdisplay at -1526,-144 ItemLabel.Text=...
 wire @dashR.signal_out5 @scrdashR5.set_text
-add @scrdashF1 textdisplay at -1524,-40 ItemLabel.Text="booting..."
+add @capdashF1 textdisplay at -1592,-170 "ItemLabel.Text=RODS" ItemLabel.TextColor=150,190,200,255
+add @scrdashF1 textdisplay at -1526,-170 ItemLabel.Text=...
 wire @dashF.signal_out1 @scrdashF1.set_text
-add @scrdashF2 textdisplay at -1524,-66 ItemLabel.Text="booting..."
+add @capdashF2 textdisplay at -1592,-196 "ItemLabel.Text=FUEL" ItemLabel.TextColor=150,190,200,255
+add @scrdashF2 textdisplay at -1526,-196 ItemLabel.Text=...
 wire @dashF.signal_out2 @scrdashF2.set_text
-add @scrdashF3 textdisplay at -1524,-92 ItemLabel.Text="booting..."
+add @capdashF3 textdisplay at -1460,-66 "ItemLabel.Text=RUNTIME" ItemLabel.TextColor=150,190,200,255
+add @scrdashF3 textdisplay at -1460,-92 ItemLabel.Text=...
 wire @dashF.signal_out3 @scrdashF3.set_text
-add @scrdashF4 textdisplay at -1524,-118 ItemLabel.Text="booting..."
+add @capdashF4 textdisplay at -1460,-118 "ItemLabel.Text=ENERGY" ItemLabel.TextColor=150,190,200,255
+add @scrdashF4 textdisplay at -1460,-144 ItemLabel.Text=...
 wire @dashF.signal_out4 @scrdashF4.set_text
-add @scrdashF5 textdisplay at -1524,-144 ItemLabel.Text="booting..."
+add @capdashF5 textdisplay at -1460,-170 "ItemLabel.Text=kWh/ROD" ItemLabel.TextColor=150,190,200,255
+add @scrdashF5 textdisplay at -1460,-196 ItemLabel.Text=...
 wire @dashF.signal_out5 @scrdashF5.set_text
-add @scrdashS1 textdisplay at -1458,-40 ItemLabel.Text="booting..."
+add @capdashS1 textdisplay at 170,182 "ItemLabel.Text=BATTERY" ItemLabel.TextColor=150,190,200,255
+add @scrdashS1 textdisplay at 236,182 ItemLabel.Text=...
 wire @dashS.signal_out1 @scrdashS1.set_text
-add @scrdashS2 textdisplay at -1458,-66 ItemLabel.Text="booting..."
+add @capdashS2 textdisplay at 170,156 "ItemLabel.Text=LASTS" ItemLabel.TextColor=150,190,200,255
+add @scrdashS2 textdisplay at 236,156 ItemLabel.Text=...
 wire @dashS.signal_out2 @scrdashS2.set_text
-add @scrdashS3 textdisplay at -1458,-92 ItemLabel.Text="booting..."
+add @capdashS3 textdisplay at 170,130 "ItemLabel.Text=AIR" ItemLabel.TextColor=150,190,200,255
+add @scrdashS3 textdisplay at 236,130 ItemLabel.Text=...
 wire @dashS.signal_out3 @scrdashS3.set_text
-add @scrdashS4 textdisplay at -1458,-118 ItemLabel.Text="booting..."
-wire @dashS.signal_out4 @scrdashS4.set_text
+wire @dashS.signal_out4 @scrdashS3.set_text_color
+add @capdashS5 textdisplay at 170,104 "ItemLabel.Text=ROUND" ItemLabel.TextColor=150,190,200,255
+add @scrdashS5 textdisplay at 236,104 ItemLabel.Text=...
+wire @dashS.signal_out5 @scrdashS5.set_text
+add @capdashS6 textdisplay at 170,78 "ItemLabel.Text=NEWS" ItemLabel.TextColor=150,190,200,255
+add @scrdashS6 textdisplay at 236,78 ItemLabel.Text=...
+wire @dashS.signal_out6 @scrdashS6.set_text
 
 # === 3. HUMP-2 GOVERNOR: oxygen generator on a relay (85 %..97 % hysteresis) + load shedding ===
 add @o2a oxygendetector at 760,240      # bridge
@@ -135,7 +152,7 @@ add @sWorkshop smokedetector at 67,264 SmokeDetector.Output=Workshop SmokeDetect
 add @stWorkshop wificomponent at 93,264 WifiComponent.Channel=7401
 wire @sWorkshop.signal_out @stWorkshop.signal_in
 add @oxWorkshop oxygendetector at 27,160
-box @airWorkshop at -13,160 from camel/camel_airnode ROOM=Workshop
+box @airWorkshop at -13,160 from camel/camel_airnode "ROOM=Shop"
 wire @oxWorkshop.signal_out @airWorkshop.signal_in1
 add @wEngineRoom waterdetector at -1103,48 WaterDetector.Output=EngineRoom WaterDetector.FalseOutput=""
 add @wtEngineRoom wificomponent at -1077,48 WifiComponent.Channel=7400
@@ -144,7 +161,7 @@ add @sEngineRoom smokedetector at -1103,264 SmokeDetector.Output=EngineRoom Smok
 add @stEngineRoom wificomponent at -1077,264 WifiComponent.Channel=7401
 wire @sEngineRoom.signal_out @stEngineRoom.signal_in
 add @oxEngineRoom oxygendetector at -1143,160
-box @airEngineRoom at -1183,160 from camel/camel_airnode ROOM=EngineRoom
+box @airEngineRoom at -1183,160 from camel/camel_airnode "ROOM=Engine"
 wire @oxEngineRoom.signal_out @airEngineRoom.signal_in1
 add @wReactor waterdetector at -1013,-208 WaterDetector.Output=Reactor WaterDetector.FalseOutput=""
 add @wtReactor wificomponent at -987,-208 WifiComponent.Channel=7400
@@ -153,7 +170,7 @@ add @sReactor smokedetector at -1013,24 SmokeDetector.Output=Reactor SmokeDetect
 add @stReactor wificomponent at -987,24 WifiComponent.Channel=7401
 wire @sReactor.signal_out @stReactor.signal_in
 add @oxReactor oxygendetector at -1053,-88
-box @airReactor at -1093,-88 from camel/camel_airnode ROOM=Reactor
+box @airReactor at -1093,-88 from camel/camel_airnode "ROOM=Reactor"
 wire @oxReactor.signal_out @airReactor.signal_in1
 add @wLowerDeck waterdetector at -521,-464 WaterDetector.Output=LowerDeck WaterDetector.FalseOutput=""
 add @wtLowerDeck wificomponent at -495,-464 WifiComponent.Channel=7400
@@ -162,7 +179,7 @@ add @sLowerDeck smokedetector at -521,-232 SmokeDetector.Output=LowerDeck SmokeD
 add @stLowerDeck wificomponent at -495,-232 WifiComponent.Channel=7401
 wire @sLowerDeck.signal_out @stLowerDeck.signal_in
 add @oxLowerDeck oxygendetector at -561,-344
-box @airLowerDeck at -601,-344 from camel/camel_airnode ROOM=LowerDeck
+box @airLowerDeck at -601,-344 from camel/camel_airnode "ROOM=Deck"
 wire @oxLowerDeck.signal_out @airLowerDeck.signal_in1
 add @wQuarters waterdetector at 164,-464 WaterDetector.Output=Quarters WaterDetector.FalseOutput=""
 add @wtQuarters wificomponent at 190,-464 WifiComponent.Channel=7400
@@ -171,7 +188,7 @@ add @sQuarters smokedetector at 164,-232 SmokeDetector.Output=Quarters SmokeDete
 add @stQuarters wificomponent at 190,-232 WifiComponent.Channel=7401
 wire @sQuarters.signal_out @stQuarters.signal_in
 add @oxQuarters oxygendetector at 124,-344
-box @airQuarters at 84,-344 from camel/camel_airnode ROOM=Quarters
+box @airQuarters at 84,-344 from camel/camel_airnode "ROOM=Bunks"
 wire @oxQuarters.signal_out @airQuarters.signal_in1
 add @wMedbay waterdetector at 31,-208 WaterDetector.Output=Medbay WaterDetector.FalseOutput=""
 add @wtMedbay wificomponent at 57,-208 WifiComponent.Channel=7400
@@ -180,7 +197,7 @@ add @sMedbay smokedetector at 31,24 SmokeDetector.Output=Medbay SmokeDetector.Fa
 add @stMedbay wificomponent at 57,24 WifiComponent.Channel=7401
 wire @sMedbay.signal_out @stMedbay.signal_in
 add @oxMedbay oxygendetector at -9,-88
-box @airMedbay at -49,-88 from camel/camel_airnode ROOM=Medbay
+box @airMedbay at -49,-88 from camel/camel_airnode "ROOM=Medbay"
 wire @oxMedbay.signal_out @airMedbay.signal_in1
 add @wPowerRoom waterdetector at 779,-208 WaterDetector.Output=PowerRoom WaterDetector.FalseOutput=""
 add @wtPowerRoom wificomponent at 805,-208 WifiComponent.Channel=7400
@@ -189,7 +206,7 @@ add @sPowerRoom smokedetector at 779,24 SmokeDetector.Output=PowerRoom SmokeDete
 add @stPowerRoom wificomponent at 805,24 WifiComponent.Channel=7401
 wire @sPowerRoom.signal_out @stPowerRoom.signal_in
 add @oxPowerRoom oxygendetector at 739,-88
-box @airPowerRoom at 699,-88 from camel/camel_airnode ROOM=PowerRoom
+box @airPowerRoom at 699,-88 from camel/camel_airnode "ROOM=Power"
 wire @oxPowerRoom.signal_out @airPowerRoom.signal_in1
 add @wBridge waterdetector at 1308,48 WaterDetector.Output=Bridge WaterDetector.FalseOutput=""
 add @wtBridge wificomponent at 1334,48 WifiComponent.Channel=7400
@@ -198,7 +215,7 @@ add @sBridge smokedetector at 1308,264 SmokeDetector.Output=Bridge SmokeDetector
 add @stBridge wificomponent at 1334,264 WifiComponent.Channel=7401
 wire @sBridge.signal_out @stBridge.signal_in
 add @oxBridge oxygendetector at 1268,160
-box @airBridge at 1228,160 from camel/camel_airnode ROOM=Bridge
+box @airBridge at 1228,160 from camel/camel_airnode "ROOM=Bridge"
 wire @oxBridge.signal_out @airBridge.signal_in1
 add @wDivingBay waterdetector at 968,-464 WaterDetector.Output=DivingBay WaterDetector.FalseOutput=""
 add @wtDivingBay wificomponent at 994,-464 WifiComponent.Channel=7400
@@ -207,7 +224,7 @@ add @sDivingBay smokedetector at 968,-232 SmokeDetector.Output=DivingBay SmokeDe
 add @stDivingBay wificomponent at 994,-232 WifiComponent.Channel=7401
 wire @sDivingBay.signal_out @stDivingBay.signal_in
 add @oxDivingBay oxygendetector at 928,-344
-box @airDivingBay at 888,-344 from camel/camel_airnode ROOM=DivingBay
+box @airDivingBay at 888,-344 from camel/camel_airnode "ROOM=Diving"
 wire @oxDivingBay.signal_out @airDivingBay.signal_in1
 add @wForeHall waterdetector at 1180,-208 WaterDetector.Output=ForeHall WaterDetector.FalseOutput=""
 add @wtForeHall wificomponent at 1206,-208 WifiComponent.Channel=7400
@@ -216,7 +233,7 @@ add @sForeHall smokedetector at 1180,24 SmokeDetector.Output=ForeHall SmokeDetec
 add @stForeHall wificomponent at 1206,24 WifiComponent.Channel=7401
 wire @sForeHall.signal_out @stForeHall.signal_in
 add @oxForeHall oxygendetector at 1140,-88
-box @airForeHall at 1100,-88 from camel/camel_airnode ROOM=ForeHall
+box @airForeHall at 1100,-88 from camel/camel_airnode "ROOM=Fore"
 wire @oxForeHall.signal_out @airForeHall.signal_in1
 add @wFwdHump waterdetector at 597,400 WaterDetector.Output=FwdHump WaterDetector.FalseOutput=""
 add @wtFwdHump wificomponent at 623,400 WifiComponent.Channel=7400
@@ -225,7 +242,7 @@ add @sFwdHump smokedetector at 597,696 SmokeDetector.Output=FwdHump SmokeDetecto
 add @stFwdHump wificomponent at 623,696 WifiComponent.Channel=7401
 wire @sFwdHump.signal_out @stFwdHump.signal_in
 add @oxFwdHump oxygendetector at 557,552
-box @airFwdHump at 517,552 from camel/camel_airnode ROOM=FwdHump
+box @airFwdHump at 517,552 from camel/camel_airnode "ROOM=Hump F"
 wire @oxFwdHump.signal_out @airFwdHump.signal_in1
 add @wAftHump waterdetector at -555,400 WaterDetector.Output=AftHump WaterDetector.FalseOutput=""
 add @wtAftHump wificomponent at -529,400 WifiComponent.Channel=7400
@@ -234,7 +251,7 @@ add @sAftHump smokedetector at -555,696 SmokeDetector.Output=AftHump SmokeDetect
 add @stAftHump wificomponent at -529,696 WifiComponent.Channel=7401
 wire @sAftHump.signal_out @stAftHump.signal_in
 add @oxAftHump oxygendetector at -595,552
-box @airAftHump at -635,552 from camel/camel_airnode ROOM=AftHump
+box @airAftHump at -635,552 from camel/camel_airnode "ROOM=Hump A"
 wire @oxAftHump.signal_out @airAftHump.signal_in1
 
 # === 5. HUMP-3 ALERT CORE and HUMP-4 CamelOS (bridge) ===

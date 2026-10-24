@@ -229,6 +229,11 @@
       super.step();
     }
     get done() { return this.time >= this.profile.duration; }
+    // text displays a player could never read to the end (a long text that keeps changing: sim/label.js)
+    displayIssues() {
+      const L = typeof module === 'object' && module.exports ? require('./label') : self.BaroLabel; if (!L) return [];
+      return this.devs.filter(d => d.kind === 'display').map(d => Object.assign({ id: d.it.id }, L.check(d.state.hist, this.time))).filter(r => !r.ok);
+    }
     // per-device / per-grid readout for the viewer
     deviceInfo(d) { return { id: d.it.id, kind: d.kind, kw: d.batt ? d.batt.cpc : d.cpc, voltage: d.voltage, state: d.state }; }
   }
@@ -319,7 +324,7 @@
       d.kind = 'terminal'; s.lines = []; d.type = text => { sim.termLog.push({ t: sim.time, id: it.id, dir: '>', text }); send('signal_out', text); }; d.update = () => { d.cpc = 0; };
       recvs.push((pin, sig) => { if (pin === 'signal_in' && sig.v !== '') { s.lines.push(sig.v); if (s.lines.length > 60) s.lines.shift(); sim.termLog.push({ t: sim.time, id: it.id, dir: '<', text: sig.v }); } else if (pin === 'clear_text' && sig.v !== '0') s.lines = []; });
     } else if (k.ItemLabel) {
-      d.kind = 'display'; s.text = (first(it, 'ItemLabel') || {}).Text || ''; recvs.push((pin, sig) => { if (pin === 'set_text') s.text = sig.v; }); d.update = () => { d.cpc = lightKW(); };
+      d.kind = 'display'; s.text = (first(it, 'ItemLabel') || {}).Text || ''; s.hist = [{ t: 0, text: s.text }]; recvs.push((pin, sig) => { if (pin === 'set_text' && sig.v !== s.text) { s.text = sig.v; if (s.hist.length < 20000) s.hist.push({ t: sim.time, text: sig.v }); } }); d.update = () => { d.cpc = lightKW(); };
     } else if (k.LightComponent) {
       d.kind = 'light'; d.update = () => { d.cpc = lightKW(); };
     } else { d.update = () => { d.cpc = base(); }; }

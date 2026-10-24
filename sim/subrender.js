@@ -86,8 +86,15 @@
     // solid structure: shell (exterior) and inside walls, by their real bodies
     out.push('<g class="walls">');
     for (const s of structs) {
+      const sp = G.prefab(s.identifier);
+      if (sp && sp.stairs) { // the walkable plank, plus faint treads so it reads as stairs
+        const b = G.body(s), [[x0, y0], [x1, y1]] = b.seg, n = Math.max(3, Math.round(b.len / 36)), tr = [];
+        for (let i = 1; i < n; i++) { const tx = x0 + (x1 - x0) * i / n, ty = y0 + (y1 - y0) * i / n; tr.push(`M${tx.toFixed(1)} ${(-ty).toFixed(1)}h${(x1 > x0 ? -1 : 1) * 12}`); }
+        out.push(poly(b.quad, `fill="${P.platform}" stroke="${added(D && D.structures, s.id) ? P.added : P.wallEdge}" stroke-width="${k}" data-k="struct" data-id="${s.id}"`) + `<path d="${tr.join('')}" stroke="${P.platform}" stroke-width="${2 * k}" fill="none"/>`);
+        continue;
+      }
       if (!G.solid(s)) continue;
-      const pf = G.prefab(s.identifier) || {}, b = G.body(s), ext = EXTERIOR.test(s.identifier) || /shell/i.test(s.name || '');
+      const pf = sp || {}, b = G.body(s), ext = EXTERIOR.test(s.identifier) || /shell/i.test(s.name || '');
       if (pf.platform) { out.push(poly(b.quad, `fill="none" stroke="${P.platform}" stroke-width="${3 * k}" data-k="struct" data-id="${s.id}"`)); continue; }
       const a = added(D && D.structures, s.id);
       out.push(poly(b.quad, `fill="${ext ? P.shell : P.wall}" stroke="${a ? P.added : ext ? P.shellEdge : P.wallEdge}" stroke-width="${(a ? 3 : 1) * k}" data-k="struct" data-id="${s.id}"`));

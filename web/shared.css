@@ -1,0 +1,52 @@
+/* Shared look for every page of the workshop (injected by sim/build_web.js).
+   Engineering console: deep-sea neutrals, one teal accent, amber for warnings, red for faults. */
+:root {
+  --bg: #e9eef0; --panel: #fbfcfc; --sunk: #dfe6e9; --ink: #13222b; --muted: #57707b; --line: #c6d2d7;
+  --accent: #0a7069; --accent-ink: #ffffff; --amber: #b86e00; --bad: #b93225; --good: #2b7a3d; --orange: #d4672f;
+  --f-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r: 6px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
+  --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277; --orange: #ff8a3d; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #091317; --panel: #0f1d23; --sunk: #0b171c; --ink: #d8e6ea; --muted: #8aa3ad; --line: #22363e;
+  --accent: #3cb7ac; --accent-ink: #04211e; --amber: #f0a53a; --bad: #ff6f61; --good: #6cc277; --orange: #ff8a3d; color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 40px }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0 }
+a { color: var(--accent) }
+button, .btn { font: 600 13px var(--f-body); border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: var(--r); padding: 7px 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px }
+button:hover, .btn:hover { border-color: var(--accent) }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+button:disabled { opacity: .5; cursor: default }
+button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent) }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden }
+.seg button { border: 0; border-radius: 0; padding: 6px 10px; font-family: var(--f-mono); font-weight: 500; box-shadow: none }
+.seg button + button { border-left: 1px solid var(--line) }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg) }
+select, input[type=text], input[type=number], input[type=search] { font: 13px var(--f-mono); color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0 }
+textarea { font: 12.5px/1.5 var(--f-mono); color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 10px }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); min-width: 0 }
+.hint { color: var(--muted); font-size: 12px; margin: 0 }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 500; cursor: pointer }
+.pill { display: inline-block; font: 600 10.5px var(--f-body); letter-spacing: .04em; padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor; vertical-align: middle; white-space: nowrap }
+.ok { color: var(--good) } .warn { color: var(--amber) } .bad { color: var(--bad) } .mut { color: var(--muted) }
+.mono { font-family: var(--f-mono) }
+.label { font: 600 11px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
+/* the navigation bar shared by every page */
+.topnav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 10px 0; margin-bottom: 14px; background: var(--bg); border-bottom: 1px solid var(--line) }
+.topnav .brand { font: 700 17px var(--f-display); letter-spacing: .03em; color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 8px }
+.topnav .brand svg { width: 22px; height: 22px }
+.topnav nav { display: flex; flex-wrap: wrap; gap: 2px }
+.topnav nav a { font: 600 13px var(--f-body); color: var(--muted); text-decoration: none; padding: 6px 11px; border-radius: var(--r) }
+.topnav nav a:hover { color: var(--ink); background: var(--sunk) }
+.topnav nav a[aria-current="page"] { color: var(--ink); background: var(--sunk); box-shadow: inset 0 -2px 0 var(--accent) }
+.topnav .spacer { flex: 1 }
+.wrap { max-width: 1680px; margin: 0 auto }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important } }

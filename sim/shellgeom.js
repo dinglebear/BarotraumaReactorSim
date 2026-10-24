@@ -29,6 +29,7 @@
   function body(st) {
     const p = prefab(st.identifier) || { bw: 0, bh: 0, off: [0, 0], rot: 0 };
     const [x, top, w, h] = st.rect, sc = st.scale || p.scale || 1, fx = !!st.flippedx, fy = !!st.flippedy, rotI = rad(st.rotation || 0);
+    if (p.stairs) return stairBody(p, x, top, w, h, fx, fy);
     const horiz = isHorizontal(p, w, h);
     const bw = p.bw > 0 ? p.bw * sc : w, bh = p.bh > 0 ? p.bh * sc : h;
     // BodyRotation (radians, flips applied), then the body is set to -BodyRotation (Structure.CreateSections)
@@ -45,6 +46,16 @@
     const long = bw >= bh, L = long ? bw : bh, T = long ? bh : bw, dx = long ? ux : vx, dy = long ? uy : vy;
     const seg = [[cx - dx * L / 2, cy - dy * L / 2], [cx + dx * L / 2, cy + dy * L / 2]];
     return { quad, seg, cx, cy, len: L, thick: T, angle, horiz };
+  }
+  // Structure.CreateStairBodies: one 10 px plank at the stair angle (45 degrees), as wide as the rect, sitting in the
+  // square at the bottom of the rect (the rest of the sprite is railing). "Right" stairs rise to the right; a flip in
+  // either axis swaps the direction.
+  function stairBody(p, x, top, w, h, fx, fy) {
+    const right = (p.stairs === 'Right') !== (fx !== fy), a = rad(45), L = w / Math.cos(a), T = 10;
+    const cx = x + w / 2, cy = fy ? top - w / 2 : top - h + w / 2, angle = right ? a : -a;
+    const ux = Math.cos(angle), uy = Math.sin(angle), vx = -uy, vy = ux;
+    const quad = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [cx + ux * i * L / 2 + vx * j * T / 2, cy + uy * i * L / 2 + vy * j * T / 2]);
+    return { quad, seg: [[cx - ux * L / 2, cy - uy * L / 2], [cx + ux * L / 2, cy + uy * L / 2]], cx, cy, len: L, thick: T, angle, horiz: true, stairs: right ? 'Right' : 'Left' };
   }
   const SOLID_NAME = /^(Shell|Shuttle Shell|Large (Horizontal|Vertical) Inside Wall|Large Inside Wall Cap|Platform|Submarine Bow|Stairs)/i;
   function solid(st) { const p = prefab(st.identifier); if (p) return !!p.body && !p.platform && !p.stairs; return SOLID_NAME.test(st.name || ''); }

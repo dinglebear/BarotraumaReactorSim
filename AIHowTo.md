@@ -224,8 +224,8 @@ A `.pins` file can also retune a circuit per ship: `prop reactor <componentId> <
 
 **Benchmark and analysis of the community circuits: `context/reactor_circuits/STUDY.md`.** Read it before designing. It covers which designs are fuel-efficient, which meet demand, and why each one fails. The current bar to beat:
 - reliability: `overclock_reactor` (avoidable unmet 0.4–1.5 %, but heavy overvolt and fuel);
-- fuel: `basic_reactor` / `lammert_arc_hts` (~25 % better than vanilla).
-Compare with: `node sim/cli.js compare vanilla,basic_reactor,lammert_arc_hts,overclock_reactor,rimuru_autoreactor,<yours> --profile Dugong_round001,Humpback_round001,Typhon2_round001`.
+- fuel: `lammert_arc_hts` and Rimuru (~25 % better than vanilla), and `reactor_modes` in eco mode.
+Compare with: `node sim/cli.js compare vanilla,lammert_arc_hts,overclock_reactor,rimuru_autoreactor,reactor_modes,<yours> --profile Dugong_round001,Humpback_round001,Typhon2_round001`.
 
 ## 10. Web bench (for the human)
 `web/index.html` is the master page. Rebuild it with `node sim/build_web.js` after adding circuits or profiles. It has:

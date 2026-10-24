@@ -144,6 +144,22 @@ Name: recipe. The source is in brackets: H = HuskOS, T = Toolkit, L = LHMRS, I =
 - **Load shedding** [C]: relays on non-essential loads (fabricators, suit lockers) open when the batteries are low. Use a latch with hysteresis, plus manual override modes through a mux.
 - **Fire only when full** [L]: `greater(supercap charge %, 99) → relay` gating the trigger.
 
+**Text displays and timers** (reference/TEXT_DISPLAYS.md)
+- **Caption + value** [C]: a changing value on its own display, ~7 characters at most ("1570 kW", "52.7 C"), its caption on a display that never changes. A long changing text never shows its end: the scroll snaps back on every change.
+- **Zero-padded clock** [C, alarm timer]: `concat("0", n) → regex (.{2})$` per field, then `concat Separator=:`. "00:03:59", never "0:3:59".
+- **Status pager** [C]: several short values on one display: a slow oscillator steps a counter → mux of short pages, one every 2.5 s.
+- **Ticker with a clean start** [C]: long messages scroll; send a single space for 0.5 s between them (text that fits resets the scroll), or the next one starts halfway.
+- **Countdown / accumulator** [alarm timer]: `memory → adder → memory` (one arithmetic step in the loop). Reset by adding a huge negative number for 0.1 s against ClampMin=0.
+
+**Vehicles and drones** (reference/VEHICLE_MECHANICS.md, the Drone Range)
+- **Steer by velocity_in** [smart return, escort]: no signal can switch the autopilot on or give it a target. Send `"x,y"` (y positive = down) to the nav terminal; it applies at once and keeps the last value. Its own velocity_x_out / velocity_y_out keep driving the engine and the ballast pumps as in vanilla.
+- **Speed control, not force** [smart return]: subs have little drag and a lot of momentum. Ask for a speed (from the distance, capped at what you can stop from within your sensors' reach), and drive engine/ballast with `60 x (wanted − actual)`. Actual speed = current_velocity_x/y ÷ 3.6.
+- **Position only from the nav terminal**: current_position_x (m) and current_position_y (depth in m, positive down). Save a spot by opening two memories for 0.1 s (`or TimeFrame=0.1 → lock_state`).
+- **Rock sensors** [smart return, escort]: motion detectors outside the hull, Target=Wall, a box just beyond each side. They only see rock while moving. Blocked across → stop that axis and go around vertically; remember rock above for a few seconds so you don't turn back up into an overhang; after a detour, hold depth a few seconds before homing again.
+- **Find a diver** [escort]: four big presence boxes (Target=Human, MinimumVelocity=0) right/left/above/below, with a gap between them where the drone waits. `right − left` and `below − above` give the direction.
+- **Shoot monsters, never the crew** [escort]: the turret's AutoOperate (AllowAutoOperateWithWiring in the editor) never targets its own team and holds fire while a friendly is first in the line; switch it on with a Target=Monster box → `set_auto_operate`.
+- **Selector for two engines** [drone remote]: multiply the steering by the lever (×1 / ×0) for each side. A relay that just stops passing leaves the deselected engine running at its last force.
+
 ## 3. Whole-sub architecture that worked (Camel Overkill)
 - **Boxes per job**, each with HOW IT WORKS and WIRING notes inside:
   - reactor brain;
@@ -200,15 +216,20 @@ Name: recipe. The source is in brackets: H = HuskOS, T = Toolkit, L = LHMRS, I =
 - **A new wifi is on channel 0** (the game's default). Always set Channel.
 - **Circuit boxes have 10 inputs and 10 outputs on current game versions** (`signal_in0..9`). Use 1–8 for portability.
 - **Timing is float:** TimeFrame and Delay round to whole ticks the way the game does (0.05 s = 3 ticks, Delay 1 s = 60 ticks). The mock now matches; don't design around a single tick.
+- **Engines and pumps keep their last set_force / set_speed** (Engine.cs, Pump.cs). Stopping sending doesn't stop them: send 0.
+- **A pump's set_targetlevel takes -100..100** (level = (v + 100) / 2 %), the nav terminal's velocity_y_out scale. 50 means 75 % full, not half.
+- **A feedback loop through two arithmetic parts runs as two loops** taking turns frame by frame (65, 64, 65, 64 on a countdown). Keep it `memory → one arithmetic part → memory`, memory first.
+- **Edge detectors depend on update order** (`and(x, not(delay(x)))` fired 0 or several times depending on which part updates first). In game you can't set that order. Prefer outputs that are right every frame: show TIME! while the alarm is on rather than a one-time message.
+- **A long text that changes every second can't be read** on a text display (above, and reference/TEXT_DISPLAYS.md). The sandbox and `ship` warn about it.
 
 ## 5. Checklist before calling a sub design done
 0. Every new box first runs in a sandbox script (`sandbox/*.sbx`) with `expect` lines, and passes with no warnings you can't explain.
 1. `node sim/cli.js sub patch <Sub> <patch>`. The loader checks must pass.
 2. `node sim/cli.js ship <NewSub> --transcript` with `--breach S --breach-hull ID`, `--fire S --fire-hull ID`, `--type "t:cmd"` and `--radio "t:camel cmd"`. Read the chat, terminal and display lines.
 3. Look at the power metrics: unmet %, brownout/overvolt seconds, junction overload, oxygen min %, generator duty.
-4. Open it on the bench's Sub tab:
-   - press buttons;
-   - flood or burn rooms;
-   - type into the terminal;
-   - watch grids and voltages live.
-5. Tell the human what to check in game: AutoTemp off, LinkToChat kept after load, door feel, anything the mock doesn't model (water, crew pathing, item damage).
+4. `node sim/cli.js sub render <NewSub> --base <Vanilla>` and look: screens and boxes clear of stairs and wire bundles, wires along the ceilings, nothing floating.
+5. Open it in the Sub Studio (`web/subs.html`):
+   - filter wires to Added and click each new box to see where it goes;
+   - run a practice round: press buttons, flood or burn rooms, type into the terminal;
+   - read the Logs tab: displays nobody can read are flagged there.
+6. Tell the human what to check in game: AutoTemp off, LinkToChat kept after load, door feel, anything the mock doesn't model (water, crew pathing, item damage).

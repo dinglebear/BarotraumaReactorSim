@@ -1,0 +1,45 @@
+# CLAUDE'S TEST CAPSULE: its two small circuits, checked before they go in the sub (ships/scratch/capsule.gen.js).
+# Readout (circuits/capsule/capsule_readout.circ): the reactor's output as "1234 kW", green in ECO, orange in REACTIVE.
+# Claude's room (circuits/capsule/capsule_claude_room.circ): walk in -> one radio line, the orange light flashes, the
+# buzzer sounds and the sign says GET OUT for 5 s after you leave, then CLAUDE again.
+name capsule: reactor readout and Claude's room
+dev power const Value=1234.4
+dev mode switch State=1
+dev screen display
+dev colour probe
+box readout file=circuits/capsule/capsule_readout.circ
+wire power.out readout.in1
+wire mode.out readout.in2
+wire readout.out1 screen.set_text
+wire readout.out2 colour.in
+
+dev pir motion
+dev light light
+dev buzzer light
+dev sign display
+dev said probe
+part radio wifi Channel=0 LinkToChat=true MinChatMessageInterval=30
+box room file=circuits/capsule/capsule_claude_room.circ
+wire pir.state_out room.in1
+wire room.out1 radio.in said.in
+wire room.out2 light.set_state
+wire room.out3 buzzer.set_state
+wire room.out4 sign.set_text
+
+expect 0.5 screen = "1234 kW"
+expect 0.5 colour = "255,170,90,255"
+at 1 toggle mode
+expect 1.5 colour = "120,255,140,255"
+at 2 set power 87.6
+expect 2.5 screen = "88 kW"
+
+expect 2.5 sign = CLAUDE
+at 3 set pir 1
+expect 3.5 buzzer = on
+expect 3.5 sign = "GET OUT"
+expect 3.5 said ~ ^\[Capsule\]
+at 6 set pir 0
+expect 10.5 sign = "GET OUT"
+expect 11.5 sign = CLAUDE
+expect 11.5 buzzer = off
+run 12

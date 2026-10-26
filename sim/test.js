@@ -163,9 +163,12 @@ console.log('real-game checks passed');
   assert(doc.check().length === 0, 'capsule loader checks: ' + doc.check().join('; '));
   assert(doc.audit(null).filter(x => x.level !== 'info').length === 0, 'capsule audit');
   const ship = SF.parseSub(text);
-  assert(ship.hulls.length === 6 && ship.gaps.length === 4 && ship.waypoints.length > 30, 'capsule rooms, gaps, waypoints');
-  const sim = new SH.ShipSim(ship, { duration: 120, scenario: { fights: false } }); const r = sim.runToEnd();
-  assert(r.unmet_pct < 2, 'capsule power: unmet ' + r.unmet_pct);
+  assert(ship.hulls.length === 11 && ship.gaps.length === 9 && ship.waypoints.length > 60, 'capsule rooms, gaps (5 doors, 4 hatches), waypoints');
+  // the reactor mode lever: REACTIVE (up) holds the core hotter, ECO (pressed down) burns less fuel; both meet the load
+  const round = eco => { const sim = new SH.ShipSim(ship, { duration: 180, scenario: { fights: false } }), lever = sim.devs.find(d => d.kind === 'lever'); if (eco) lever.press(); return sim.runToEnd(); };
+  const re = round(false), eco = round(true);
+  assert(re.unmet_pct < 2 && eco.unmet_pct < 2, `capsule power: unmet ${re.unmet_pct} / ${eco.unmet_pct}`);
+  assert(eco.temp_max < re.temp_max && eco.fuel_condition_used < re.fuel_condition_used * 0.9, `ECO lever: ${eco.temp_max} vs ${re.temp_max} degrees, fuel ${eco.fuel_condition_used} vs ${re.fuel_condition_used}`);
   console.log('scratch build passed');
 }
 
@@ -218,7 +221,7 @@ console.log('real-game checks passed');
   assert(B.slopes.length >= 3, 'slopes placed: ' + B.slopes.length);
   const flat = sh.structures.filter(s => s.identifier === 'shella0deg'), vert = sh.structures.filter(s => s.identifier === 'shella90deg');
   assert(flat.some(s => s.flippedy) && vert.some(s => s.flippedx), 'bottom shells FY, right shells FX');
-  // the capsule: stepped top deck, smoothed, watertight
+  // the capsule: tapered decks and a tower, smoothed, watertight
   const cap = SF.parseSub(rd('ships/custom/Claudes_Test_Capsule.sub'));
   assert.strictEqual(G.leaks(cap).length, 0, 'capsule watertight');
   assert(cap.structures.filter(s => G.solid(s) && G.body(s).angle % (Math.PI / 2) !== 0).length >= 4, 'capsule has slopes');

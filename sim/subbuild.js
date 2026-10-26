@@ -165,8 +165,10 @@ class SubBuilder {
         if (c.type[0] === 'T' ? !S.bevelTop : !(room && room.bevelBottom)) continue;
         const h = runAt(true, c.y, c.x)[0], v = runAt(false, c.x, c.y)[0]; if (!h || !v) continue;
         const room_w = h.a1 - h.a0, room_h = v.a1 - v.a0;
+        // what's left of the edge: a step's slope may already take its other end
+        const far = h.a0 === c.x ? h.e1 : h.e0, free = Math.abs(far - c.x) - OV - 8;
         // cut at most ~60 into the room vertically (headroom / floor); a shallow slope can run most of the edge
-        const p = this.pickSlope(Math.min(room_w * 0.85, 520), CL + 62, 3, 25); if (!p) continue;
+        const p = this.pickSlope(Math.min(room_w * 0.85, free, 520), CL + 62, 3, 25); if (!p) continue;
         const C = [c.x + c.ox * CL, c.y + c.oy * CL], A = [C[0] - c.ox * p.dx, C[1]], Bp = [C[0], C[1] - c.oy * p.dy];
         slopes.push({ piece: p, corner: c.type, a: A, b: Bp, at: c });
         setEnd(h, c.x, A[0] + c.ox * OV);
@@ -176,7 +178,7 @@ class SubBuilder {
     // straight shells (vanilla flips: bottom FY, right FX, so the plate sits against the room)
     for (const u of runs) {
       if (u.dead) continue;
-      const lo = Math.min(u.e0, u.e1), hi = Math.max(u.e0, u.e1); if (hi - lo < 8) continue;
+      const lo = u.e0, hi = u.e1; if (hi - lo < 8) continue; // trimmed from both ends past each other: the slopes cover it
       const fl = u.side === 'bottom' ? { flippedy: 'true' } : u.side === 'right' ? { flippedx: 'true' } : {};
       if (u.side === 'top') d.addStructure(S.shell, lo, u.at + SHELL, hi - lo, SHELL, Object.assign(col(S.shellColor), fl));
       if (u.side === 'bottom') d.addStructure(S.shell, lo, u.at, hi - lo, SHELL, Object.assign(col(S.shellColor), fl));

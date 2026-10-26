@@ -70,7 +70,9 @@
     if (!p.body || p.stairs) return rect;
     const b = body(st), tilt = Math.abs(((b.angle * 180 / Math.PI) % 90 + 90) % 90);
     if (tilt < 2 || tilt > 88) return rect; // straight pieces: the whole sprite
-    const ux = Math.cos(b.angle), uy = Math.sin(b.angle), vx = -uy, vy = ux, L = 4 * Math.hypot(w, h), T = b.thick * 1.33 / 2;
+    // along the body's LONG axis (seg): some pieces' bodies are taller than wide, so that isn't always the angle's direction
+    const [[sx0, sy0], [sx1, sy1]] = b.seg, sl = Math.hypot(sx1 - sx0, sy1 - sy0) || 1;
+    const ux = (sx1 - sx0) / sl, uy = (sy1 - sy0) / sl, vx = -uy, vy = ux, L = 4 * Math.hypot(w, h), T = b.thick * 1.33 / 2;
     const band = [[-L, -T], [L, -T], [L, T], [-L, T]].map(([u, v]) => [b.cx + ux * u + vx * v, b.cy + uy * u + vy * v]);
     return clip(band, rect);
   }

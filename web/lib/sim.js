@@ -1802,7 +1802,9 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
     if (!p.body || p.stairs) return rect;
     const b = body(st), tilt = Math.abs(((b.angle * 180 / Math.PI) % 90 + 90) % 90);
     if (tilt < 2 || tilt > 88) return rect; // straight pieces: the whole sprite
-    const ux = Math.cos(b.angle), uy = Math.sin(b.angle), vx = -uy, vy = ux, L = 4 * Math.hypot(w, h), T = b.thick * 1.33 / 2;
+    // along the body's LONG axis (seg): some pieces' bodies are taller than wide, so that isn't always the angle's direction
+    const [[sx0, sy0], [sx1, sy1]] = b.seg, sl = Math.hypot(sx1 - sx0, sy1 - sy0) || 1;
+    const ux = (sx1 - sx0) / sl, uy = (sy1 - sy0) / sl, vx = -uy, vy = ux, L = 4 * Math.hypot(w, h), T = b.thick * 1.33 / 2;
     const band = [[-L, -T], [L, -T], [L, T], [-L, T]].map(([u, v]) => [b.cx + ux * u + vx * v, b.cy + uy * u + vy * v]);
     return clip(band, rect);
   }
@@ -2608,9 +2610,16 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
         d.cpc = lightKW();
       };
     } else if (k.Controller) {
-      d.kind = /periscope/.test(it.identifier) ? 'periscope' : 'button'; s.pressed = 0;
-      d.press = () => { send(d.kind === 'button' ? 'signal_out' : 'trigger_out', '1'); };
-      d.update = () => { d.cpc = lightKW(); };
+      const c = k.Controller[0] || {};
+      if (bool(c.IsToggle, false) && !/periscope/.test(it.identifier)) { // a lever: sends its state every frame (Controller.Update), a press flips it
+        d.kind = 'lever'; s.on = bool(c.State, false);
+        d.press = () => { s.on = !s.on; };
+        d.update = () => { const v = s.on ? (c.Output !== undefined ? c.Output : '1') : (c.FalseOutput !== undefined ? c.FalseOutput : ''); if (v !== '') send('signal_out', v); d.cpc = lightKW(); };
+      } else {
+        d.kind = /periscope/.test(it.identifier) ? 'periscope' : 'button'; s.pressed = 0;
+        d.press = () => { send(d.kind === 'button' ? 'signal_out' : 'trigger_out', '1'); };
+        d.update = () => { d.cpc = lightKW(); };
+      }
     } else if (k.Terminal) {
       d.kind = 'terminal'; s.lines = []; d.type = text => { sim.termLog.push({ t: sim.time, id: it.id, dir: '>', text }); send('signal_out', text); }; d.update = () => { d.cpc = 0; };
       recvs.push((pin, sig) => { if (pin === 'signal_in' && sig.v !== '') { s.lines.push(sig.v); if (s.lines.length > 60) s.lines.shift(); sim.termLog.push({ t: sim.time, id: it.id, dir: '<', text: sig.v }); } else if (pin === 'clear_text' && sig.v !== '0') s.lines = []; });

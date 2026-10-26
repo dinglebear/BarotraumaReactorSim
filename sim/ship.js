@@ -317,9 +317,16 @@
         d.cpc = lightKW();
       };
     } else if (k.Controller) {
-      d.kind = /periscope/.test(it.identifier) ? 'periscope' : 'button'; s.pressed = 0;
-      d.press = () => { send(d.kind === 'button' ? 'signal_out' : 'trigger_out', '1'); };
-      d.update = () => { d.cpc = lightKW(); };
+      const c = k.Controller[0] || {};
+      if (bool(c.IsToggle, false) && !/periscope/.test(it.identifier)) { // a lever: sends its state every frame (Controller.Update), a press flips it
+        d.kind = 'lever'; s.on = bool(c.State, false);
+        d.press = () => { s.on = !s.on; };
+        d.update = () => { const v = s.on ? (c.Output !== undefined ? c.Output : '1') : (c.FalseOutput !== undefined ? c.FalseOutput : ''); if (v !== '') send('signal_out', v); d.cpc = lightKW(); };
+      } else {
+        d.kind = /periscope/.test(it.identifier) ? 'periscope' : 'button'; s.pressed = 0;
+        d.press = () => { send(d.kind === 'button' ? 'signal_out' : 'trigger_out', '1'); };
+        d.update = () => { d.cpc = lightKW(); };
+      }
     } else if (k.Terminal) {
       d.kind = 'terminal'; s.lines = []; d.type = text => { sim.termLog.push({ t: sim.time, id: it.id, dir: '>', text }); send('signal_out', text); }; d.update = () => { d.cpc = 0; };
       recvs.push((pin, sig) => { if (pin === 'signal_in' && sig.v !== '') { s.lines.push(sig.v); if (s.lines.length > 60) s.lines.shift(); sim.termLog.push({ t: sim.time, id: it.id, dir: '<', text: sig.v }); } else if (pin === 'clear_text' && sig.v !== '0') s.lines = []; });

@@ -12,7 +12,12 @@ It returns a `SubDoc` (`sim/subedit.js`) for the machinery and the electrical wo
 
 **The outline is smoothed automatically** (see "Smooth walls" below), so design the silhouette with steps: humps, overhangs, a narrower top deck. The builder fills every step with a slanted shell piece.
 
-Worked example: `ships/scratch/capsule.gen.js` builds **Claude's Test Capsule**: 6 rooms with the top deck stepped in by 128 at both ends (so the builder bevels it), an orange shell, a reactor, engine, pump, oxygen generator and nav terminal, lights, and Claude's feed-forward reactor circuit. `node sim/test.js` builds and checks it every time. Its power runs clean in the mock (0 % unmet); it is not yet tested in game.
+Worked example: `ships/scratch/capsule.gen.js` builds **Claude's Test Capsule**, a 25.6 × 10 m scout with 11 rooms on four levels:
+- **the outline:** a keel deck (two ballast tanks and a cargo hold), the main deck, an upper deck, and a conning tower (Claude's Room). The decks taper toward both ends: a long taper at the stern and a short, round one at the bow;
+- **the machinery:** a reactor with Claude's REACTIVE/ECO circuit on a lever, two displays showing its output, two ballast pumps on the nav terminal, an oxygen generator with a vent in every dry room, two batteries, a fabricator and a deconstructor;
+- **Claude's Room:** it yells at visitors (`circuits/capsule/`, checked in `sandbox/capsule.sbx`).
+
+`node sim/test.js` builds and checks it every time: watertight, loader checks, audit, power (0 % unmet), and ECO burning less fuel than REACTIVE. It is not yet tested in game.
 
 ## Workflow
 1. **Study real subs in the bench's Sub tab.** Tick **Walls**, **Background**, **Props** and **Gaps & waypoints** to see the shell, slabs, background walls, every item's hitbox, door gaps and the AI path network. Click any piece for its identifier and hitbox. On the command line:
@@ -65,6 +70,16 @@ What the builder does with it:
 - **Turning it off:** pass `{ smooth: false }` or `{ bevelTop: false }` in the builder's style options.
 
 To get a smooth sub, give the outline steps. For example: a top deck narrower than the bottom one, a hump on top, or a bow room shorter than its neighbour. A plain rectangle only gets its top corners bevelled.
+
+**Designing the outline (what the capsule taught):**
+| You want | Do this | You get |
+|---|---|---|
+| A rounded end | Step each deck in by **256** from the one below it (or above, for the keel) | A 57° slope at each step: reads as a curve |
+| A long, tapered stern | Step in by **512** | A 34° slope: a tail |
+| A symmetric hump or tower | Put it over the middle of **one** room, with **≥ 256** of that room's roof showing on each side | The same slope on both sides. Over a boundary between two rooms, one side has too little roof and gets no slope, so the hump looks lopsided |
+| A round nose | Let the main deck stick out past the decks above and below, and leave its end corners bevelled | A short vertical nose with slopes above and below |
+
+Render after every change (`sub render <Sub> --collision`): the brown shapes are what the sprites cover, the dashed pink is what collides.
 
 ## Patch-language equivalents (SUBEDIT.md)
 ```

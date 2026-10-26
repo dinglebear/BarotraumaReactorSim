@@ -37,7 +37,9 @@ details.layers .menu { position: absolute; z-index: 20; top: calc(100% + 6px); l
 .view { position: relative; height: clamp(420px, calc(100dvh - 210px), 1500px); background: var(--table); touch-action: none; overflow: hidden }
 @media (max-width: 700px) { .view { height: clamp(280px, 58vh, 520px) } }
 .view.expanded { position: fixed; inset: 0; z-index: 60; height: auto; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px) }
-.view svg { width: 100%; height: 100%; display: block; cursor: grab; user-select: none }
+.view svg { position: relative; width: 100%; height: 100%; display: block; cursor: grab; user-select: none }
+.view canvas#pic { position: absolute; inset: 0; width: 100%; height: 100%; display: block }
+.view canvas#pic[hidden] { display: none }
 .view svg.panning { cursor: grabbing }
 .view svg.measuring { cursor: crosshair }
 .view svg [stroke-width], .view svg .ns { vector-effect: non-scaling-stroke }
@@ -46,8 +48,7 @@ details.layers .menu { position: absolute; z-index: 20; top: calc(100% + 6px); l
 .view svg [data-k=item][data-new] { stroke-width: 1.5 }
 /* layer switches (classes on the svg; nothing is redrawn) */
 svg.no-rooms .rooms, svg.no-walls .walls, svg.no-deco .deco, svg.no-items .items, svg.no-props .props, svg.no-nav .nav, svg.no-live #live, svg.no-live #water { display: none }
-svg:not(.pic) .picture, svg:not(.coll) .collision { display: none }
-svg.pic { background: #080d13 }
+svg:not(.coll) .collision { display: none }
 /* over the game's picture: rooms and walls are outlines (the picture shows what they look like), items see-through */
 svg.pic .rooms rect { fill-opacity: .07; stroke: #9fb3bc; stroke-opacity: .28; stroke-width: 1px; vector-effect: non-scaling-stroke }
 svg.pic .walls polygon:not([data-new]) { fill-opacity: 0; stroke: #d8c4b0; stroke-opacity: .3 }
@@ -151,6 +152,7 @@ code { font-family: var(--f-mono); font-size: 12px; background: var(--sunk); pad
         <button id="btnMeasure" aria-pressed="false" title="Click two points to measure (Esc clears)">Measure</button>
       </div>
       <div class="view" id="view">
+        <canvas id="pic" hidden></canvas>
         <svg id="svg" tabindex="0" aria-label="Side view of the submarine"></svg>
         <div class="overlay tl" id="chips"></div>
         <div class="overlay bl"><div class="scale" id="scale"><span id="scaleT">1 m</span><i id="scaleBar" style="width:60px"></i></div></div>
@@ -265,8 +267,7 @@ function meta() {
 // ---------- the picture: drawn once per sub (and compare choice); pan and zoom only move the viewBox ----------
 function drawStatic() {
   const sh = S.ship, b = R.bounds(sh, 400), W = b[2] - b[0];
-  const pic = sh.picture ? { href: sh.picture.href || sh.picture.file, box: sh.picture.box } : null;
-  const r = R.render(sh, { base: S.base, wires: 'all', nav: true, props: true, labels: 'none', width: W, crop: b, picture: pic, pictureStyle: false, collision: true });
+  const r = R.render(sh, { base: S.base, wires: 'all', nav: true, props: true, labels: 'none', width: W, crop: b, collision: true });
   S.D = r.diff; S.full = b;
   let inner = r.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
   inner = inner.replace('</g><g class="deco">', '</g><g id="water"></g><g class="deco">');
@@ -280,7 +281,8 @@ function drawStatic() {
 function layers() {
   const on = id => $(id).checked, pic = !!S.ship.picture && on('lyPic');
   svg.classList.toggle('pic', pic); svg.classList.toggle('coll', on('lyColl')); $('lyPicRow').hidden = !S.ship.picture;
-  const sea = svg.querySelector('.sea'); if (sea) sea.setAttribute('fill', pic ? R.PALETTE.pictureSea : R.PALETTE.sea);
+  const sea = svg.querySelector('.sea'); if (sea) sea.setAttribute('fill', pic ? 'none' : R.PALETTE.sea); // the picture's canvas shows through
+  drawPic();
   svg.classList.toggle('no-rooms', !on('lyRooms')); svg.classList.toggle('no-walls', !on('lyWalls')); svg.classList.toggle('no-deco', !on('lyDeco'));
   svg.classList.toggle('no-items', !on('lyItems')); svg.classList.toggle('no-props', !on('lyProps')); svg.classList.toggle('no-nav', !on('lyNav')); svg.classList.toggle('no-live', !on('lyLive'));
   store.set('layers2', LAYERS.filter(on));
@@ -297,7 +299,24 @@ function setView(v) {
   const cw = viewEl.clientWidth || 800, ch = viewEl.clientHeight || 500;
   v.h = v.w * ch / cw; S.view = v;
   svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
-  scaleBar(); schedule();
+  drawPic(); scaleBar(); schedule();
+}
+// The game's picture goes on a canvas under the map, and only the part in view is drawn. As an SVG <image> stretched
+// over the whole sub it became tens of thousands of pixels wide when zoomed in, and some browsers froze on that.
+function drawPic() {
+  const c = $('pic'), P = S.ship && S.ship.picture, v = S.view, on = !!(P && v && $('lyPic').checked);
+  c.hidden = !on; if (!on) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), cw = Math.round((viewEl.clientWidth || 800) * dpr), ch = Math.round((viewEl.clientHeight || 500) * dpr);
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+  const x = c.getContext('2d'); x.fillStyle = R.PALETTE.pictureSea; x.fillRect(0, 0, cw, ch);
+  if (!P.img) { P.img = new Image(); P.img.onload = () => { if (S.ship && S.ship.picture === P) drawPic(); }; P.img.src = P.href || P.file; }
+  const img = P.img; if (!img.complete || !img.naturalWidth) return;
+  const [p0, q0, p1, q1] = P.box, iw = img.naturalWidth, ih = img.naturalHeight; // picture box in sub coordinates; the svg's y is -y
+  const X0 = Math.max(v.x, p0), X1 = Math.min(v.x + v.w, p1), Y0 = Math.max(v.y, -q1), Y1 = Math.min(v.y + v.h, -q0);
+  if (X1 <= X0 || Y1 <= Y0) return;
+  const kx = cw / v.w, ky = ch / v.h;
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  x.drawImage(img, (X0 - p0) / (p1 - p0) * iw, (Y0 + q1) / (q1 - q0) * ih, (X1 - X0) / (p1 - p0) * iw, (Y1 - Y0) / (q1 - q0) * ih, (X0 - v.x) * kx, (Y0 - v.y) * ky, (X1 - X0) * kx, (Y1 - Y0) * ky);
 }
 function fit(rect) { // rect: [x0, y0, x1, y1] in sub units (y up); default: the whole sub
   const b = rect || R.bounds(S.ship, 120), cw = viewEl.clientWidth || 800, ch = viewEl.clientHeight || 500;
@@ -308,7 +327,7 @@ function fit(rect) { // rect: [x0, y0, x1, y1] in sub units (y up); default: the
 function zoomAt(f, sx, sy) { // f > 1 zooms out; (sx, sy) a point in svg units
   const v = S.view; if (!v) return;
   if (sx === undefined) { sx = v.x + v.w / 2; sy = v.y + v.h / 2; }
-  const w = Math.min(Math.max(v.w * f, 60), (S.full[2] - S.full[0]) * 3);
+  const w = Math.min(Math.max(v.w * f, 150), (S.full[2] - S.full[0]) * 3); // closest: 1.5 m across
   const k = w / v.w; setView({ x: sx - (sx - v.x) * k, y: sy - (sy - v.y) * k, w });
 }
 const px = () => S.view ? S.view.w / (viewEl.clientWidth || 800) : 1; // sub units per screen pixel
@@ -749,7 +768,7 @@ $('subFile').onchange = async e => {
       const href = 'data:image/png;base64,' + sh.previewImage, img = new Image(); img.src = href; await img.decode();
       const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const x = c.getContext('2d'); x.drawImage(img, 0, 0);
       const reg = PV.register(x.getImageData(0, 0, c.width, c.height).data, c.width, c.height, sh);
-      if (reg) { sh.picture = { href, box: reg.box, w: c.width, h: c.height }; if (S.ship === sh) drawStatic(); }
+      if (reg) { sh.picture = { href, box: reg.box, w: c.width, h: c.height }; if (S.ship === sh) { drawStatic(); inspector(); } }
     }
   } catch (err) { $('insp').innerHTML = `<div class="note bad">Could not read ${esc(f.name)}: ${esc(err.message)}. Pick a .sub file saved by Barotrauma.</div>`; showTab('insp'); }
   e.target.value = '';

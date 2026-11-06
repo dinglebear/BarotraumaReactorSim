@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sub Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Sub Studio: the sub fills a dark drafting table (the same picture the command line renders); a narrow side panel
+   inspects what you click and runs a practice round. The table keeps one dark look in both themes, like a sonar screen. */
+:root {
+  --table: #0a1c27; --table-ink: #c9d6dc; --table-mut: #7f97a2; --table-line: #1d3442;
+  --water: #2f8fd6; --smoke: #ff7a3d; --sel: #ffe066; --link: #7ac8ff; --hit: #ff4fd8; --measure: #7ef0b0;
+}
+.studio { display: grid; gap: 12px }
+.subbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center }
+.subbar h1 { font-size: 22px; letter-spacing: .02em; margin-right: 6px }
+.subbar label.inl { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted) }
+.subbar select { max-width: 230px }
+.filebtn { position: relative; overflow: hidden }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer }
+.meta { color: var(--muted); font-size: 12.5px; font-family: var(--f-mono); min-width: 0 }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 12px; align-items: start }
+@media (max-width: 1050px) { .layout { grid-template-columns: minmax(0, 1fr) } }
+.viewp { display: grid; min-width: 0; overflow: hidden }
+.vbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+.vbar .seg button { padding: 5px 9px; font-size: 12px }
+.vbar input[type=search] { width: 210px }
+details.layers { position: relative }
+details.layers summary { list-style: none; cursor: pointer; font: 600 13px var(--f-body); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 11px; background: var(--panel) }
+details.layers summary::-webkit-details-marker { display: none }
+details.layers[open] summary { border-color: var(--accent) }
+details.layers .menu { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: grid; gap: 7px; width: 250px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25) }
+.view { position: relative; height: clamp(420px, calc(100dvh - 210px), 1500px); background: var(--table); touch-action: none; overflow: hidden }
+@media (max-width: 700px) { .view { height: clamp(280px, 58vh, 520px) } }
+.view.expanded { position: fixed; inset: 0; z-index: 60; height: auto; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px) }
+.view svg { position: relative; width: 100%; height: 100%; display: block; cursor: grab; user-select: none }
+.view canvas#pic { position: absolute; inset: 0; width: 100%; height: 100%; display: block }
+.view canvas#pic[hidden] { display: none }
+.view svg.panning { cursor: grabbing }
+.view svg.measuring { cursor: crosshair }
+.view svg [stroke-width], .view svg .ns { vector-effect: non-scaling-stroke }
+.view svg #live, .view svg #marks, .view svg #lbl, .view svg #water { pointer-events: none }
+.view svg text { font-family: var(--f-mono) }
+.view svg [data-k=item][data-new] { stroke-width: 1.5 }
+/* layer switches (classes on the svg; nothing is redrawn) */
+svg.no-rooms .rooms, svg.no-walls .walls, svg.no-deco .deco, svg.no-items .items, svg.no-props .props, svg.no-nav .nav, svg.no-live #live, svg.no-live #water { display: none }
+svg:not(.coll) .collision { display: none }
+/* over the game's picture: rooms and walls are outlines (the picture shows what they look like), items see-through */
+svg.pic .rooms rect { fill-opacity: .07; stroke: #9fb3bc; stroke-opacity: .28; stroke-width: 1px; vector-effect: non-scaling-stroke }
+svg.pic .walls polygon:not([data-new]) { fill-opacity: 0; stroke: #d8c4b0; stroke-opacity: .3 }
+svg.pic .walls polygon:hover { stroke-opacity: .9 }
+svg.pic .walls path, svg.pic .deco { display: none }
+svg.pic [data-k=item] { fill-opacity: .32 }
+svg.pic .props rect { fill-opacity: .25; stroke-opacity: .35 }
+svg.w-none .wires { display: none }
+svg.w-power [data-k=wire]:not([data-pw]), svg.w-signal [data-k=wire][data-pw], svg.w-added [data-k=wire]:not([data-new]) { display: none }
+svg.focus [data-k=wire] { opacity: .07 }
+svg.focus [data-k=wire].hl { opacity: 1; stroke-width: 3 }
+svg.focus [data-k=item] { fill-opacity: .25 }
+svg.focus [data-k=item].hl { fill-opacity: .95 }
+.overlay { position: absolute; display: flex; gap: 6px; align-items: center; font: 12px var(--f-mono); color: var(--table-ink); pointer-events: none }
+.overlay.tl { left: 10px; top: 8px; flex-wrap: wrap; max-width: calc(100% - 20px) }
+.overlay.bl { left: 10px; bottom: 8px }
+.overlay.br { right: 8px; bottom: 8px; pointer-events: auto }
+.overlay.br button { padding: 4px 10px; font-family: var(--f-mono); background: rgba(10, 28, 39, .85); color: var(--table-ink); border-color: var(--table-line) }
+.overlay.br button:hover { border-color: var(--link) }
+.scale { display: grid; gap: 2px }
+.scale i { display: block; height: 6px; border: 1.5px solid var(--table-ink); border-top: 0 }
+.chip { background: rgba(10, 28, 39, .8); border: 1px solid var(--table-line); border-radius: 99px; padding: 1px 8px; white-space: nowrap }
+.coords { padding: 6px 10px; font: 12px var(--f-mono); color: var(--muted); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between }
+/* side panel */
+.side { display: grid; min-width: 0; max-height: calc(100dvh - 120px); position: sticky; top: calc(env(safe-area-inset-top, 0px) + 64px); grid-template-rows: auto minmax(0, 1fr) }
+@media (max-width: 1050px) { .side { position: static; max-height: none } }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); padding: 0 6px; overflow-x: auto }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 10px; color: var(--muted) }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
+.tabs .count { font: 500 11px var(--f-mono); margin-left: 5px; color: var(--muted) }
+.pane { padding: 12px; display: grid; gap: 12px; align-content: start; overflow: auto; min-width: 0 }
+.pane h2 { font: 600 16px var(--f-display) }
+.pane h3 { font: 600 11px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; font-size: 13px; margin: 0 }
+.kv dt { color: var(--muted) }
+.kv dd { margin: 0; font-family: var(--f-mono); font-size: 12.5px; overflow-wrap: anywhere }
+ul.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; font-size: 13px }
+ul.list li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 6px; border-radius: 4px; min-width: 0 }
+ul.list li > span:first-child { min-width: 0; overflow-wrap: anywhere }
+ul.list li.go { cursor: pointer }
+ul.list li.go:hover { background: var(--sunk) }
+ul.list .n { font-family: var(--f-mono); color: var(--muted); white-space: nowrap }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 7px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, .35) }
+.btns { display: flex; flex-wrap: wrap; gap: 6px }
+.btns button { padding: 5px 10px }
+.note { font-size: 12.5px; padding: 8px 10px; border-radius: 4px; background: var(--sunk); border-left: 3px solid var(--accent) }
+.note.warn { border-left-color: var(--amber) }
+.note.bad { border-left-color: var(--bad) }
+pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12px/1.5 var(--f-mono); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px }
+.tile { border: 1px solid var(--line); border-radius: var(--r); padding: 7px 10px; display: grid; gap: 1px; min-width: 0 }
+.tile .k { font: 600 10px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
+.tile .v { font: 500 19px var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tile .s { font: 11.5px var(--f-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.field { display: grid; gap: 3px; font-size: 12px; color: var(--muted) }
+.field input, .field select { width: 100% }
+.runbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.clock { font: 500 14px var(--f-mono); font-variant-numeric: tabular-nums }
+.progress { height: 4px; background: var(--sunk); border-radius: 2px; overflow: hidden }
+.progress > div { height: 100%; width: 0; background: var(--accent) }
+.disp { font: 12px var(--f-mono); display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px }
+.disp .t { background: #0e1a16; color: #7ef0b0; padding: 0 6px; border-radius: 3px; overflow-wrap: anywhere }
+code { font-family: var(--f-mono); font-size: 12px; background: var(--sunk); padding: 0 4px; border-radius: 3px }
+</style>
+</head>
+<body>
+<header class="topnav"><a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 18c0-4 5-7 12-7h4l2-4h3l-1 4c3 1 5 3 5 7s-5 6-13 6S4 22 4 18z" fill="currentColor" opacity=".9"/><circle cx="12" cy="18" r="1.8" fill="var(--bg)"/><circle cx="17" cy="18" r="1.8" fill="var(--bg)"/><circle cx="22" cy="18" r="1.8" fill="var(--bg)"/></svg>Barotrauma Workshop</a><nav aria-label="Pages"><a href="index.html">Home</a><a href="subs.html" aria-current="page">Sub Studio</a><a href="sandbox.html">Circuit Lab</a><a href="world.html">Drone Range</a><a href="bench.html">Reactor Bench</a></nav><span class="spacer"></span><button class="themebtn" type="button" title="Light or dark" aria-label="Switch between light and dark"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2.5a7.5 7.5 0 0 1 0 15z" fill="currentColor"/></svg></button></header><script>(()=>{const k='bw.theme',r=document.documentElement;try{const t=localStorage.getItem(k);if(t)r.dataset.theme=t}catch(e){}document.currentScript.previousElementSibling.querySelector('.themebtn').onclick=()=>{const d=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=d?'light':'dark';try{localStorage.setItem(k,r.dataset.theme)}catch(e){}}})()</script>
+<div class="wrap studio">
+  <div class="subbar">
+    <h1>Sub Studio</h1>
+    <label class="inl">Sub <select id="subSel" aria-label="Submarine"></select></label>
+    <label class="btn filebtn" title="Open a .sub from your computer (Barotrauma's LocalMods or Submarines folder)">Open .sub…<input type="file" id="subFile" accept=".sub,.xml"></label>
+    <label class="inl" title="Highlight what this sub has that the other one doesn't (same item IDs = original)">Compare with <select id="baseSel" aria-label="Compare with"></select></label>
+    <span class="meta" id="subMeta"></span>
+  </div>
+
+  <div class="layout">
+    <section class="panel viewp" aria-label="Submarine">
+      <div class="vbar">
+        <div class="seg" id="wireMode" role="group" aria-label="Wires">
+          <button data-w="all" aria-pressed="true">All wires</button><button data-w="added" aria-pressed="false" title="Only the wires that aren't in the sub you compare with">Added</button><button data-w="power" aria-pressed="false">Power</button><button data-w="signal" aria-pressed="false">Signal</button><button data-w="none" aria-pressed="false">No wires</button>
+        </div>
+        <details class="layers" id="layers"><summary>Layers</summary>
+          <div class="menu">
+            <label class="check" id="lyPicRow"><input type="checkbox" id="lyPic" checked> The sub's own picture (as in game)</label>
+            <label class="check"><input type="checkbox" id="lyRooms" checked> Rooms (hulls)</label>
+            <label class="check"><input type="checkbox" id="lyWalls" checked> Walls, floors, stairs</label>
+            <label class="check"><input type="checkbox" id="lyDeco" checked> Outside decoration (no collision)</label>
+            <label class="check"><input type="checkbox" id="lyItems" checked> Items</label>
+            <label class="check"><input type="checkbox" id="lyProps" checked> Ladders, doors, cabinets</label>
+            <label class="check"><input type="checkbox" id="lyColl"> Collision (hitboxes)</label>
+            <label class="check"><input type="checkbox" id="lyNav"> Gaps and AI waypoints</label>
+            <label class="check"><input type="checkbox" id="lyNames" checked> Room names</label>
+            <label class="check"><input type="checkbox" id="lyItemNames" checked> Item names when zoomed in</label>
+            <label class="check"><input type="checkbox" id="lyGrid"> 1 m grid</label>
+            <label class="check"><input type="checkbox" id="lyLive" checked> Practice round overlay</label>
+          </div>
+        </details>
+        <input type="search" id="find" placeholder="Find: battery, 7300, Medbay" aria-label="Find items, rooms, wifi channels or display text">
+        <button id="btnMeasure" aria-pressed="false" title="Click two points to measure (Esc clears)">Measure</button>
+      </div>
+      <div class="view" id="view">
+        <canvas id="pic" hidden></canvas>
+        <svg id="svg" tabindex="0" aria-label="Side view of the submarine"></svg>
+        <div class="overlay tl" id="chips"></div>
+        <div class="overlay bl"><div class="scale" id="scale"><span id="scaleT">1 m</span><i id="scaleBar" style="width:60px"></i></div></div>
+        <div class="overlay br"><button id="btnZin" aria-label="Zoom in">+</button><button id="btnZout" aria-label="Zoom out">−</button><button id="btnFit" title="Whole sub (0)">Fit</button><button id="btnExpand" title="Fill the window (Esc to close)">Expand</button></div>
+      </div>
+      <div class="coords"><span id="coords">Move over the sub for coordinates. 100 units = 1 m, y up.</span><span>Drag to pan · wheel or pinch to zoom · click anything</span></div>
+    </section>
+
+    <aside class="panel side" aria-label="Details">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="insp" aria-selected="true">Inspect</button>
+        <button role="tab" data-tab="over" aria-selected="false">Overview</button>
+        <button role="tab" data-tab="round" aria-selected="false">Practice round</button>
+        <button role="tab" data-tab="logs" aria-selected="false">Logs<span class="count" id="nLogs"></span></button>
+      </div>
+      <div class="pane" data-pane="insp" id="insp"></div>
+      <div class="pane" data-pane="over" id="over" hidden></div>
+      <div class="pane" data-pane="round" hidden>
+        <p class="hint">The sub's own circuits run as built: crew walking between rooms, a pilot changing speed and depth, fights where gunners fire every turret, and a flood or fire if you ask for one. Click items while it runs to press buttons and type into terminals.</p>
+        <div class="row2">
+          <label class="field">Round length (s)<input type="number" id="rDur" min="30" step="30" value="600"></label>
+          <label class="field">Reactor<select id="rCirc"></select></label>
+          <label class="field">Flood at (s)<input type="number" id="rBreach" min="0" step="10" placeholder="never"></label>
+          <label class="field">Flood room<select id="rBreachHull"></select></label>
+          <label class="field">Fire at (s)<input type="number" id="rFire" min="0" step="10" placeholder="never"></label>
+          <label class="field">Fire room<select id="rFireHull"></select></label>
+        </div>
+        <label class="check"><input type="checkbox" id="rFights" checked> Fights every few minutes (turrets fire, sonar pings)</label>
+        <div class="runbar">
+          <button id="btnRun" class="primary">Start</button><button id="btnReset">Reset</button>
+          <div class="seg" id="speed" role="group" aria-label="Speed"><button data-s="1" aria-pressed="true">x1</button><button data-s="5" aria-pressed="false">x5</button><button data-s="25" aria-pressed="false">x25</button><button data-s="max" aria-pressed="false">Max</button></div>
+        </div>
+        <div class="runbar"><span class="clock" id="clock">0:00 / 10:00</span><span class="hint" id="rate"></span></div>
+        <div class="progress" aria-hidden="true"><div id="prog"></div></div>
+        <div class="tiles" id="tiles"></div>
+        <div id="roundMsg"></div>
+        <h3>Events</h3>
+        <pre class="log" id="events">Nothing yet.</pre>
+      </div>
+      <div class="pane" data-pane="logs" hidden>
+        <h3>Text displays</h3><div id="displays" class="disp"></div>
+        <h3>Radio chat</h3><pre class="log" id="chat">No radio yet.</pre>
+        <h3>Terminals</h3><pre class="log" id="term">No terminal lines yet.</pre>
+        <h3>Warnings</h3><div id="warns" class="hint">None.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="lib/sim.js"></script>
+<script src="lib/ships.js"></script>
+<script src="lib/circuits.js"></script>
+<script>
+(() => {
+'use strict';
+const R = self.BaroSubRender, SH = self.BaroShip, SF = self.BaroSubFile, F = self.BaroFormat, P = self.BaroProject, L = self.BaroLabel, G = self.BaroShellGeom, PV = self.BaroPreview;
+const LAYERS = ['lyPic', 'lyRooms', 'lyWalls', 'lyDeco', 'lyItems', 'lyProps', 'lyColl', 'lyNav', 'lyNames', 'lyItemNames', 'lyGrid', 'lyLive'];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const store = { get(k, d) { try { const v = localStorage.getItem('bw.subs.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('bw.subs.' + k, JSON.stringify(v)); } catch (e) { } } };
+const ships = Object.assign({}, self.BaroShips || {});
+const CIRC = (self.BaroCircuitLib || {}).circuits || {};
+const svg = $('svg'), viewEl = $('view');
+const NS = 'http://www.w3.org/2000/svg';
+const KIND_NAMES = { reactor: 'Reactor', battery: 'Batteries', power: 'Junction boxes, relays', circuitbox: 'Circuit boxes', logic: 'Logic and wifi', door: 'Doors and hatches', weapon: 'Weapons', terminal: 'Terminals, screens, nav', sensor: 'Sensors', machine: 'Engines, pumps, machines', light: 'Lights', other: 'Other' };
+const WIRE_NAMES = { redwire: 'Red', bluewire: 'Blue', orangewire: 'Orange', greenwire: 'Green', blackwire: 'Black', whitewire: 'White', yellowwire: 'Yellow', brownwire: 'Brown', wire: 'Wire' };
+const S = { ship: null, base: null, D: null, full: null, view: null, sel: null, wires: 'all', hits: [], measure: null, sim: null, running: false, speed: '1', carry: 0, lastTs: 0, stepsWin: [], items: new Map(), wireEls: new Map(), hullById: new Map(), itemById: new Map() };
+const m = v => (v / 100).toFixed(v >= 1000 ? 1 : 2) + ' m';
+const centre = it => [it.rect[0] + it.rect[2] / 2, it.rect[1] - it.rect[3] / 2];
+const tok = name => String(name).replace(/[^A-Za-z0-9]+/g, '_');
+
+// ---------- the sub list ----------
+function fillSubs(sel) {
+  const s = $('subSel'); s.innerHTML = '';
+  const groups = [['Vanilla', n => ships[n].vanilla], ['Made in this repo', n => !ships[n].vanilla && !ships[n].opened], ['Opened from your computer', n => ships[n].opened]];
+  for (const [label, f] of groups) {
+    const names = Object.keys(ships).filter(f).sort(); if (!names.length) continue;
+    const g = document.createElement('optgroup'); g.label = label;
+    for (const n of names) { const o = document.createElement('option'); o.value = n; o.textContent = n; g.appendChild(o); }
+    s.appendChild(g);
+  }
+  if (sel && ships[sel]) s.value = sel;
+}
+function autoBase(sh) {
+  if (sh.vanilla) return '';
+  const n = sh.name.toLowerCase(); let best = '';
+  for (const b of Object.values(ships)) if (b.vanilla && n.startsWith(b.name.toLowerCase()) && b.name.length > best.length) best = b.name;
+  return best;
+}
+function fillBase(sh) {
+  const s = $('baseSel'); s.innerHTML = '<option value="">nothing</option>';
+  for (const n of Object.keys(ships).filter(n => n !== sh.name).sort((a, b) => (ships[b].vanilla - ships[a].vanilla) || a.localeCompare(b))) { const o = document.createElement('option'); o.value = n; o.textContent = n; s.appendChild(o); }
+  const saved = store.get('base.' + sh.name, null);
+  s.value = saved !== null && (saved === '' || ships[saved]) ? saved : autoBase(sh);
+}
+function selectSub(name) {
+  const sh = ships[name]; if (!sh) return;
+  stopRound(); S.ship = sh; store.set('sub', name); $('subSel').value = name;
+  try { history.replaceState(null, '', '#' + tok(name)); } catch (e) { }
+  S.itemById = new Map(sh.items.map(i => [i.id, i])); S.hullById = new Map(sh.hulls.map(h => [h.id, h]));
+  S.conns = new Map(); for (const w of sh.wires) for (const [a, b] of [[w.from, w.to], [w.to, w.from]]) { if (!S.conns.has(a.item)) S.conns.set(a.item, []); S.conns.get(a.item).push({ conn: a.conn, other: b.item, oconn: b.conn, wire: w }); }
+  fillBase(sh); S.base = $('baseSel').value ? ships[$('baseSel').value] : null;
+  S.sel = null; S.hits = []; S.measure = null; $('btnMeasure').setAttribute('aria-pressed', 'false'); svg.classList.remove('measuring');
+  if ($('find').value) S.hits = findHits($('find').value);
+  drawStatic(); fit(); overview(); inspector(); roundForm(); resetRound(); meta();
+}
+function meta() {
+  const sh = S.ship, b = R.bounds(sh, 0), w = (b[2] - b[0]) / 100, h = (b[3] - b[1]) / 100, boxes = sh.items.filter(i => i.box).length;
+  $('subMeta').textContent = `${sh.class || 'sub'}${sh.tier ? ' · tier ' + sh.tier : ''} · ${w.toFixed(1)} × ${h.toFixed(1)} m · ${sh.hulls.length} rooms · ${sh.items.length} items · ${sh.wires.length} wires · ${boxes} circuit box${boxes === 1 ? '' : 'es'}`;
+}
+
+// ---------- the picture: drawn once per sub (and compare choice); pan and zoom only move the viewBox ----------
+function drawStatic() {
+  const sh = S.ship, b = R.bounds(sh, 400), W = b[2] - b[0];
+  const r = R.render(sh, { base: S.base, wires: 'all', nav: true, props: true, labels: 'none', width: W, crop: b, collision: true });
+  S.D = r.diff; S.full = b;
+  let inner = r.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+  inner = inner.replace('</g><g class="deco">', '</g><g id="water"></g><g class="deco">');
+  svg.innerHTML = inner + '<g id="grid"></g><g id="live"></g><g id="marks"></g><g id="lbl"></g>';
+  S.items = new Map(); for (const e of svg.querySelectorAll('[data-k=item]')) S.items.set(e.dataset.id, e);
+  S.wireEls = new Map(); for (const e of svg.querySelectorAll('[data-k=wire]')) S.wireEls.set(e.dataset.id, e);
+  $('wireMode').querySelector('[data-w=added]').disabled = !S.base;
+  if (!S.base && S.wires === 'added') setWires('all');
+  layers(); focusWires(); live(true); marks();
+}
+function layers() {
+  const on = id => $(id).checked, pic = !!S.ship.picture && on('lyPic');
+  svg.classList.toggle('pic', pic); svg.classList.toggle('coll', on('lyColl')); $('lyPicRow').hidden = !S.ship.picture;
+  const sea = svg.querySelector('.sea'); if (sea) sea.setAttribute('fill', pic ? 'none' : R.PALETTE.sea); // the picture's canvas shows through
+  drawPic();
+  svg.classList.toggle('no-rooms', !on('lyRooms')); svg.classList.toggle('no-walls', !on('lyWalls')); svg.classList.toggle('no-deco', !on('lyDeco'));
+  svg.classList.toggle('no-items', !on('lyItems')); svg.classList.toggle('no-props', !on('lyProps')); svg.classList.toggle('no-nav', !on('lyNav')); svg.classList.toggle('no-live', !on('lyLive'));
+  store.set('layers2', LAYERS.filter(on));
+  labels(); grid();
+}
+function setWires(w) {
+  S.wires = w; store.set('wires', w);
+  for (const b of $('wireMode').querySelectorAll('button')) b.setAttribute('aria-pressed', b.dataset.w === w);
+  for (const c of ['w-all', 'w-added', 'w-power', 'w-signal', 'w-none']) svg.classList.toggle(c, c === 'w-' + w);
+}
+
+// ---------- view: pan / zoom ----------
+function setView(v) {
+  const cw = viewEl.clientWidth || 800, ch = viewEl.clientHeight || 500;
+  v.h = v.w * ch / cw; S.view = v;
+  svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
+  drawPic(); scaleBar(); schedule();
+}
+// The game's picture goes on a canvas under the map, and only the part in view is drawn. As an SVG <image> stretched
+// over the whole sub it became tens of thousands of pixels wide when zoomed in, and some browsers froze on that.
+function drawPic() {
+  const c = $('pic'), P = S.ship && S.ship.picture, v = S.view, on = !!(P && v && $('lyPic').checked);
+  c.hidden = !on; if (!on) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), cw = Math.round((viewEl.clientWidth || 800) * dpr), ch = Math.round((viewEl.clientHeight || 500) * dpr);
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+  const x = c.getContext('2d'); x.fillStyle = R.PALETTE.pictureSea; x.fillRect(0, 0, cw, ch);
+  if (!P.img) { P.img = new Image(); P.img.onload = () => { if (S.ship && S.ship.picture === P) drawPic(); }; P.img.src = P.href || P.file; }
+  const img = P.img; if (!img.complete || !img.naturalWidth) return;
+  const [p0, q0, p1, q1] = P.box, iw = img.naturalWidth, ih = img.naturalHeight; // picture box in sub coordinates; the svg's y is -y
+  const X0 = Math.max(v.x, p0), X1 = Math.min(v.x + v.w, p1), Y0 = Math.max(v.y, -q1), Y1 = Math.min(v.y + v.h, -q0);
+  if (X1 <= X0 || Y1 <= Y0) return;
+  const kx = cw / v.w, ky = ch / v.h;
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  x.drawImage(img, (X0 - p0) / (p1 - p0) * iw, (Y0 + q1) / (q1 - q0) * ih, (X1 - X0) / (p1 - p0) * iw, (Y1 - Y0) / (q1 - q0) * ih, (X0 - v.x) * kx, (Y0 - v.y) * ky, (X1 - X0) * kx, (Y1 - Y0) * ky);
+}
+function fit(rect) { // rect: [x0, y0, x1, y1] in sub units (y up); default: the whole sub
+  const b = rect || R.bounds(S.ship, 120), cw = viewEl.clientWidth || 800, ch = viewEl.clientHeight || 500;
+  let w = b[2] - b[0], h = b[3] - b[1]; if (w / h < cw / ch) w = h * cw / ch;
+  const cx = (b[0] + b[2]) / 2, cy = -(b[1] + b[3]) / 2;
+  setView({ x: cx - w / 2, y: cy - w * ch / cw / 2, w });
+}
+function zoomAt(f, sx, sy) { // f > 1 zooms out; (sx, sy) a point in svg units
+  const v = S.view; if (!v) return;
+  if (sx === undefined) { sx = v.x + v.w / 2; sy = v.y + v.h / 2; }
+  const w = Math.min(Math.max(v.w * f, 150), (S.full[2] - S.full[0]) * 3); // closest: 1.5 m across
+  const k = w / v.w; setView({ x: sx - (sx - v.x) * k, y: sy - (sy - v.y) * k, w });
+}
+const px = () => S.view ? S.view.w / (viewEl.clientWidth || 800) : 1; // sub units per screen pixel
+function toSvg(e) { const r = svg.getBoundingClientRect(), v = S.view; return [v.x + (e.clientX - r.left) / r.width * v.w, v.y + (e.clientY - r.top) / r.height * v.h]; }
+function scaleBar() {
+  const u = px() * 90, mt = u / 100, steps = [0.25, 0.5, 1, 2, 5, 10, 20, 50, 100]; let n = steps[0];
+  for (const s of steps) if (s <= mt) n = s;
+  $('scaleBar').style.width = (n * 100 / px()).toFixed(0) + 'px'; $('scaleT').textContent = n + ' m';
+}
+let sched = 0;
+function schedule() { if (sched) return; sched = requestAnimationFrame(() => { sched = 0; labels(); marks(); grid(); }); }
+
+// pointer: drag pans, a click without movement selects, two fingers pinch
+const ptrs = new Map(); let drag = null;
+svg.addEventListener('pointerdown', e => {
+  svg.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size === 1) drag = { x: e.clientX, y: e.clientY, v: Object.assign({}, S.view), moved: false };
+  else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; drag = { pinch: Math.hypot(a[0] - b[0], a[1] - b[1]), v: Object.assign({}, S.view), mid: toSvg({ clientX: (a[0] + b[0]) / 2, clientY: (a[1] + b[1]) / 2 }), moved: true }; }
+});
+svg.addEventListener('pointermove', e => {
+  if (S.view) { const [x, y] = toSvg(e); $('coords').textContent = `x ${Math.round(x)}  y ${Math.round(-y)}  (${(x / 100).toFixed(2)} m, ${(-y / 100).toFixed(2)} m)` + (hullAt(x, -y) ? '  · ' + roomName(hullAt(x, -y)) : ''); if (S.measure && S.measure.a && !S.measure.b) { S.measure.hover = [x, -y]; schedule(); } }
+  if (!ptrs.has(e.pointerId) || !drag) return;
+  ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (drag.pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); S.view = Object.assign({}, drag.v); zoomAt(drag.pinch / Math.max(d, 1), drag.mid[0], drag.mid[1]); return; }
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) > 4) { drag.moved = true; svg.classList.add('panning'); }
+  if (drag.moved) { const k = drag.v.w / (viewEl.clientWidth || 800); setView({ x: drag.v.x - dx * k, y: drag.v.y - dy * k, w: drag.v.w }); }
+});
+const endPtr = e => {
+  const was = drag; ptrs.delete(e.pointerId); svg.classList.remove('panning');
+  if (ptrs.size === 0) { if (was && !was.moved && e.type === 'pointerup') click(e); drag = null; }
+};
+svg.addEventListener('pointerup', endPtr); svg.addEventListener('pointercancel', endPtr);
+svg.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = toSvg(e); zoomAt(Math.pow(1.0015, e.deltaY), x, y); }, { passive: false });
+svg.addEventListener('keydown', e => {
+  const v = S.view; if (!v) return; const st = v.w * 0.1;
+  if (e.key === '+' || e.key === '=') zoomAt(1 / 1.25); else if (e.key === '-') zoomAt(1.25); else if (e.key === '0') fit();
+  else if (e.key === 'ArrowLeft') setView({ x: v.x - st, y: v.y, w: v.w }); else if (e.key === 'ArrowRight') setView({ x: v.x + st, y: v.y, w: v.w });
+  else if (e.key === 'ArrowUp') setView({ x: v.x, y: v.y - st, w: v.w }); else if (e.key === 'ArrowDown') setView({ x: v.x, y: v.y + st, w: v.w }); else return;
+  e.preventDefault();
+});
+new ResizeObserver(() => { if (S.view) setView(S.view); }).observe(viewEl);
+
+// ---------- picking ----------
+function hullAt(x, y) { return S.ship.hulls.find(h => x >= h.rect[0] && x <= h.rect[0] + h.rect[2] && y <= h.rect[1] && y >= h.rect[1] - h.rect[3]); }
+function roomName(h) { return h.label || h.name || 'room ' + h.id; }
+function wireVisible(w) {
+  if (S.wires === 'none') return false; const pw = /^power/.test(w.from.conn) || /^power/.test(w.to.conn);
+  if (S.wires === 'power' && !pw) return false; if (S.wires === 'signal' && pw) return false; if (S.wires === 'added' && !(S.D && S.D.wires.has(w.id))) return false;
+  return true;
+}
+function wirePts(w) { if (w.nodes && w.nodes.length >= 2) return w.nodes; const a = S.itemById.get(w.from.item), b = S.itemById.get(w.to.item); return a && b ? [centre(a), centre(b)] : []; }
+function nearestWire(x, y, tol) {
+  let best = null, bd = tol;
+  for (const w of S.ship.wires) {
+    if (!wireVisible(w)) continue; const p = wirePts(w);
+    for (let i = 1; i < p.length; i++) {
+      const [ax, ay] = p[i - 1], [bx, by] = p[i], dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2));
+      const d = Math.hypot(x - ax - t * dx, y - ay - t * dy); if (d < bd) { bd = d; best = w; }
+    }
+  }
+  return best;
+}
+function click(e) {
+  const [sx, sy] = toSvg(e), x = sx, y = -sy;
+  if (S.measure) { if (!S.measure.a || S.measure.b) S.measure = { a: [x, y] }; else S.measure.b = [x, y]; marks(); return; }
+  const el = document.elementFromPoint(e.clientX, e.clientY), t = el && el.closest ? el.closest('[data-k]') : null, k = t && t.dataset.k;
+  let sel = null;
+  if (k === 'item') sel = { k: 'item', id: t.dataset.id };
+  else { const w = nearestWire(x, y, 6 * px()); if (w) sel = { k: 'wire', id: w.id }; else if (k === 'struct' || k === 'prop' || k === 'hull') sel = { k, id: t.dataset.id }; }
+  select(sel);
+}
+function select(sel, zoom) {
+  S.sel = sel; focusWires(); marks(); inspector(); showTab('insp');
+  if (zoom && sel) { const r = selRect(sel); if (r) { const pad = Math.max(r[2], r[3]) * 2 + 300; fit([r[0] - pad, r[1] - r[3] - pad, r[0] + r[2] + pad, r[1] + pad]); } }
+}
+function selRect(sel) {
+  if (!sel) return null;
+  if (sel.k === 'item') { const it = S.itemById.get(sel.id); return it && it.rect; }
+  if (sel.k === 'hull') { const h = S.hullById.get(sel.id); return h && h.rect; }
+  if (sel.k === 'wire') { const w = S.ship.wires.find(q => q.id === sel.id), p = w ? wirePts(w) : []; if (!p.length) return null; const xs = p.map(q => q[0]), ys = p.map(q => q[1]); return [Math.min(...xs), Math.max(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)]; }
+  if (sel.k === 'struct') { const s = (S.ship.structures || []).find(q => q.id === sel.id); return s && s.rect; }
+  if (sel.k === 'prop') { const s = (S.ship.props || []).find(q => q.id === sel.id); return s && s.rect; }
+  return null;
+}
+// the selected item's wires stay bright, everything else fades
+function focusWires() {
+  for (const e of svg.querySelectorAll('.hl')) e.classList.remove('hl');
+  const sel = S.sel, on = sel && (sel.k === 'item' || sel.k === 'wire');
+  svg.classList.toggle('focus', !!on); if (!on) return;
+  const ids = new Set();
+  if (sel.k === 'item') { ids.add(sel.id); for (const c of S.conns.get(sel.id) || []) { ids.add(c.other); const we = S.wireEls.get(c.wire.id); if (we) we.classList.add('hl'); } }
+  else { const w = S.ship.wires.find(q => q.id === sel.id); if (w) { ids.add(w.from.item); ids.add(w.to.item); const we = S.wireEls.get(w.id); if (we) we.classList.add('hl'); } }
+  for (const id of ids) { const e = S.items.get(id); if (e) e.classList.add('hl'); }
+}
+
+// ---------- marks: selection, find hits, measuring ----------
+function marks() {
+  const g = $('marks'); if (!g || !S.view) return; const k = px(), out = [];
+  const box = (r, col, w, dash) => out.push(`<rect x="${r[0] - 4 * k}" y="${-r[1] - 4 * k}" width="${r[2] + 8 * k}" height="${r[3] + 8 * k}" fill="none" stroke="${col}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''} class="ns"/>`);
+  for (const h of S.hits.slice(0, 400)) { const r = selRect(h); if (r) { const [cx, cy] = [r[0] + r[2] / 2, r[1] - r[3] / 2]; out.push(`<circle cx="${cx}" cy="${-cy}" r="${Math.max(r[2], r[3]) / 2 + 9 * k}" fill="none" stroke="var(--hit)" stroke-width="2" class="ns"/>`); } }
+  if (S.sel) {
+    const r = selRect(S.sel); if (r) box(r, 'var(--sel)', 2.5);
+    if (S.sel.k === 'item') for (const c of S.conns.get(S.sel.id) || []) { const it = S.itemById.get(c.other); if (it) box(it.rect, 'var(--link)', 1.5, '4 3'); }
+  }
+  const M = S.measure;
+  if (M && M.a) {
+    const b = M.b || M.hover; out.push(`<circle cx="${M.a[0]}" cy="${-M.a[1]}" r="${4 * k}" fill="var(--measure)"/>`);
+    if (b) {
+      const d = Math.hypot(b[0] - M.a[0], b[1] - M.a[1]), dx = Math.abs(b[0] - M.a[0]), dy = Math.abs(b[1] - M.a[1]);
+      out.push(`<line x1="${M.a[0]}" y1="${-M.a[1]}" x2="${b[0]}" y2="${-b[1]}" stroke="var(--measure)" stroke-width="2" class="ns"/><circle cx="${b[0]}" cy="${-b[1]}" r="${4 * k}" fill="var(--measure)"/>`);
+      out.push(`<text x="${(M.a[0] + b[0]) / 2 + 8 * k}" y="${-(M.a[1] + b[1]) / 2 - 8 * k}" font-size="${13 * k}" fill="var(--measure)" paint-order="stroke" stroke="#0a1c27" stroke-width="3">${(d / 100).toFixed(2)} m (${Math.round(d)} u) · dx ${(dx / 100).toFixed(2)} · dy ${(dy / 100).toFixed(2)}</text>`);
+    }
+  }
+  g.innerHTML = out.join('');
+}
+
+// ---------- labels and grid: drawn for the current zoom so text stays readable ----------
+function labels() {
+  const g = $('lbl'); if (!g || !S.view) return; const k = px(), v = S.view, out = [];
+  const inView = r => r[0] + r[2] > v.x && r[0] < v.x + v.w && -r[1] < v.y + v.h && -r[1] + r[3] > v.y;
+  if ($('lyNames').checked) for (const h of S.ship.hulls) {
+    if (h.rect[2] / k < 70 || !inView(h.rect)) continue;
+    out.push(`<text x="${h.rect[0] + 6 * k}" y="${-h.rect[1] + 16 * k}" font-size="${12 * k}" fill="#c9d6dc" opacity=".8">${esc(roomName(h))}</text>`);
+  }
+  if ($('lyItemNames').checked && k < 1.6) {
+    let n = 0; const sim = S.sim;
+    for (const it of S.ship.items) {
+      if (n > 350 || !inView(it.rect)) continue;
+      const d = sim && sim.byId ? sim.byId.get(it.id) : null, txt = d && d.kind === 'display' ? d.state.text : null;
+      if (txt !== null && txt !== undefined) { out.push(`<text x="${it.rect[0]}" y="${-it.rect[1] + it.rect[3] / 2 + 4 * k}" font-size="${11 * k}" fill="#7ef0b0" paint-order="stroke" stroke="#04100c" stroke-width="3">${esc(String(txt).slice(0, 40))}</text>`); n++; continue; }
+      if (k > 0.9 && it.rect[2] / k < 20) continue;
+      out.push(`<text x="${it.rect[0]}" y="${-it.rect[1] - 3 * k}" font-size="${10 * k}" fill="${S.D && S.D.items.has(it.id) ? '#ffb347' : '#9fb3bc'}">${esc(it.identifier)}</text>`); n++;
+    }
+  }
+  g.innerHTML = out.join('');
+}
+function grid() {
+  const g = $('grid'); if (!g || !S.view) return;
+  if (!$('lyGrid').checked) { g.innerHTML = ''; return; }
+  const v = S.view, k = px(), step = k > 4 ? 1000 : k > 1.2 ? 500 : 100, out = [];
+  for (let x = Math.ceil(v.x / step) * step; x <= v.x + v.w; x += step) out.push(`<line x1="${x}" y1="${v.y}" x2="${x}" y2="${v.y + v.h}" stroke="rgba(255,255,255,${x % (step * 5) ? .05 : .12})" stroke-width="1" class="ns"/>`);
+  for (let y = Math.ceil(v.y / step) * step; y <= v.y + v.h; y += step) out.push(`<line x1="${v.x}" y1="${y}" x2="${v.x + v.w}" y2="${y}" stroke="rgba(255,255,255,${y % (step * 5) ? .05 : .12})" stroke-width="1" class="ns"/>`);
+  g.innerHTML = out.join('');
+}
+
+// ---------- find ----------
+function findHits(q) {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  const sh = S.ship, hits = [], num = /^#?\d+$/.test(q) ? q.replace('#', '') : null, sim = S.sim;
+  for (const it of sh.items) {
+    const wifi = (it.comps.WifiComponent || [])[0], ch = wifi ? String(wifi.Channel) : null;
+    const d = sim && sim.byId ? sim.byId.get(it.id) : null, txt = d && d.kind === 'display' ? String(d.state.text).toLowerCase() : '';
+    if ((num && (it.id === num || ch === num)) || (!num && (it.identifier.toLowerCase().includes(q) || R.itemKind(it) === q || (txt && txt.includes(q))))) hits.push({ k: 'item', id: it.id });
+  }
+  if (!num) for (const h of sh.hulls) if (roomName(h).toLowerCase().includes(q)) hits.push({ k: 'hull', id: h.id });
+  return hits;
+}
+$('find').oninput = () => { S.hits = findHits($('find').value); marks(); inspector(); showTab('insp'); };
+$('find').onkeydown = e => { if (e.key === 'Enter' && S.hits.length) select(S.hits[0], true); };
+
+// ---------- inspector ----------
+function itemTitle(it) { return `${it.identifier} #${it.id}`; }
+function connList(id) {
+  const by = new Map(); for (const c of S.conns.get(id) || []) { if (!by.has(c.conn)) by.set(c.conn, []); by.get(c.conn).push(c); }
+  if (!by.size) return '<p class="hint">No wires.</p>';
+  return '<ul class="list">' + [...by.entries()].map(([conn, cs]) => cs.map((c, i) => { const o = S.itemById.get(c.other); return `<li class="go" data-go="item:${c.other}"><span>${i ? '' : `<b class="mono">${esc(conn)}</b> → `}${o ? esc(o.identifier) : '?'} #${esc(c.other)}<span class="mut">.${esc(c.oconn)}</span></span><span class="n"><span class="sw" style="background:${R.WIRE[c.wire.color] || R.WIRE.wire}"></span>${(wireLen(c.wire) / 100).toFixed(1)} m</span></li>`; }).join('')).join('') + '</ul>';
+}
+function wireLen(w) { const p = wirePts(w); let l = 0; for (let i = 1; i < p.length; i++) l += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return l; }
+const HIDE = /^(PickingTime|CanBePicked|LockGuiFramePosition|GuiFrameOffset|AllowInGameEditing|Msg|channelmemory|IgnoreLocalization|Padding|TextScale|Scrollable)$/;
+function compsHtml(it) {
+  const parts = [];
+  for (const [name, arr] of Object.entries(it.comps || {})) for (const c of arr) {
+    const kv = Object.entries(c).filter(([k]) => !HIDE.test(k)).slice(0, 14);
+    if (kv.length) parts.push(`<details><summary class="mono">${esc(name)}</summary><dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></details>`);
+  }
+  return parts.join('');
+}
+function boxHtml(it) {
+  const b = it.box, counts = {};
+  for (const c of b.components) counts[c.item] = (counts[c.item] || 0) + 1;
+  const notes = (b.labels || []).filter(l => l.header || l.body);
+  return `<h3>Circuit box: ${b.components.length} parts, ${b.wires.length} wires</h3>
+    <p class="hint">${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} × ${esc(k.replace(/component$/, ''))}`).join(', ')}</p>
+    ${notes.map(l => `<details><summary>${esc(l.header || 'Note')}</summary><p class="hint" style="white-space:pre-wrap">${esc(l.body)}</p></details>`).join('')}
+    <div class="btns"><button id="toLab" title="Opens the box in the Circuit Lab, where you can wire test devices to it and run it">Open in Circuit Lab</button></div>`;
+}
+function liveHtml(id) {
+  const d = S.sim && S.sim.byId ? S.sim.byId.get(id) : null; if (!d) return '';
+  const st = d.state || {}, bits = [];
+  if (d.voltage !== undefined) bits.push(['Voltage', d.voltage.toFixed(2) + (d.voltage < 0.5 ? ' (no power)' : '')]);
+  if (d.cpc) bits.push(['Drawing', Math.round(d.cpc) + ' kW']);
+  if (d.kind === 'display') bits.push(['Shows', '"' + st.text + '"']);
+  if (d.kind === 'door') bits.push(['Door', st.open ? 'open' : 'shut']);
+  if (d.kind === 'terminal' && st.lines && st.lines.length) bits.push(['Last line', st.lines[st.lines.length - 1]]);
+  if (d.kind === 'engine') bits.push(['Force', Math.round(st.force || 0) + ' %']);
+  if (d.kind === 'pump') bits.push(['Pump', Math.round(st.speed || 0) + ' %']);
+  if (d.batt) bits.push(['Charge', (d.batt.charge / d.batt.capacity * 100).toFixed(0) + ' %']);
+  const acts = [];
+  if (d.press) acts.push(`<button data-act="press">Press</button>`);
+  let h = `<h3>Live</h3><dl class="kv">${bits.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
+  if (acts.length) h += `<div class="btns">${acts.join('')}</div>`;
+  if (d.type) h += `<label class="field">Type into this terminal (Enter sends)<input type="text" id="typeIn" placeholder="help"></label>`;
+  return h;
+}
+function inspector() {
+  const el = $('insp'), sel = S.sel, sh = S.ship; let h = '';
+  if ($('find').value.trim()) {
+    h += `<h3>Find: ${S.hits.length} match${S.hits.length === 1 ? '' : 'es'}</h3>`;
+    if (S.hits.length) h += '<ul class="list">' + S.hits.slice(0, 80).map(x => { if (x.k === 'hull') { const r = S.hullById.get(x.id); return `<li class="go" data-go="hull:${x.id}"><span>Room: ${esc(roomName(r))}</span><span class="n">#${x.id}</span></li>`; } const it = S.itemById.get(x.id), wifi = (it.comps.WifiComponent || [])[0]; return `<li class="go" data-go="item:${x.id}"><span>${esc(it.identifier)}${wifi ? ` <span class="mut">ch ${esc(wifi.Channel)}</span>` : ''}</span><span class="n">#${x.id}</span></li>`; }).join('') + (S.hits.length > 80 ? `<li><span class="hint">and ${S.hits.length - 80} more</span></li>` : '') + '</ul>';
+    else h += '<p class="hint">Nothing matches. Try an item name (battery, wifi), an ID (#1835), a wifi channel (7300), a kind (logic, sensor) or a room.</p>';
+  }
+  if (!sel) {
+    h += `<h2>${esc(sh.name)}</h2><p class="hint">Click an item, a wire, a wall or a room to see what it is and what it's wired to. ${sh.picture ? "Underneath is the sub as the game draws it: the picture saved in the .sub, lined up with the rooms. " : "This sub has no saved picture, so walls are drawn as their sprites cover them. "}Rooms are the hulls you walk in, wires follow their saved nodes, and Layers has the collision (hitboxes).</p>`;
+    if (S.base) h += `<div class="note">Orange = added compared with <b>${esc(S.base.name)}</b>: ${S.D.items.size} items, ${S.D.wires.size} wires${S.D.structures.size ? `, ${S.D.structures.size} walls` : ''}${S.D.hulls.size ? `, ${S.D.hulls.size} rooms` : ''}. Pick <b>Added</b> above to see only the new wiring.</div>`;
+    h += legend();
+  } else if (sel.k === 'item') {
+    const it = S.itemById.get(sel.id), c = centre(it), room = hullAt(c[0], c[1]), wifi = (it.comps.WifiComponent || [])[0], isNew = S.D && S.D.items.has(it.id);
+    h += `<h2>${esc(it.identifier)} <span class="mut mono" style="font-size:13px">#${it.id}</span>${isNew ? ' <span class="pill" style="color:var(--orange)">added</span>' : ''}</h2>
+      <dl class="kv"><dt>Kind</dt><dd>${esc(KIND_NAMES[R.itemKind(it)] || R.itemKind(it))}</dd><dt>Where</dt><dd>${room ? esc(roomName(room)) + ', ' : ''}x ${Math.round(c[0])}, y ${Math.round(c[1])}</dd><dt>Size</dt><dd>${it.rect[2]} × ${it.rect[3]} u</dd>${wifi ? `<dt>Wifi channel</dt><dd>${esc(wifi.Channel)}${/true/i.test(wifi.LinkToChat) ? ' (radio chat)' : ''}</dd>` : ''}</dl>`;
+    h += liveHtml(it.id);
+    h += `<h3>Wires</h3>` + connList(it.id);
+    if (it.box) h += boxHtml(it);
+    const ch = compsHtml(it); if (ch) h += `<h3>Settings</h3>${ch}`;
+  } else if (sel.k === 'wire') {
+    const w = sh.wires.find(q => q.id === sel.id), a = S.itemById.get(w.from.item), b = S.itemById.get(w.to.item);
+    h += `<h2>${esc(WIRE_NAMES[w.color] || w.color)} wire <span class="mut mono" style="font-size:13px">#${w.id}</span>${S.D && S.D.wires.has(w.id) ? ' <span class="pill" style="color:var(--orange)">added</span>' : ''}</h2>
+      <dl class="kv"><dt>From</dt><dd>${a ? esc(itemTitle(a)) : '?'} .${esc(w.from.conn)}</dd><dt>To</dt><dd>${b ? esc(itemTitle(b)) : '?'} .${esc(w.to.conn)}</dd><dt>Length</dt><dd>${(wireLen(w) / 100).toFixed(2)} m along ${Math.max(0, (w.nodes || []).length - 2)} bends</dd></dl>
+      <div class="btns">${a ? `<button data-go="item:${a.id}">Go to ${esc(a.identifier)}</button>` : ''}${b ? `<button data-go="item:${b.id}">Go to ${esc(b.identifier)}</button>` : ''}</div>`;
+  } else if (sel.k === 'hull') {
+    const r = S.hullById.get(sel.id), [x, t, w, hh] = r.rect, inside = sh.items.filter(it => { const c = centre(it); return c[0] >= x && c[0] <= x + w && c[1] <= t && c[1] >= t - hh; });
+    const counts = {}; for (const it of inside) { const k = R.itemKind(it); counts[k] = (counts[k] || 0) + 1; }
+    const water = S.sim ? (S.sim.hullWater[r.id] || 0) : null, smoke = S.sim ? !!S.sim.hullSmoke[r.id] : null;
+    h += `<h2>${esc(roomName(r))} <span class="mut mono" style="font-size:13px">room #${r.id}</span></h2>
+      <dl class="kv"><dt>Size</dt><dd>${(w / 100).toFixed(2)} × ${(hh / 100).toFixed(2)} m (${(w * hh / 1e4).toFixed(1)} m²)</dd><dt>Top left</dt><dd>x ${x}, y ${t}</dd>${r.linked ? `<dt>Linked to</dt><dd>room #${esc(r.linked)}</dd>` : ''}${water !== null ? `<dt>Water</dt><dd>${Math.round(water)} %</dd><dt>Smoke</dt><dd>${smoke ? 'yes' : 'no'}</dd>` : ''}</dl>
+      <p class="hint">The rectangle includes part of the floor and ceiling slabs; the walkable space is between the walls drawn grey.</p>
+      <h3>${inside.length} items here</h3><ul class="list">${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<li><span><span class="sw" style="background:${R.PALETTE.kind[k]}"></span>${esc(KIND_NAMES[k] || k)}</span><span class="n">${n}</span></li>`).join('')}</ul>`;
+    if (S.sim) h += `<div class="btns"><button data-room="flood">${water ? 'Drain' : 'Flood'} this room</button><button data-room="fire">${smoke ? 'Put out the fire' : 'Start a fire'}</button></div>`;
+  } else if (sel.k === 'struct') {
+    const s = (sh.structures || []).find(q => q.id === sel.id), pf = G.prefab(s.identifier) || {}, b = G.body(s);
+    h += `<h2>${esc(s.name || s.identifier)}</h2><dl class="kv"><dt>Prefab</dt><dd>${esc(s.identifier)} #${s.id}</dd><dt>Box</dt><dd>${s.rect.join(', ')}</dd>
+      <dt>Collides</dt><dd>${pf.stairs ? 'stairs: a 10 u plank at 45°, rising to the ' + (b.stairs === 'Right' ? 'right' : 'left') : pf.platform ? 'platform (walk on it, drop through)' : G.solid(s) ? 'yes, as drawn (rotated ' + Math.round(-b.angle * 180 / Math.PI) + '°)' : 'no (background or decoration)'}</dd>${s.flippedx || s.flippedy ? `<dt>Flipped</dt><dd>${s.flippedx ? 'x ' : ''}${s.flippedy ? 'y' : ''}</dd>` : ''}${s.scale && s.scale !== 1 ? `<dt>Scale</dt><dd>${s.scale}</dd>` : ''}</dl>`;
+  } else if (sel.k === 'prop') {
+    const p = (sh.props || []).find(q => q.id === sel.id);
+    h += `<h2>${esc(p.identifier)} <span class="mut mono" style="font-size:13px">#${p.id}</span></h2><dl class="kv"><dt>Box</dt><dd>${p.rect.join(', ')}</dd></dl><p class="hint">Not electrical, shown for placement.</p>`;
+  }
+  el.innerHTML = h;
+  el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { const [k, id] = b.dataset.go.split(':'); select({ k, id }, true); });
+  const lab = $('toLab'); if (lab) lab.onclick = () => openInLab(S.itemById.get(sel.id));
+  el.querySelectorAll('[data-act=press]').forEach(b => b.onclick = () => { const d = S.sim.byId.get(sel.id); d.press(); S.sim.metrics.ev(`${d.it.identifier} #${d.it.id} pressed (by hand)`); });
+  const ti = $('typeIn'); if (ti) ti.onkeydown = e => { if (e.key === 'Enter' && ti.value.trim()) { S.sim.byId.get(sel.id).type(ti.value.trim()); ti.value = ''; panel(true); } };
+  el.querySelectorAll('[data-room]').forEach(b => b.onclick = () => {
+    const r = S.hullById.get(sel.id), sim = S.sim;
+    if (b.dataset.room === 'flood') { if (sim.hullWater[r.id]) delete sim.hullWater[r.id]; else { sim.hullWater[r.id] = 100; sim.metrics.ev(`flood in ${roomName(r)} (by hand)`); } }
+    else { if (sim.hullSmoke[r.id]) delete sim.hullSmoke[r.id]; else { sim.hullSmoke[r.id] = true; sim.metrics.ev(`fire in ${roomName(r)} (by hand)`); } }
+    live(true); inspector();
+  });
+}
+function legend() {
+  const sh = S.ship, counts = {}; for (const it of sh.items) { const k = R.itemKind(it); counts[k] = (counts[k] || 0) + 1; }
+  const wc = {}; for (const w of sh.wires) wc[w.color] = (wc[w.color] || 0) + 1;
+  return `<h3>Items by kind</h3><ul class="list">${Object.keys(KIND_NAMES).filter(k => counts[k]).map(k => `<li class="go" data-kind="${k}"><span><span class="sw" style="background:${R.PALETTE.kind[k]}"></span>${KIND_NAMES[k]}</span><span class="n">${counts[k]}</span></li>`).join('')}</ul>
+    <h3>Wires by colour</h3><ul class="list">${Object.entries(wc).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<li><span><span class="sw" style="background:${R.WIRE[c] || R.WIRE.wire}"></span>${esc(WIRE_NAMES[c] || c)}</span><span class="n">${n}</span></li>`).join('')}</ul>
+    <h3>Walls</h3>${S.ship.picture ? '<p class="hint">Underneath is the picture the game saved in this .sub (its real sprites, lined up automatically). The outlines over it are what you can click.</p>' : ''}<ul class="list"><li><span><span class="sw" style="background:${R.PALETTE.shell}"></span>Outer shell (as the sprites cover it)</span></li><li><span><span class="sw" style="background:${R.PALETTE.wall}"></span>Inside walls and floors</span></li><li><span><span class="sw" style="background:${R.PALETTE.platform}"></span>Platforms and stairs</span></li><li><span><span class="sw" style="background:${R.PALETTE.decoEdge}"></span>Outside decoration, dashed (no collision)</span></li><li><span><span class="sw" style="background:${R.PALETTE.collision}"></span>Collision (hitboxes), dashed: Layers menu</span></li></ul>`;
+}
+
+// ---------- overview ----------
+function overview() {
+  const sh = S.ship, el = $('over');
+  const boxes = sh.items.filter(i => i.box), wifi = {};
+  for (const it of sh.items) { const w = (it.comps.WifiComponent || [])[0]; if (w) wifi[w.Channel] = (wifi[w.Channel] || 0) + 1; }
+  for (const it of boxes) for (const c of it.box.components) if (c.item === 'wificomponent' && c.props && c.props.Channel !== undefined) wifi[c.props.Channel] = (wifi[c.props.Channel] || 0) + 1;
+  const desc = String(sh.description || '').trim();
+  el.innerHTML = `<h2>${esc(sh.name)}</h2>${desc ? `<p class="hint" style="white-space:pre-wrap">${esc(desc.length > 420 ? desc.slice(0, 420) + '…' : desc)}</p>` : ''}
+    <h3>Rooms</h3><ul class="list">${sh.hulls.slice().sort((a, b) => roomName(a).localeCompare(roomName(b))).map(h => `<li class="go" data-go="hull:${h.id}"><span>${esc(roomName(h))}</span><span class="n">${(h.rect[2] / 100).toFixed(1)} × ${(h.rect[3] / 100).toFixed(1)} m</span></li>`).join('')}</ul>
+    <h3>Circuit boxes</h3>${boxes.length ? `<ul class="list">${boxes.map(it => { const n = (it.box.labels || []).find(l => l.header); return `<li class="go" data-go="item:${it.id}"><span>${n ? esc(n.header.slice(0, 48)) : 'box #' + it.id}</span><span class="n">${it.box.components.length} parts</span></li>`; }).join('')}</ul>` : '<p class="hint">None.</p>'}
+    <h3>Wifi channels</h3>${Object.keys(wifi).length ? `<ul class="list">${Object.entries(wifi).sort((a, b) => Number(a[0]) - Number(b[0])).map(([c, n]) => `<li class="go" data-find="${esc(c)}"><span>Channel ${esc(c)}</span><span class="n">${n} wifi</span></li>`).join('')}</ul>` : '<p class="hint">None.</p>'}`;
+  el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { const [k, id] = b.dataset.go.split(':'); select({ k, id }, true); });
+  el.querySelectorAll('[data-find]').forEach(b => b.onclick = () => { $('find').value = b.dataset.find; $('find').oninput(); });
+}
+document.addEventListener('click', e => { const k = e.target.closest && e.target.closest('[data-kind]'); if (k) { $('find').value = k.dataset.kind; $('find').oninput(); } });
+
+// ---------- Circuit Lab hand-off: the box becomes a sandbox script with probes on its used outputs ----------
+function openInLab(it) {
+  const model = { name: tok(S.ship.name) + '_box' + it.id, boxes: [Object.assign({}, it.box, { name: 'b' + it.id })], links: [] };
+  const circ = F.toCirc(model, { positions: true }).split('\n').filter(l => !/^name\s/.test(l));
+  const used = new Map(); for (const c of S.conns.get(it.id) || []) { const o = S.itemById.get(c.other); used.set(c.conn, (used.get(c.conn) || []).concat(o ? `${o.identifier} #${o.id}.${c.oconn}` : '?')); }
+  const ins = [...used.keys()].filter(k => /signal_in/.test(k)).sort(), outs = [...used.keys()].filter(k => /signal_out/.test(k)).sort();
+  const L2 = [`# ${S.ship.name}: circuit box #${it.id}, opened from the Sub Studio.`, `# In the sub its inputs come from:`, ...ins.map(k => `#   ${k.replace('signal_', '')} <- ${used.get(k).join(', ')}`), `# and its outputs go to:`, ...outs.map(k => `#   ${k.replace('signal_', '')} -> ${used.get(k).join(', ')}`),
+    `# Add devices (dev ...), wire them to b${it.id}.in1 .. b${it.id}.out1 and press Apply. Syntax: open "Syntax, devices and parts".`, `name ${S.ship.name} box #${it.id}`,
+    ...outs.map(k => `dev ${k.replace('signal_', '')} probe`), '', ...circ, '', ...outs.map(k => `wire b${it.id}.${k.replace('signal_', '')} ${k.replace('signal_', '')}.in`), 'run 10'];
+  try { localStorage.setItem('bw.import', L2.join('\n')); } catch (e) { }
+  location.href = 'sandbox.html#import';
+}
+
+// ---------- practice round ----------
+function roomOptions(sel) { sel.innerHTML = '<option value="">any room</option>' + S.ship.hulls.map(h => `<option value="${h.id}">${esc(roomName(h))}</option>`).join(''); }
+function roundForm() {
+  roomOptions($('rBreachHull')); roomOptions($('rFireHull'));
+  const c = $('rCirc'); c.innerHTML = '<option value="">as built (the sub\'s own circuits or the crew)</option>' + Object.entries(CIRC).filter(([, v]) => v.circ).map(([k]) => `<option value="${esc(k)}">${esc(k.replace(/_/g, ' '))}</option>`).join('');
+}
+function buildRound() {
+  const sh = S.ship, num = id => $(id).value === '' ? null : Number($(id).value);
+  const sim = new SH.ShipSim(sh, { duration: Math.max(30, Number($('rDur').value) || 600), seed: 12345, scenario: { fights: $('rFights').checked, breachAt: num('rBreach'), breachHull: $('rBreachHull').value || null, fireAt: num('rFire'), fireHull: $('rFireHull').value || null } });
+  const key = $('rCirc').value;
+  if (key) {
+    if (!sim.reactor.autoTemp) sim.warnings.push("this sub's own circuit already runs the reactor, so the picked circuit is not plugged in");
+    else { const model = F.parseCirc(CIRC[key].circ), sum = k => sim.batteries.reduce((a, b) => a + b[k], 0); sim.attachCircuit(P.substitute(model, { MAX: sim.reactor.maxPower, BATT_N: sim.batteries.length, BATT_KW: sum('maxRecharge'), BATT_OUT: sum('maxOut'), BATT_CAP: sum('capacity') })); }
+  }
+  return sim;
+}
+function resetRound() {
+  stopRound();
+  try { S.sim = buildRound(); $('roundMsg').innerHTML = S.sim.warnings.length ? `<div class="note warn">${S.sim.warnings.map(esc).join('<br>')}</div>` : ''; }
+  catch (e) { S.sim = null; $('roundMsg').innerHTML = `<div class="note bad">Could not set up the round: ${esc(e.message)}</div>`; }
+  S.carry = 0; S.stepsWin = []; liveBuild(); live(true); panel(true); setRunLabel();
+}
+function stopRound() { S.running = false; setRunLabel(); }
+function setRunLabel() { $('btnRun').textContent = S.running ? 'Pause' : S.sim && S.sim.time > 0 && !S.sim.done ? 'Resume' : S.sim && S.sim.done ? 'Run again' : 'Start'; }
+// one animation frame: as many 1/60 s ticks as the speed asks for, but never more than ~11 ms of work, so the page
+// never freezes; when the machine can't keep up, the round just runs slower and the rate shows it
+function frame(ts) {
+  if (!S.running || !S.sim) return;
+  const sim = S.sim, dt = Math.min(0.1, (ts - S.lastTs) / 1000 || 0); S.lastTs = ts;
+  const t0 = performance.now(), want = S.speed === 'max' ? Infinity : S.carry + Number(S.speed) * dt * 60; let n = 0;
+  while (n < want && !sim.done) { sim.step(); n++; if ((n & 7) === 0 && performance.now() - t0 > 11) break; }
+  S.carry = S.speed === 'max' ? 0 : Math.min(want - n, Number(S.speed) * 6);
+  S.stepsWin.push([ts, n]); while (S.stepsWin.length && ts - S.stepsWin[0][0] > 1000) S.stepsWin.shift();
+  if (sim.done) { S.running = false; setRunLabel(); sim.metrics.ev('round over'); }
+  live(); panel();
+  if (S.running) requestAnimationFrame(frame);
+}
+$('btnRun').onclick = () => { if (!S.sim || S.sim.done) resetRound(); if (!S.sim) return; S.running = !S.running; setRunLabel(); if (S.running) { S.lastTs = performance.now(); requestAnimationFrame(frame); } };
+$('btnReset').onclick = resetRound;
+for (const id of ['rDur', 'rCirc', 'rBreach', 'rBreachHull', 'rFire', 'rFireHull', 'rFights']) $(id).onchange = resetRound;
+$('speed').onclick = e => { const b = e.target.closest('button'); if (!b) return; S.speed = b.dataset.s; S.carry = 0; for (const x of $('speed').querySelectorAll('button')) x.setAttribute('aria-pressed', x === b); store.set('speed', S.speed); };
+
+// the overlay on the picture: water, smoke, unpowered items dimmed, lights glowing, open doors
+function liveBuild() {
+  const g = $('live'), w = $('water'); if (!g || !w) return; S.liveEls = [];
+  if (!S.sim) { g.innerHTML = ''; w.innerHTML = ''; return; }
+  w.innerHTML = S.ship.hulls.map(h => `<rect data-h="${h.id}" x="${h.rect[0]}" y="${-h.rect[1] + h.rect[3]}" width="${h.rect[2]}" height="0" fill="var(--water)" opacity=".5"/><rect data-s="${h.id}" x="${h.rect[0]}" y="${-h.rect[1]}" width="${h.rect[2]}" height="${h.rect[3]}" fill="var(--smoke)" opacity="0"/>`).join('');
+  const out = [];
+  for (const d of S.sim.devs) {
+    const it = d.it, r = it.rect, hasPower = (it.conns || []).some(c => /^power_in$|^power$/.test(c.name)) && !/junction|battery|reactor|relay|circuitbox|logic/.test(d.kind);
+    if (!hasPower && d.kind !== 'door') continue;
+    out.push(`<rect data-d="${it.id}" x="${r[0]}" y="${-r[1]}" width="${r[2]}" height="${r[3]}" fill="#000" fill-opacity="0" stroke="none" stroke-width="2" class="ns"/>`);
+    S.liveEls.push(d);
+  }
+  g.innerHTML = out.join('');
+  S.liveRects = new Map(); for (const e of g.querySelectorAll('[data-d]')) S.liveRects.set(e.dataset.d, e);
+  S.waterRects = new Map(); for (const e of w.querySelectorAll('[data-h]')) S.waterRects.set(e.dataset.h, e);
+  S.smokeRects = new Map(); for (const e of w.querySelectorAll('[data-s]')) S.smokeRects.set(e.dataset.s, e);
+}
+let liveAt = 0;
+function live(force) {
+  const sim = S.sim; if (!sim || !S.waterRects) return;
+  const now = performance.now(); if (!force && now - liveAt < 150) return; liveAt = now;
+  for (const h of S.ship.hulls) {
+    const wr = S.waterRects.get(h.id), sr = S.smokeRects.get(h.id), lv = Math.min(100, sim.hullWater[h.id] || 0), hh = h.rect[3] * lv / 100;
+    if (wr && wr._v !== lv) { wr._v = lv; wr.setAttribute('height', hh); wr.setAttribute('y', -h.rect[1] + h.rect[3] - hh); }
+    const sm = sim.hullSmoke[h.id] ? .28 : 0; if (sr && sr._v !== sm) { sr._v = sm; sr.setAttribute('opacity', sm); }
+  }
+  for (const d of S.liveEls || []) {
+    const e = S.liveRects.get(d.it.id); if (!e) continue;
+    let fo = 0, stroke = 'none';
+    if (d.kind === 'door') stroke = d.state.open ? '#5ef0e0' : 'none';
+    else if (d.voltage !== undefined && d.voltage < 0.5) fo = .6;
+    else if (d.kind === 'light' && d.cpc > 0) stroke = '#f4e27a';
+    const key = fo + stroke; if (e._v !== key) { e._v = key; e.setAttribute('fill-opacity', fo); e.setAttribute('stroke', stroke); }
+  }
+  if ($('lyItemNames').checked && px() < 1.6) labels();
+}
+// the side panel while the round runs
+let panelAt = 0;
+function tile(k, v, s, cls) { return `<div class="tile"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span><span class="s">${s || ''}</span></div>`; }
+const clock = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+function panel(force) {
+  const sim = S.sim, now = performance.now(); if (!sim || (!force && now - panelAt < 250)) return; panelAt = now;
+  $('clock').textContent = `${clock(sim.time)} / ${clock(sim.profile.duration)}`; $('prog').style.width = Math.min(100, sim.time / sim.profile.duration * 100) + '%';
+  const steps = S.stepsWin.reduce((a, b) => a + b[1], 0), x = steps / 60;
+  $('rate').textContent = S.running ? `running at x${x < 10 ? x.toFixed(1) : Math.round(x)}${S.speed !== 'max' && x < Number(S.speed) * 0.8 ? ` (asked x${S.speed}: this machine can't go faster)` : ''}` : '';
+  const n = sim.snapshot(), v = n.voltage, vc = v < 0.5 ? 'bad' : v < 0.9 || v > 1.1 ? 'warn' : 'ok';
+  const wet = Object.entries(sim.hullWater).filter(([, w]) => w > 0).length, smoky = Object.values(sim.hullSmoke).filter(Boolean).length;
+  $('tiles').innerHTML = tile('Main bus', v.toFixed(2) + ' V', v < 0.5 ? 'blackout' : v < 0.9 ? 'brownout' : v > 1.1 ? 'overvoltage' : 'stable', vc)
+    + tile('Reactor', Math.round(n.power) + ' kW', `load ${Math.round(n.load)} kW · ${sim.reactor.autoTemp ? 'crew auto control' : 'circuit control'}`)
+    + tile('Core', n.temp.toFixed(1) + ' °', `fission ${n.fission.toFixed(0)} % · turbine ${n.turbine.toFixed(0)} %`, n.temp > 60 || n.temp < 40 ? 'warn' : '')
+    + tile('Oxygen', sim.o2.toFixed(0) + ' %', `lowest ${sim.o2Min.toFixed(0)} %`, sim.o2 < 60 ? 'bad' : sim.o2 < 85 ? 'warn' : '')
+    + tile('Flooded rooms', wet, smoky ? `${smoky} on fire` : 'no fire', wet || smoky ? 'warn' : '')
+    + tile('Chat / terminal', `${sim.chat.length} / ${sim.termLog.length}`, 'lines so far');
+  $('events').textContent = sim.metrics.events.length ? sim.metrics.events.join('\n') : 'Nothing yet.';
+  $('nLogs').textContent = sim.chat.length + sim.termLog.length || '';
+  if (!document.querySelector('[data-pane=logs]').hidden || force) logs();
+}
+function logs() {
+  const sim = S.sim; if (!sim) return;
+  const disp = sim.devs.filter(d => d.kind === 'display');
+  const bad = new Set(sim.time > 20 ? sim.displayIssues().map(x => x.id) : []);
+  $('displays').innerHTML = disp.length ? disp.map(d => `<span class="go mono" data-go="item:${d.it.id}" style="cursor:pointer">#${d.it.id}${bad.has(d.it.id) ? ' <span class="pill bad">unreadable</span>' : ''}</span><span class="t">${esc(d.state.text) || '&nbsp;'}</span>`).join('') : '<span class="hint">No text displays.</span><span></span>';
+  $('displays').querySelectorAll('[data-go]').forEach(b => b.onclick = () => { const [k, id] = b.dataset.go.split(':'); select({ k, id }, true); });
+  $('chat').textContent = sim.chat.length ? sim.chat.slice(-80).map(c => `[${clock(c.t)} ch${c.ch}] ${c.crew ? '(crew) ' : ''}${c.text}`).join('\n') : 'No radio yet.';
+  $('term').textContent = sim.termLog.length ? sim.termLog.slice(-80).map(l => `#${l.id} [${clock(l.t)}] ${l.dir} ${l.text}`).join('\n') : 'No terminal lines yet.';
+  const issues = sim.time > 20 ? sim.displayIssues() : [], w = sim.warnings.concat(issues.map(x => `text display #${x.id}: ${x.reason}`));
+  $('warns').innerHTML = w.length ? w.map(x => `<div class="note warn">${esc(x)}</div>`).join('') : 'None.';
+}
+
+// ---------- tabs, buttons, boot ----------
+function showTab(t) {
+  for (const b of document.querySelectorAll('.side [role=tab]')) b.setAttribute('aria-selected', b.dataset.tab === t);
+  for (const p of document.querySelectorAll('.side .pane')) p.hidden = p.dataset.pane !== t;
+  if (t === 'logs') logs();
+}
+document.querySelector('.side .tabs').onclick = e => { const b = e.target.closest('[role=tab]'); if (b) showTab(b.dataset.tab); };
+$('wireMode').onclick = e => { const b = e.target.closest('button'); if (b && !b.disabled) setWires(b.dataset.w); };
+for (const id of LAYERS) $(id).onchange = layers;
+document.addEventListener('click', e => { const d = $('layers'); if (d.open && !d.contains(e.target)) d.open = false; });
+$('btnZin').onclick = () => zoomAt(1 / 1.3); $('btnZout').onclick = () => zoomAt(1.3); $('btnFit').onclick = () => fit();
+const expand = on => { viewEl.classList.toggle('expanded', on); document.body.style.overflow = on ? 'hidden' : ''; $('btnExpand').textContent = on ? 'Close' : 'Expand'; setTimeout(() => setView(S.view), 0); };
+$('btnExpand').onclick = () => expand(!viewEl.classList.contains('expanded'));
+$('btnMeasure').onclick = () => { S.measure = S.measure ? null : {}; $('btnMeasure').setAttribute('aria-pressed', !!S.measure); svg.classList.toggle('measuring', !!S.measure); marks(); };
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (viewEl.classList.contains('expanded')) expand(false);
+  else if (S.measure) { S.measure = {}; marks(); } else if (S.sel) select(null);
+});
+$('subSel').onchange = () => selectSub($('subSel').value);
+addEventListener('hashchange', () => { const n = Object.keys(ships).find(n => '#' + tok(n) === location.hash); if (n && n !== S.ship.name) selectSub(n); });
+$('baseSel').onchange = () => { store.set('base.' + S.ship.name, $('baseSel').value); S.base = $('baseSel').value ? ships[$('baseSel').value] : null; drawStatic(); inspector(); };
+$('subFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    let buf = new Uint8Array(await f.arrayBuffer());
+    if (buf[0] === 0x1f && buf[1] === 0x8b) buf = new Uint8Array(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+    const sh = SF.parseSub(new TextDecoder().decode(buf)); sh.opened = true; if (ships[sh.name] && !ships[sh.name].opened) sh.name += ' (opened)';
+    ships[sh.name] = sh; fillSubs(sh.name); selectSub(sh.name);
+    // the picture the game saved in the file: line it up with the sub (a second or so), then draw it underneath
+    if (sh.previewImage && PV) {
+      const href = 'data:image/png;base64,' + sh.previewImage, img = new Image(); img.src = href; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+      const reg = PV.register(x.getImageData(0, 0, c.width, c.height).data, c.width, c.height, sh);
+      if (reg) { sh.picture = { href, box: reg.box, w: c.width, h: c.height }; if (S.ship === sh) { drawStatic(); inspector(); } }
+    }
+  } catch (err) { $('insp').innerHTML = `<div class="note bad">Could not read ${esc(f.name)}: ${esc(err.message)}. Pick a .sub file saved by Barotrauma.</div>`; showTab('insp'); }
+  e.target.value = '';
+};
+
+{
+  const ly = store.get('layers2', null); if (ly) for (const id of LAYERS) $(id).checked = ly.includes(id);
+  S.speed = store.get('speed', '1'); for (const x of $('speed').querySelectorAll('button')) x.setAttribute('aria-pressed', x.dataset.s === S.speed);
+  const fromHash = Object.keys(ships).find(n => '#' + tok(n) === location.hash);
+  const first = fromHash || (ships[store.get('sub', '')] ? store.get('sub', '') : ships['Camel Overkill'] ? 'Camel Overkill' : Object.keys(ships)[0]);
+  fillSubs(first); setWires(store.get('wires', 'all'));
+  if (first) selectSub(first); else $('insp').innerHTML = '<p class="hint">No subs in this page. Open a .sub file.</p>';
+}
+})();
+</script>
+</body>
+</html>

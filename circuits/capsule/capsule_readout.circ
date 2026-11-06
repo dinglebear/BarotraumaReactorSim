@@ -1,0 +1,23 @@
+# CLAUDE'S TEST CAPSULE: REACTOR READOUT. The reactor's output on a text display, "1234 kW", green in ECO and orange in
+# REACTIVE. The bridge and the reactor room each have a display on the same two wires. "1234 kW" is 7 characters, so it
+# never has to scroll (sim/label.js).
+name capsule_readout
+box readout
+note "READOUT: HOW IT WORKS" "Text: the reactor's power_value_out, rounded, joined to 'kW' with a space.\nColour: the mode lever (0 = ECO, 1 = REACTIVE) picks green or orange through a multiplexer."
+note "WIRING" "in1 <- reactor power_value_out, in2 <- reactor mode lever\nout1 -> text displays set_text, out2 -> text displays set_text_color"
+pin in1 reactor.power_value_out
+pin in2 const.1
+c r round
+c kw mem Value=kW
+c cat concat Separator=" "
+w in1 r.in
+w r.out cat.1
+w kw.out cat.2
+w cat.out out1
+c green mem Value="120,255,140,255"
+c orange mem Value="255,170,90,255"
+c cm mux
+w in2 cm.set_input
+w green.out cm.signal_in0
+w orange.out cm.signal_in1
+w cm.out out2

@@ -1,0 +1,64 @@
+# DRONE ESCORT in a cave. A diver swims through a winding tunnel; two crawlers and a mudraptor wait along the way.
+# The drone (circuits/challenges/drone_escort.circ) follows the diver with motion detectors, stays out of the rock,
+# and switches its coilgun's AutoOperate on whenever a monster is near. AutoOperate never targets its own crew and
+# holds fire while the diver is in the line of fire.
+# The drone: Kastrull-sized (3 x 1.5 m, 1550 kg, engine MaxForce 50), a small ballast pump, a coilgun under it that can
+# turn all the way round (a custom mount: the vanilla hardpoint only covers the upper half).
+name drone escort: follow the diver, dodge rock, shoot monsters only
+world Top=0
+rock -2600,-2200,12600,-1500
+rock -2600,1500,12600,2200
+rock -2600,-1500,-2000,1500
+rock 12000,-1500,12600,1500
+rock 3000,-1500,3600,0
+wall 6500,1500 7300,1500 6900,200
+rock 9000,-1500,9800,-300
+diver player At=0,0 Speed=150 Path="2500,300 3300,700 5000,0 6900,-600 8500,0 9400,500 11000,0"
+monster crawler1 Kind=crawler At=5600,-1100
+monster crawler2 Kind=crawler At=8800,1000
+monster raptor Kind=mudraptor At=11200,-1000
+vehicle drone At=-500,300 Size=300,150 Mass=1550 Volume=45000
+dev eng engine On=drone MaxForce=50
+dev bal pump On=drone MaxFlow=100
+dev nav nav On=drone
+# where the diver is: four presence boxes, a gap of 4 m across and 2 m up/down around the drone
+dev pR motion On=drone Offset=1100,0 RangeX=700 RangeY=1300 Target=Human
+dev pL motion On=drone Offset=-1100,0 RangeX=700 RangeY=1300 Target=Human
+dev pU motion On=drone Offset=0,700 RangeX=1800 RangeY=600 Target=Human
+dev pD motion On=drone Offset=0,-700 RangeX=1800 RangeY=600 Target=Human
+# rock just outside the hull
+dev wR motion On=drone Offset=300,0 RangeX=150 RangeY=100 Target=Wall
+dev wL motion On=drone Offset=-300,0 RangeX=150 RangeY=100 Target=Wall
+dev wU motion On=drone Offset=0,175 RangeX=180 RangeY=100 Target=Wall
+dev wD motion On=drone Offset=0,-175 RangeX=180 RangeY=100 Target=Wall
+# monsters within 10 m: the gun may operate itself
+dev mon motion On=drone RangeX=1000 RangeY=1000 Target=Monster
+dev gun turret On=drone Offset=0,-60 Kind=coilgun MinAngle=0 MaxAngle=360 TargetMonsters=true TargetHumans=false
+dev status display
+
+box brain file=circuits/challenges/drone_escort.circ
+
+wire nav.velocity_x_out eng.set_force
+wire nav.velocity_y_out bal.set_targetlevel
+wire nav.current_velocity_x brain.in1
+wire nav.current_velocity_y brain.in2
+wire pR.state_out brain.in3
+wire pL.state_out brain.in4
+wire pU.state_out brain.in5
+wire pD.state_out brain.in6
+wire wR.state_out brain.in7
+wire wL.state_out brain.in8
+wire wU.state_out brain.in9
+wire wD.state_out brain.in0
+wire brain.out1 nav.velocity_in
+wire brain.out2 status.set_text
+wire mon.state_out gun.set_auto_operate
+
+expect 30 drone.dist.player < 1500
+expect 60 drone.dist.player < 1500
+expect 90 drone.dist.player < 1500
+expect 110 player.alive = 1
+expect 110 world.friendly = 0
+expect 110 world.kills >= 2
+expect 110 drone.impacts = 0
+run 110

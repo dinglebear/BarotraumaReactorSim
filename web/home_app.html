@@ -1,0 +1,123 @@
+<title>Barotrauma Workshop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!--SHARED-->
+<style>
+/* Home: a short statement of what the workshop is, the tools as four doors, then every sub as a blueprint card. */
+:root { --table: #0a1c27; --table-ink: #c9d6dc }
+.home { display: grid; gap: 34px; padding-top: 8px }
+.hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 28px; align-items: center }
+@media (max-width: 900px) { .hero { grid-template-columns: minmax(0, 1fr) } }
+.hero h1 { font-size: clamp(30px, 4.4vw, 46px); line-height: 1.05; letter-spacing: .01em }
+.hero p.lead { font-size: 16px; color: var(--muted); max-width: 56ch; margin: 12px 0 0 }
+.hero .cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px }
+.hero .cta a.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.feature { background: var(--table); border-radius: var(--r); overflow: hidden; display: grid; text-decoration: none; color: var(--table-ink); border: 1px solid var(--line) }
+.feature img { width: 100%; height: auto; display: block }
+.feature figcaption { display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: space-between; padding: 8px 12px; font: 12.5px var(--f-mono); border-top: 1px solid #1d3442 }
+.feature figcaption b { font: 600 14px var(--f-display); letter-spacing: .03em }
+.feature:hover { border-color: var(--accent) }
+section h2 { font-size: 20px; margin-bottom: 4px }
+section > p.hint { font-size: 13.5px; max-width: 75ch; margin-bottom: 12px }
+.tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px }
+.tool { display: grid; grid-template-rows: auto auto 1fr auto; gap: 6px; padding: 14px 16px; text-decoration: none; color: var(--ink) }
+.tool:hover { border-color: var(--accent) }
+.tool .tag { font: 600 10.5px var(--f-display); text-transform: uppercase; letter-spacing: .14em; color: var(--accent) }
+.tool h3 { font-size: 19px }
+.tool p { margin: 0; color: var(--muted); font-size: 13.5px }
+.tool .go { font: 600 13px var(--f-body); color: var(--accent) }
+.subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px }
+.sub { display: grid; text-decoration: none; color: var(--ink); overflow: hidden }
+.sub .pic { background: var(--table); aspect-ratio: 16 / 7; display: grid; place-items: center; overflow: hidden }
+.sub .pic img { width: 100%; height: 100%; object-fit: contain; display: block; grid-area: 1 / 1 }
+.sub .pic.game, .feature .game { background: #080d13 }
+.feature .game { display: grid } .feature .game img { grid-area: 1 / 1 }
+.sub .cap { padding: 8px 12px 10px; display: grid; gap: 2px }
+.sub .cap b { font: 600 14.5px var(--f-display); letter-spacing: .02em }
+.sub .cap span { font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums }
+.sub:hover { border-color: var(--accent) }
+.cli { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px }
+@media (max-width: 900px) { .cli { grid-template-columns: minmax(0, 1fr) } }
+.cli .panel { padding: 14px 16px; display: grid; gap: 8px; align-content: start }
+.cli h3 { font-size: 15px }
+.cli pre { margin: 0; overflow-x: auto; font: 12.5px/1.6 var(--f-mono); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px }
+.cli pre .c { color: var(--muted) }
+.cli p { margin: 0; font-size: 13.5px; color: var(--muted) }
+footer.fine { color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 12px; max-width: 90ch }
+</style>
+
+<!--NAV-->
+<main class="wrap home">
+  <div class="hero">
+    <div>
+      <h1>Build the sub, wire it, run a round. Before the real one.</h1>
+      <p class="lead">A workshop for Barotrauma submarines and circuits. The parts behave like the game's own code: the same signal timing, power grid, reactor maths and wall shapes, so a circuit that works here is one less surprise at sea.</p>
+      <div class="cta"><a class="btn primary" href="subs.html">Open the Sub Studio</a><a class="btn" href="sandbox.html">Try a circuit</a></div>
+    </div>
+    <a class="feature" id="feature" href="subs.html"></a>
+  </div>
+
+  <section aria-labelledby="hTools">
+    <h2 id="hTools">Tools</h2>
+    <p class="hint">Each one runs 60 ticks a second in your browser, nothing to install.</p>
+    <div class="tools" id="tools"></div>
+  </section>
+
+  <section aria-labelledby="hSubs">
+    <h2 id="hSubs">Submarines</h2>
+    <p class="hint">The four vanilla subs and the ones built in this repository. Orange in a picture is what was added to the vanilla sub it started from.</p>
+    <div class="subs" id="subs"></div>
+  </section>
+
+  <section aria-labelledby="hCli">
+    <h2 id="hCli">Making a sub from the repository</h2>
+    <p class="hint">The command line edits real <code>.sub</code> files: it places items out of walls, routes wires along the ceilings, checks circuit boxes against the game's limits and renders a picture after every change. <code>SUBBUILD.md</code> and <code>SUBEDIT.md</code> have the details.</p>
+    <div class="cli">
+      <div class="panel"><h3>Change a vanilla sub</h3>
+<pre><span class="c"># write a patch: add items, wire them, drop in circuit boxes</span>
+add @btn button at -900,120
+box @brain at -950,100 from circuits/my_brain.circ
+wire @btn.signal_out @brain.signal_in1
+
+<span class="c"># apply it, then look at what you made</span>
+node sim/cli.js sub patch Dugong my_patch
+node sim/cli.js sub render My_Dugong --base Dugong</pre>
+        <p>The render puts the sub's own picture underneath and every new item and wire in orange. <code>sub audit</code> lists anything loose, inside a wall or over a box's 64-part limit.</p></div>
+      <div class="panel"><h3>Test it like a round</h3>
+<pre><span class="c"># a practice round with the sub's own circuits</span>
+node sim/cli.js ship My_Dugong --transcript
+
+<span class="c"># one circuit on its own, with scripted inputs</span>
+node sim/cli.js sandbox text_display
+
+<span class="c"># everything, including Camel Overkill's round</span>
+npm test</pre>
+        <p>The transcript prints radio chat, terminal lines and every text display, and warns about displays nobody could read.</p></div>
+    </div>
+  </section>
+
+  <footer class="fine">Rules come from Barotrauma's published source code (FakeFishGames/Barotrauma) and are noted in <code>reference/</code>. Textures aren't part of that code, so subs are shown with the picture the game saves inside every .sub; a sub without one is drawn from its wall shapes. Built by Claude with Dinglebear, who tests it in game.</footer>
+</main>
+
+<script>
+(() => {
+'use strict';
+const THUMBS = /*__THUMBS__*/, PAGES = /*__PAGES__*/;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const tok = n => String(n).replace(/[^A-Za-z0-9]+/g, '_');
+const TOOLS = {
+  'subs.html': ['Look, find, run', 'Sub Studio', 'Every sub as the game draws it, with its rooms, items and wiring on top. Filter wires by power, signal or what was added, click anything to see where it goes, then run a practice round with floods, fires and fights.'],
+  'sandbox.html': ['Circuits', 'Circuit Lab', 'Wire circuit boxes, loose components and devices together, script what happens over time, and get warned about the mistakes that cost a round.'],
+  'world.html': ['Vehicles', 'Drone Range', 'A small sub or drone in a cave with real buoyancy, drag and engine force: test autopilots, return-to-position circuits and turret logic against walls, a diver and monsters.'],
+  'bench.html': ['Reactor', 'Reactor Bench', 'Run a reactor circuit against a recorded round\'s power demand and score it for steady voltage, fuel per rod and how the batteries were used.'],
+};
+document.getElementById('tools').innerHTML = PAGES.filter(p => TOOLS[p.file]).map(p => { const [tag, h, d] = TOOLS[p.file]; return `<a class="panel tool" href="${p.file}"><span class="tag">${tag}</span><h3>${h}</h3><p>${d}</p><span class="go">Open ${h} →</span></a>`; }).join('');
+const order = THUMBS.slice().sort((a, b) => (a.vanilla - b.vanilla) || b.boxes - a.boxes || a.name.localeCompare(b.name));
+// a sub's picture: the one the game saved in the .sub, with a see-through layer on top marking what was added
+const pic = (t, lazy) => t.picture ? `<span class="pic game"><img src="${t.picture}" alt="${esc(t.name)} as the game draws it" ${lazy}width="${t.w}" height="${t.h}"><img src="${t.file}" alt="" ${lazy}width="${t.w}" height="${t.h}"></span>` : `<span class="pic"><img src="${t.file}" alt="Side view of ${esc(t.name)}" ${lazy}width="${t.w}" height="${t.h}"></span>`;
+document.getElementById('subs').innerHTML = order.map(t => `<a class="panel sub" href="subs.html#${tok(t.name)}">${pic(t, 'loading="lazy" ')}<span class="cap"><b>${esc(t.name)}</b><span>${t.vanilla ? 'vanilla' : t.base ? 'from ' + esc(t.base) : 'built from scratch'} · ${t.rooms} rooms · ${t.items} items · ${t.boxes} circuit box${t.boxes === 1 ? '' : 'es'}</span></span></a>`).join('');
+const f = THUMBS.find(t => t.name === 'Camel Overkill') || order[0];
+if (f) { const el = document.getElementById('feature'); el.href = 'subs.html#' + tok(f.name); el.innerHTML = `${pic(f, '')}<figcaption><b>${esc(f.name)}</b><span>${f.boxes} circuit boxes · ${f.wires} wires · orange = added to the ${esc(f.base || 'vanilla')}</span></figcaption>`; }
+})();
+</script>

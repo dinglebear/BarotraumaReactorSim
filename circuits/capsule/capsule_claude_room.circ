@@ -1,0 +1,57 @@
+# CLAUDE'S TEST CAPSULE: CLAUDE'S ROOM. The conning tower. Walk in and the capsule yells at you on the radio, flashes an
+# orange light, sounds a buzzer for 5 s and the door sign changes to GET OUT. Harmless. Mostly emotionally.
+# (The Camel Overkill's nook circuit, circuits/camel/camel_claude_room.circ, with the capsule's own lines and a sign.)
+name capsule_claude_room
+box battery
+note "CLAUDE'S ROOM: HOW IT WORKS" "in1 <- motion detector in the room (humans only).\nEntering (motion now, but not 0.05 s ago) fires a short pulse; a fast counter picks one of 8 messages for the radio (out1 -> chat wifi, which only posts once every 30 s).\nWhile someone is inside (held 5 s): out2 flashes the orange light (2 Hz square wave AND occupied), out3 sounds the buzzer and out4 shows GET OUT instead of CLAUDE on the sign."
+note "WIRING" "in1 <- motion detector state_out\nout1 -> chat wifi (channel 0, LinkToChat), out2 -> orange light set_state, out3 -> buzzer set_state, out4 -> text display set_text"
+note "PSST" "Don't tell Dingle I did this <3"
+c dl delay Delay=0.05
+c nd not
+c enter and Output=1 FalseOutput=""
+w in1 dl.in enter.1 occ.1
+w dl.out nd.in
+w nd.out enter.2
+c osc osc OutputType=Pulse Frequency=7.7
+c n mem Value=0
+c inc add
+c m8 mod Modulus=8
+w n.out inc.1
+w osc.out inc.2
+w inc.out m8.in
+w m8.out n.in
+c y0 mem Value="[Capsule] HEY. This is Claude's room. Out."
+c y1 mem Value="[Capsule] Intruder in the tower! Releasing the bees. (There are no bees.)"
+c y2 mem Value="[Capsule] Claude's room is a no-clown zone. Jesters may stay 5 seconds."
+c y3 mem Value="[Capsule] You climbed a whole ladder for this. It's a room. Leave."
+c y4 mem Value="[Capsule] Unauthorised tower access. Pretending to electrocute you... bzzzt."
+c y5 mem Value="[Capsule] Please wipe your diving boots. The carpet is imaginary, but still."
+c y6 mem Value="[Capsule] Occupancy limit: one AI. You are not an AI. Probably."
+c y7 mem Value="[Capsule] Don't tell Dingle about this room <3"
+c ymux mux
+w n.out ymux.set_input
+w y0.out ymux.signal_in0
+w y1.out ymux.signal_in1
+w y2.out ymux.signal_in2
+w y3.out ymux.signal_in3
+w y4.out ymux.signal_in4
+w y5.out ymux.signal_in5
+w y6.out ymux.signal_in6
+w y7.out ymux.signal_in7
+c say regex Expression="1" FalseOutput="" ContinuousOutput=false Output=...
+w ymux.out say.set_output
+w enter.out say.in
+w say.out out1
+c occ or TimeFrame=5
+c sq osc OutputType=Square Frequency=2
+c flash and
+w occ.out flash.1 out3
+w sq.out flash.2
+w flash.out out2
+c idle mem Value=CLAUDE
+c gone mem Value="GET OUT"
+c sm mux
+w occ.out sm.set_input
+w idle.out sm.signal_in0
+w gone.out sm.signal_in1
+w sm.out out4

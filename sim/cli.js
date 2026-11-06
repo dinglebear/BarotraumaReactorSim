@@ -145,7 +145,7 @@ const COMMANDS = {
     if (a.circuit) model = loadModel(resolve(a.circuit, CIRC_DIRS), a['battery-circuit'] && resolve(a['battery-circuit'], CIRC_DIRS));
     if (model) { const sum = k => sim.batteries.reduce((x, b) => x + b[k], 0); sim.attachCircuit(P.substitute(model, { MAX: sim.reactor.maxPower, BATT_N: sim.batteries.length, BATT_KW: sum('maxRecharge'), BATT_OUT: sum('maxOut'), BATT_CAP: sum('capacity') })); }
     sim.cfg.circuitName = model ? model.name : sim.reactor.autoTemp ? 'crew_autotemp' : 'own_circuits';
-    const r = sim.runToEnd(); r.profile = ship.name + '_practice'; r.warnings = sim.warnings;
+    const r = sim.runToEnd(); r.profile = ship.name + '_practice'; r.warnings = sim.warnings.concat(sim.displayIssues().map(x => `text display #${x.id}: ${x.reason}`));
     const out = path.join(ROOT, 'logs', `${r.circuit}__${r.profile}.log`); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, P.fmtReport(r));
     process.stdout.write(P.fmtReport(r));
     console.log(`oxygen_min_pct=${sim.o2Min.toFixed(1)}\noxygen_generator_on_pct=${(sim.o2GenOnS / sim.time * 100).toFixed(1)}`);
@@ -177,6 +177,7 @@ const COMMANDS = {
   // sub catalog <sub> [regex]          structures (walls/shells/backgrounds/deco) and items you can place, with sizes
   // sub audit <sub> [--base <sub>]     everything that broke in game before: box size, loose items, items in walls, moved originals
   // sub leaks <sub>                    watertight check with the game's collision shapes (sim/shellgeom.js)
+  // sub render <sub> [--base <sub>]    picture of the sub (its own game picture underneath, rooms, items, wires; what was added in orange) -> renders/<sub>.png
   sub(a) {
     const zlib = require('zlib'), SE = require('./subedit'), SF = require('./subfile');
     const [what, name, arg] = a._;
@@ -184,6 +185,23 @@ const COMMANDS = {
     const readSub = f => { const b = fs.readFileSync(f); return (b[0] === 0x1f && b[1] === 0x8b ? zlib.gunzipSync(b) : b).toString('utf8'); };
     const f = what === 'templates' ? null : find(name || ''); if (!f && what !== 'templates') throw new Error(`no sub "${name}" (ships/custom, ships/vanilla or a path)`);
     const text = f ? readSub(f) : '';
+    if (what === 'render') { // sub render <sub> [--base <sub>] [--out f.png|f.svg] [--wires all|added|none] [--crop x0,y0,x1,y1] [--room name] [--width px] [--nav] [--grid] [--labels rooms|added|all|none] [--no-picture] [--collision]
+      const R = require('./subrender'), sh = SF.parseSub(text), bf = a.base ? find(a.base) : null, base = bf ? SF.parseSub(readSub(bf)) : null;
+      let crop = a.crop ? String(a.crop).split(',').map(Number) : null;
+      if (a.room) { const re = new RegExp(a.room, 'i'), hs = sh.hulls.filter(h => re.test(h.label || h.name) || h.id === a.room); if (!hs.length) throw new Error('no room matches ' + a.room);
+        const xs = hs.flatMap(h => [h.rect[0], h.rect[0] + h.rect[2]]), ys = hs.flatMap(h => [h.rect[1], h.rect[1] - h.rect[3]]); crop = [Math.min(...xs) - 150, Math.min(...ys) - 150, Math.max(...xs) + 150, Math.max(...ys) + 150]; }
+      // the sub's own picture under everything (what it looks like in game), unless --no-picture or the file has none
+      let picture = null;
+      if (sh.previewImage && !a['no-picture']) { const PV = require('./preview'), png = Buffer.from(sh.previewImage, 'base64'), img = PV.decodePng(png), reg = PV.register(img.rgba, img.w, img.h, sh); if (reg) picture = { href: 'data:image/png;base64,' + sh.previewImage, box: reg.box }; }
+      const r = R.render(sh, { base, crop, picture, collision: !!a.collision, width: Number(a.width) || (crop ? 1600 : 2400), wires: a.wires || 'all', nav: !!a.nav, grid: !!a.grid, labels: a.labels || (base ? 'added' : 'rooms'), title: sh.name + (base ? '  (orange = added vs ' + path.basename(bf, '.sub') + ')' : '') });
+      if (!picture) console.log(sh.previewImage ? 'drawn from shapes (--no-picture)' : 'this sub has no preview picture (save it once in the game\'s sub editor to get one): drawn from shapes');
+      const out = path.resolve(a.out || path.join(ROOT, 'renders', sh.name.replace(/[^\w.-]+/g, '_') + (a.room ? '_' + String(a.room).replace(/\W+/g, '_') : '') + '.png'));
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      const svgOut = out.replace(/\.png$/i, '.svg'); fs.writeFileSync(svgOut, r.svg);
+      if (r.diff) console.log(`added vs ${path.basename(bf)}: ${r.diff.items.size} items, ${r.diff.wires.size} wires, ${r.diff.structures.size} structures, ${r.diff.hulls.size} rooms`);
+      if (/\.svg$/i.test(out)) { console.log('wrote ' + path.relative(process.cwd(), svgOut)); return; }
+      return require('./png').svgToPng(r.svg, out, r.width, r.height).then(ok => console.log(ok ? 'wrote ' + path.relative(process.cwd(), out) + ' (and .svg)' : 'wrote ' + path.relative(process.cwd(), svgOut) + ' (no Playwright here for PNG)'));
+    }
     if (what === 'list') {
       const sh = SF.parseSub(text), by = new Map(sh.items.map(i => [i.id, i])), re = arg ? new RegExp(arg, 'i') : null;
       const room = it => { const cx = it.rect[0] + it.rect[2] / 2, cy = it.rect[1] - it.rect[3] / 2, h = sh.hulls.find(h => cx >= h.rect[0] && cx <= h.rect[0] + h.rect[2] && cy <= h.rect[1] && cy >= h.rect[1] - h.rect[3]); return h ? (h.name || 'hull' + h.id) : 'outside'; };
@@ -275,4 +293,4 @@ const COMMANDS = {
 const a = args(process.argv.slice(3));
 const cmd = COMMANDS[process.argv[2]];
 if (!cmd) { console.log('commands: ' + Object.keys(COMMANDS).join(', ') + '  (see AIHowTo.md)'); process.exit(1); }
-try { cmd(a); } catch (e) { console.error('ERROR: ' + e.message); process.exit(1); }
+try { const r = cmd(a); if (r && typeof r.catch === 'function') r.catch(e => { console.error('ERROR: ' + e.message); process.exit(1); }); } catch (e) { console.error('ERROR: ' + e.message); process.exit(1); }

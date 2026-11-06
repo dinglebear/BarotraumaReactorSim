@@ -20,7 +20,7 @@ The vanilla Camel with all of its electrical systems redesigned and rewired by C
 | Box | Where | What it does |
 |---|---|---|
 | **HUMP-1 Reactor brain** (`camel_reactor`) | reactor room | Feed-forward reactor control: turbine = setpoint / 5000, and fission holds 50 °. Sends reactor kW, load and temperature on wifi. |
-| **Screen wall: DASH-1/2/3** (`camel_dash_reactor`, `camel_dash_fuel`, `camel_dash_ship`) | reactor room | 13 text displays. **Reactor:** output and percentage of max, core temperature coloured OPTIMAL/COLD/HOT, fission and turbine, a 10-step output bar. **Fuel:** rod count and type, fuel %, **time left at the current burn**, rods per hour, kWh made this round, kWh per rod. **Ship:** propulsion battery minutes at this throttle, rooms short of air, round clock, a message ticker. The fuel math is the game's own (rod drain = fission % × 0.2 / 100 per s); the prediction matched a real round (1.10 % predicted vs 1.1–1.2 % measured). |
+| **Screen walls: DASH-1/2/3** (`camel_dash_reactor`, `camel_dash_fuel`, `camel_dash_ship`) | reactor room (DASH-1/2), engineering (DASH-3) | 28 text displays: every readout is a fixed caption display next to a short value, so no value ever scrolls (a long text that changes every second never shows its end in game: reference/TEXT_DISPLAYS.md). **Reactor:** OUTPUT kW, CORE °C coloured green/blue/red, FISSION %, TURBINE %. **Fuel:** RODS, FUEL %, **RUNTIME left at the current burn**, ENERGY kWh this round, kWh/ROD. **Ship (engineering):** BATTERY %, LASTS (propulsion minutes at this throttle), AIR (short name of a room short of air), ROUND clock, a NEWS ticker that blanks for 0.5 s between messages so each one starts from the beginning. The fuel math is the game's own (rod drain = fission % × 0.2 / 100 per s); the prediction matched a real round (1.10 % predicted vs 1.1–1.2 % measured). |
 | **HUMP-P Power manager** (`camel_propulsion`) | engine room | Propulsion bus: 4 batteries power only the engine and the ballast pumps. All charging goes through a measured CHARGE TAP relay and only takes the reactor's surplus. Reactor setpoint = main demand + what the banks want. The propulsion target is 80 %, editable with `set battery N`. |
 | **HUMP-R Rate distributor** (`camel_rates`) | engine room | Turns the charging shares into battery rates: equal 50 kW steps, with the remainder rotating between batteries so they stay level. |
 | **HUMP-2 Governor** (`camel_governor`) | power room | Oxygen generator on a relay (MaxPower 2000). It switches ON when any room's air node reports low air and OFF when no room has been below the high threshold for 10 s. It warns the reactor 5 s before switching on. Also load shedding. |
@@ -37,7 +37,7 @@ The vanilla Camel with all of its electrical systems redesigned and rewired by C
 Also new:
 - 12 room sensor nodes (water + smoke, transmitting the room name);
 - a wifi receiver on all 11 main lights;
-- 4 status displays;
+- 4 status displays (a pager: one short page every 2.5 s: kW, load, battery %, O2 %, alert);
 - a mood display;
 - a second chaingun on the empty hardpoint (own periscope, loader and supercapacitor);
 - 4 bilge pumps;
@@ -96,6 +96,8 @@ In game (Dinglebear's round 3, the 90 s that were logged), the main bus voltage 
   - New `sub audit` tool.
 
 - **Round 6 (walls):** the editor now knows each wall's real collision shape (`sim/shellgeom.js`). It found that the light, motion detector and circuit box in Claude's nook sat partly inside the hump's slanted shell. They moved into the nook. Three screen-wall displays also moved into the spots they were meant to have, which the old box-shaped check had wrongly blocked.
+
+- **Round 7 (readable screens, mod 0.4.0):** Dingle found that a long text that changes every second can't be read: the scroll snaps back on every change. Every screen-wall value is now about 7 characters with a fixed caption display beside it; the ship readouts moved to engineering (the reactor room has room for 3 display columns before the stairs); the room status displays page through short values; the ticker restarts each message. The editor now treats stairs as the game's 45° plank (not their whole box), the sub picture draws them, and wire bundles run just under each room's real ceiling slab, above the screens.
 
 ## Testing it in game
 1. Turn the reactor's **automatic control OFF**. The game doesn't save that switch.

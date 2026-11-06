@@ -1,0 +1,67 @@
+# REACTOR MODES: one lever switches between REACTIVE and ECO. Both follow the load with the turbine; they differ in how
+# hot they keep the core, which is the whole trade (reference/BAROTRAUMA_MECHANICS.md, sim/engine.js):
+#   * the reactor can only deliver max x min(turbine, temperature / 50): below 50 degrees its output is capped;
+#   * steady temperature = heat - turbine, heat = fission x fuel / 50, and every rod loses fission% x 0.2 / 100 per s.
+# REACTIVE holds 57 degrees: the full output is always there, so a sudden load (engines, guns) never browns out, but
+# it burns fission for heat it may not use. ECO holds the temperature at half the turbine + 8 (at least 12): just enough
+# for the current load, so far less fission and fuel, but a big jump in load has to wait for the core to heat up.
+# Bench: in8 is the lever (pin in8 const.1 = reactive, const.0 = eco). In a sub, wire a lever or a wifi channel to in8.
+name reactor_modes
+box reactor
+note "REACTOR MODES: HOW IT WORKS" "Turbine = load / max output x 100, in both modes.\nTarget temperature: REACTIVE (in8 = 1) 57 degrees; ECO (in8 = 0) turbine / 2 + 8, at least 12, which keeps the output cap (temperature / 50) just above what the turbine needs.\nFission = (actual turbine + 2 x target - temperature) x 50 / fuel: the heat the turbine uses, plus the target, pulled back toward it by the temperature (the feed-forward pattern with a movable set point).\nActual turbine = power output / max x 100, so heat follows the turbine as it really moves.\nTurn the reactor's automatic control OFF."
+note "WIRING" "From the reactor: in1 load_value_out, in2 power_value_out, in3 temperature_out, in4 fuel_out\nin8 <- mode lever (1 = reactive, 0 = eco)\nout1 -> set_fissionrate, out2 -> set_turbineoutput"
+pin in1 reactor.load_value_out
+pin in2 reactor.power_value_out
+pin in3 reactor.temperature_out
+pin in4 reactor.fuel_out
+pin in8 const.1
+pin out1 reactor.set_fissionrate
+pin out2 reactor.set_turbineoutput
+c tmax mem Value=$MAX
+c k100 mem Value=100
+c tdiv div
+c tpct mul
+w in1 tdiv.1
+w tmax.out tdiv.2 pdiv.2
+w tdiv.out tpct.1
+w k100.out tpct.2 ppct.2 tdeg.2
+w tpct.out out2 eco1.1
+# actual turbine and temperature
+c pdiv div
+c ppct mul
+c tdeg div
+w in2 pdiv.1
+w pdiv.out ppct.1
+w in3 tdeg.1
+# target temperature by mode
+c k05 mem Value=0.5
+c eco1 mul
+c k8 mem Value=8
+c eco add ClampMin=12 ClampMax=57
+c k57 mem Value=57
+c tm mux
+w k05.out eco1.2
+w eco1.out eco.1
+w k8.out eco.2
+w in8 tm.set_input
+w eco.out tm.signal_in0
+w k57.out tm.signal_in1
+# fission = (actual turbine + 2 x target - temperature) x 50 / fuel
+c k2 mem Value=2
+c t2 mul
+c f1 add
+c f2 sub
+c k50 mem Value=50
+c fmul mul
+c fdiv div ClampMin=0 ClampMax=100
+w tm.out t2.1
+w k2.out t2.2
+w ppct.out f1.1
+w t2.out f1.2
+w f1.out f2.1
+w tdeg.out f2.2
+w f2.out fmul.1
+w k50.out fmul.2
+w fmul.out fdiv.1
+w in4 fdiv.2
+w fdiv.out out1

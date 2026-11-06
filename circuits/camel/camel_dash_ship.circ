@@ -1,60 +1,58 @@
-# CAMEL OVERKILL: DASH-3 "SHIP WALL". Propulsion battery time left, air status, round clock and a message ticker.
+# CAMEL OVERKILL: DASH-3 "SHIP WALL". Propulsion battery, its time left, air, round clock and a message ticker. Short
+# values next to fixed captions, like DASH-1; the ticker is the one display that scrolls on purpose.
 name camel_dash_ship
 box battery
-note "DASH-3 SHIP WALL: HOW IT WORKS" "out1 PROP BANK: minutes left at this throttle = charge % x 80 / bus kW (4 batteries = 8000 kW min). Below 10 kW it says idle instead (a multiplexer picks the text).\nout2 AIR: rooms short of air come in by name on 7402 (from the air nodes), held 2 s; otherwise 'every room OK'.\nout3 ROUND TIME hh:mm:ss: a 1 Hz oscillator counts seconds; each field is zero-padded with concat('0', n) -> regex (.{2})$.\nout4 a ticker: a slow oscillator steps a counter through 8 messages. Edit the memories to change them."
-note "WIRING" "Wifi in only. out1..out4 -> text displays (set_text)"
+note "DASH-3 SHIP WALL: HOW IT WORKS" "out1 BATTERY: propulsion bank charge, rounded, + '%'.\nout2 LASTS: minutes left at this throttle = charge % x 80 / bus kW (4 batteries = 8000 kW min), or 'idle' below 10 kW (a multiplexer picks the text).\nout3 AIR: 'all OK', or the short name of a room short of air (on 7402 from the air nodes, held 2 s); out4 is its colour (green / amber).\nout5 ROUND hh:mm:ss: a 1 Hz oscillator counts seconds; each field is zero-padded with concat('0', n) -> regex (.{2})$.\nout6 NEWS ticker: every 30 s a counter steps through 8 messages. A long message scrolls, and the game keeps the scroll position when the text changes, so the next message would start halfway. The ticker sends a single space for 0.5 s first: text that fits resets the scroll, and the new message comes in from the right."
+note "WIRING" "Wifi in only. out1, out2, out3, out5, out6 -> value displays (set_text); out4 -> the AIR display's set_text_color"
 c rpc wifi Channel=7202
 c rpk wifi Channel=7211
 c rair wifi Channel=7402
-# propulsion bank time left
+# propulsion bank
+c bpr round
+c pc mem Value=%
+c b1 concat
+w rpc.out bpr.in pm0.1
+w bpr.out b1.1
+w pc.out b1.2
+w b1.out out1
+# time left at this throttle
 c k80 mem Value=80
 c pm0 mul
 c pm1 div ClampMin=0 ClampMax=999
 c pm round
-w rpc.out pm0.1 p2.2
 w k80.out pm0.2
 w pm0.out pm1.1
 w rpk.out pm1.2 idl.1
 w pm1.out pm.in
-c h1 mem Value="PROP BANK "
-c p2 concat
-c p3 concat Separator="% ~ "
-c t1 mem Value=" min at this throttle"
-c p4 concat
-c t1i mem Value="% | idle, charging"
-c p5 concat
-w h1.out p2.1
-w p2.out p3.1 p5.1
-w pm.out p3.2
-w p3.out p4.1
-w t1.out p4.2
-w t1i.out p5.2
+c umin mem Value=min
+c p4 concat Separator=" "
+w pm.out p4.1
+w umin.out p4.2
+c idle mem Value=idle
 c k10 mem Value=10
 c idl greater
 w k10.out idl.2
 c pmux mux
 w idl.out pmux.set_input
-w p5.out pmux.signal_in0
+w idle.out pmux.signal_in0
 w p4.out pmux.signal_in1
-w pmux.out out1
+w pmux.out out2
 # air
 c low or TimeFrame=2
 c room mem Value=none
 w rair.out low.1 room.in
-c h2 mem Value="AIR LOW: "
-c t2 mem Value=" (generator on)"
-c a1 concat
-c a2 concat
-c ok mem Value="AIR: every room OK"
+c ok mem Value="all OK"
 c amux mux
-w h2.out a1.1
-w room.out a1.2
-w a1.out a2.1
-w t2.out a2.2
-w low.out amux.set_input
+w low.out amux.set_input cmux.set_input
 w ok.out amux.signal_in0
-w a2.out amux.signal_in1
-w amux.out out2
+w room.out amux.signal_in1
+w amux.out out3
+c cg mem Value="120,255,140,255"
+c ca mem Value="255,170,60,255"
+c cmux mux
+w cg.out cmux.signal_in0
+w ca.out cmux.signal_in1
+w cmux.out out4
 # round clock
 c tick osc OutputType=Pulse Frequency=1
 c sec mem Value=0
@@ -90,24 +88,20 @@ w smod.out zs.2
 w zh.out rh.in
 w zm.out rm.in
 w zs.out rs.in
-c h3 mem Value="ROUND TIME "
-c c1 concat
 c c2 concat Separator=":"
 c c3 concat Separator=":"
-w h3.out c1.1
-w rh.out c1.2
-w c1.out c2.1
+w rh.out c2.1
 w rm.out c2.2
 w c2.out c3.1
 w rs.out c3.2
-w c3.out out3
-# ticker
-c tk osc OutputType=Pulse Frequency=0.15
+w c3.out out5
+# ticker: a new message every 30 s, with a 0.5 s blank first so it starts from the beginning
+c tk osc OutputType=Pulse Frequency=0.0333
 c tn mem Value=0
 c tadd add
 c t8 mod Modulus=8
 w tn.out tadd.1
-w tk.out tadd.2
+w tk.out tadd.2 gap.1
 w tadd.out t8.in
 w t8.out tn.in
 c tmux mux
@@ -128,4 +122,10 @@ w x4.out tmux.signal_in4
 w x5.out tmux.signal_in5
 w x6.out tmux.signal_in6
 w x7.out tmux.signal_in7
-w tmux.out out4
+c gap or TimeFrame=0.5
+c sp mem Value=" "
+c tsel mux
+w gap.out tsel.set_input
+w tmux.out tsel.signal_in0
+w sp.out tsel.signal_in1
+w tsel.out out6

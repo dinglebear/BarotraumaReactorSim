@@ -21,12 +21,12 @@
 //   run <seconds>
 // Endpoints: pin shorthands work as in .circ (1 = signal_in1, out = signal_out, in = signal_in).
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine'), require('./components'), require('./format'));
-  else root.BaroSandbox = factory(root.BaroEngine, root.BaroComponents, root.BaroFormat);
-})(typeof self !== 'undefined' ? self : this, function (E, C, F) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine'), require('./components'), require('./format'), require('./label'), require('./world'));
+  else root.BaroSandbox = factory(root.BaroEngine, root.BaroComponents, root.BaroFormat, root.BaroLabel, root.BaroWorld);
+})(typeof self !== 'undefined' ? self : this, function (E, C, F, LBL, W) {
   'use strict';
   const STEP = E.STEP;
-  const HELP = "File format (.sbx), one statement per line, '#' comments:\n  name <title>\n  dev <id> <type> [Prop=value ...]     button | switch | const | terminal | light | display | probe | door\n                                       | motion | water | smoke | oxygen   (see DEVICES below)\n  part <id> <component> [Prop=value]   a component outside any box (same types as .circ: and, mem, regex, wifi...)\n  box <name>                           a circuit box; then .circ lines (c / w / note / label) until the next\n  ...                                  top-level statement. Box pins: <box>.in0..in9 / <box>.out0..out9 (current boxes have 10 each)\n  box <name> file=<path> [box=N] [K=V] load a box from a .circ or Blueprints .txt file (path from the repo root;\n                                       the web page knows circuits/**), filling $K placeholders\n                                       (e.g. file=circuits/camel/camel_door.circ ROOM=Medbay). box=N picks the Nth box.\n  wire <a> <b> [<c> ...]               world wires: <dev>.<pin>, <part>.<pin>, <box>.in3 / <box>.out2\n  at <t> press|set|toggle|type|say <target> [value]     scripted input at t seconds\n  watch <endpoint> ...                 print every change on these pins\n  expect <t> <endpoint|dev> <op> <value>   check at t: op = | != | > | < | ~ (regex) ; dev value = its state/text\n  expectwarn <regex> / expecterror <regex>   this run must report a matching warning/error (for pitfall demos);\n                                       a matched error doesn't fail the run\n  run <seconds>\nEndpoints: pin shorthands work as in .circ (1 = signal_in1, out = signal_out, in = signal_in).";
+  const HELP = "File format (.sbx), one statement per line, '#' comments:\n  name <title>\n  dev <id> <type> [Prop=value ...]     button | switch | const | terminal | light | display | probe | door\n                                       | motion | water | smoke | oxygen   (see DEVICES below)\n  part <id> <component> [Prop=value]   a component outside any box (same types as .circ: and, mem, regex, wifi...)\n  box <name>                           a circuit box; then .circ lines (c / w / note / label) until the next\n  ...                                  top-level statement. Box pins: <box>.in0..in9 / <box>.out0..out9 (current boxes have 10 each)\n  box <name> file=<path> [box=N] [K=V] load a box from a .circ or Blueprints .txt file (path from the repo root;\n                                       the web page knows circuits/**), filling $K placeholders\n                                       (e.g. file=circuits/camel/camel_door.circ ROOM=Medbay). box=N picks the Nth box.\n  wire <a> <b> [<c> ...]               world wires: <dev>.<pin>, <part>.<pin>, <box>.in3 / <box>.out2\n  at <t> press|set|toggle|type|say <target> [value]     scripted input at t seconds\n  watch <endpoint> ...                 print every change on these pins\n  expect <t> <endpoint|dev> <op> <value>   check at t: op = | != | > | < | ~ (regex) ; dev value = its state/text\n  expectwarn <regex> / expecterror <regex>   this run must report a matching warning/error (for pitfall demos);\n                                       a matched error doesn't fail the run\n  run <seconds>\nWORLD (sim/world.js): rock x0,y0,x1,y1 | wall x,y x,y x,y (convex) | vehicle <id> At=x,y Size=w,h [Mass] [Volume] [Tank]\n  | diver <id> At=x,y [Path=\"x,y x,y\"] [Speed=150] | monster <id> Kind=crawler|mudraptor At=x,y. Mount devices with On=<vehicle>.\n  at <t> goto <diver> x,y ; at <t> pilot <nav> x,y|off (a pilot steers there, no rock avoidance) ; expect <t> drone.x|y|speed|depth|impacts|ballast, player.hp|alive, drone.dist.player, world.kills  (ops also >= <=)\nEndpoints: pin shorthands work as in .circ (1 = signal_in1, out = signal_out, in = signal_in).";
   // virtual devices: pins and what they do
   const DEVICES = {
     button: { outs: ['signal_out'], ins: [], about: 'press -> sends Output (default "1") once' },
@@ -43,10 +43,10 @@
     oxygen: { outs: ['signal_out'], ins: [], about: 'oxygen detector: sends the % every tick; set <percent>' },
     // vehicles: drones, shuttles, anything you drive and shoot from
     periscope: { outs: ['position_out', 'trigger_out'], ins: [], about: 'aim angle in degrees on position_out every tick; set <deg>; press = one trigger_out (Output, "1"); toggle = hold fire (every tick)' },
-    turret: { outs: [], ins: ['position_in', 'trigger_in', 'toggle_light', 'set_light'], about: 'coilgun/chaingun: takes the angle from position_in; fires on trigger_in if reloaded (Reload=1 s). Read gun.shots / gun.angle' },
-    engine: { outs: [], ins: ['set_force'], about: 'set_force -100..100; with no signal for 0.1 s it falls back to its manual setting (0). Read eng.force' },
-    pump: { outs: [], ins: ['set_speed', 'set_targetlevel', 'set_active', 'toggle'], about: 'set_speed -100..100 (+ pumps in), set_targetlevel 0..100, set_active. Read p.speed / p.target / p.on' },
-    nav: { outs: ['velocity_x_out', 'velocity_y_out', 'toggle_docking', 'current_velocity_x', 'current_velocity_y'], ins: [], about: 'nav terminal: set <x>,<y> steering (-100..100, y up); sends velocity_x_out = x and velocity_y_out = -y (pump speed) every tick; press = toggle_docking' },
+    turret: { outs: [], ins: ['position_in', 'trigger_in', 'toggle_light', 'set_light', 'set_auto_operate', 'toggle_auto_operate'], about: 'coilgun/chaingun: takes the angle from position_in; fires on trigger_in if reloaded (Reload=1 s). Read gun.shots / gun.angle. On=<vehicle>: real aim and bolts (Kind=coilgun|chaingun, Offset=x,y, MinAngle/MaxAngle, AutoOperate, TargetHumans, Damage); gun.hits' },
+    engine: { outs: [], ins: ['set_force'], about: 'set_force -100..100, kept until the next signal (Engine.cs). Read eng.force. On=<vehicle>: pushes it with MaxForce (300)' },
+    pump: { outs: [], ins: ['set_speed', 'set_targetlevel', 'set_active', 'toggle'], about: 'set_speed -100..100 (+ pumps in), set_targetlevel -100..100 (= level (v+100)/2 %, what the nav terminal\'s velocity_y_out sends), set_active. Read p.speed / p.target / p.on. On=<vehicle>: fills its ballast (MaxFlow 600)' },
+    nav: { outs: ['velocity_x_out', 'velocity_y_out', 'toggle_docking', 'current_velocity_x', 'current_velocity_y', 'current_position_x', 'current_position_y'], ins: ['velocity_in'], about: 'nav terminal: set <x>,<y> steering (-100..100, y up); sends velocity_x_out = x and velocity_y_out = -y (pump speed) every tick; press = toggle_docking' },
     dock: { outs: ['state_out', 'proximity_sensor', 'on_dock', 'on_undock'], ins: ['toggle', 'set_state'], about: 'docking port: dev d dock 1 = starts docked; set 1/0 = another port is near or not; toggle/set_state docks (only when near) or undocks; on_dock/on_undock pulse once' },
   };
   // inputs that keep only the latest value and act on it in Update() (several senders in one tick: the last one wins).
@@ -58,7 +58,7 @@
   const tokenize = line => [...line.matchAll(/([^\s"=]+=)"([^"]*)"|"((?:[^"\\]|\\.)*)"|(\S+)/g)].map(m => m[1] !== undefined ? m[1] + m[2] : m[3] !== undefined ? m[3].replace(/\\(.)/g, (a, b) => b === 'n' ? '\n' : b) : m[4]);
 
   function parse(text, opts = {}) {
-    const spec = { name: 'sandbox', devs: [], parts: [], boxes: [], wires: [], events: [], watches: [], expects: [], msgExpects: [], duration: 10, errors: [] };
+    const spec = { name: 'sandbox', devs: [], parts: [], boxes: [], wires: [], events: [], watches: [], expects: [], msgExpects: [], duration: 10, errors: [], world: W ? W.emptySpec() : null };
     let boxLines = null, boxName = null, boxStart = 0;
     const flush = () => {
       if (!boxLines) return;
@@ -89,6 +89,7 @@
         else if (k === 'expect') spec.expects.push({ t: Number(t[1]), target: t[2], op: t[3], value: t.slice(4).join(' '), ln });
         else if (k === 'expectwarn' || k === 'expecterror') spec.msgExpects.push({ kind: k === 'expectwarn' ? 'warning' : 'error', re: t.slice(1).join(' '), ln });
         else if (k === 'run') spec.duration = Number(t[1]) || 10;
+        else if (W && W.parseLine(k, t, props, spec.world)) { /* rock, wall, vehicle, diver, monster, world (sim/world.js) */ }
         else throw new Error(`unknown statement "${t[0]}"`);
       } catch (e) { spec.errors.push(`line ${ln}: ${e.message}`); }
     });
@@ -113,6 +114,7 @@
         const box = this.buildBox({ name: 'part:' + p.id, components: [{ id: '0', item: p.def.item, cls: p.def.cls, props: p.props }], wires: [], pins: {} });
         this.boxes.push(box); this.objs[p.id] = { kind: 'part', it: box.compById['0'], def: p.def };
       }
+      if (spec.world && spec.world.used) this.world = new W.World(spec.world, this);
       for (const d of spec.devs) this.addDev(d);
       for (const w of spec.wires) { const a = this.ep(w.a, w.ln), b = this.ep(w.b, w.ln); if (a && b) { this.wire(a, b); (a.senders = a.senders || []).push(w.b); (b.senders = b.senders || []).push(w.a); } }
       this.lint();
@@ -134,7 +136,7 @@
     addDev(d) {
       if (this.objs[d.id]) { this.errors.push(`line ${d.ln}: duplicate name "${d.id}"`); return; }
       const it = this.mkItem('dev:' + d.id, {}), s = { on: false, text: '', color: '', lines: [], value: d.arg !== undefined ? d.arg : (d.props.Value !== undefined ? d.props.Value : '0') };
-      const o = { kind: 'dev', type: d.type, it, s, props: d.props }; this.objs[d.id] = o; this.devs.push(o);
+      const o = { kind: 'dev', id: d.id, type: d.type, it, s, props: d.props }; this.objs[d.id] = o; this.devs.push(o);
       const send = (pin, v) => this.send(it, pin, String(v)), P = d.props;
       // log changes; a device that changes more than 8 times in a second is fighting senders: warn once, mute it for that second
       const fl = { sec: -1, n: 0 }, log = m => {
@@ -152,26 +154,33 @@
       if (T === 'engine') s.force = 0;
       if (T === 'periscope') s.on = true; // manned
       if (T === 'dock') { s.on = /^(1|docked|true)$/i.test(d.arg || '0'); s.value = s.on ? '1' : '0'; } // dev d dock 1 = starts docked
+      if (P.On !== undefined) { const e = !this.world ? 'On= needs a vehicle (add: vehicle <id> At=x,y Size=w,h)' : !/^(engine|pump|nav|motion|turret)$/.test(T) ? `a ${T} can't be mounted on a vehicle` : this.world.bind(o); if (e) this.errors.push(`line ${d.ln}: ${d.id}: ${e}`); }
       it.recv = (pin, sig) => {
         const v = sig.v;
         if (T === 'light' || T === 'switch' || T === 'door') {
           if (pin === 'toggle') { if (v !== '0' && v !== '') { s.on = !s.on; if (T !== 'switch') log(`${T === 'door' ? (s.on ? 'opens' : 'closes') : (s.on ? 'on' : 'off')} (toggle)`); } }
           else if (pin === 'set_state') { const n = v !== '0'; if (n !== s.on && T !== 'switch') log(T === 'door' ? (n ? 'opens' : 'closes') : (n ? 'on' : 'off')); s.on = n; }
           else if (pin === 'set_color') { if (v !== s.color) { s.color = v; log(`colour ${v}`); } }
-        } else if (T === 'display') { if (pin === 'set_text' && v !== s.text) { s.text = v; log(`shows "${v}"`); } else if (pin === 'set_text_color') s.color = v; }
+        } else if (T === 'display') { if (pin === 'set_text' && v !== s.text) { s.text = v; log(`shows "${v}"`); (s.hist = s.hist || [{ t: 0, text: '' }]).length < 20000 && s.hist.push({ t: this.time, text: v }); } else if (pin === 'set_text_color') s.color = v; }
         else if (T === 'terminal') { if (pin === 'signal_in' && v !== '') { s.lines.push(v); log(`< ${v}`); } else if (pin === 'clear_text' && v !== '0') { s.lines = []; log('(cleared)'); } }
         else if (T === 'probe') { if (v !== s.last) log(`${pin} = "${v}"`); s.last = v; }
         else if (T === 'turret') {
           if (pin === 'position_in') { const a = Number(v); if (Number.isFinite(a)) s.angle = a; }
+          else if (pin === 'trigger_in' && v !== '0' && v !== '' && o.vehicle) s.trigger = true;
+          else if (pin === 'set_auto_operate' || (pin === 'toggle_auto_operate' && v !== '0' && v !== '')) { const on = pin === 'set_auto_operate' ? v !== '0' : !o.auto; if (on !== !!o.auto) log(on ? 'auto-operate on' : 'auto-operate off'); o.auto = on; } // AllowAutoOperateWithWiring
           else if (pin === 'trigger_in' && v !== '0' && v !== '') { const rl = Number(P.Reload ?? 1); if (this.time - (s.lastShot ?? -1e9) >= rl) { s.lastShot = this.time; s.shots = (s.shots || 0) + 1; log(`fires at ${Number(s.angle || 0).toFixed(1)}° (shot ${s.shots})`); } }
         }
-        else if (T === 'engine') { if (pin === 'set_force') { const f = Number(v); if (Number.isFinite(f)) { const n = Math.max(-100, Math.min(100, f)); if (Math.round(n) !== Math.round(s.force || 0)) log(`force ${Math.round(n)} %`); s.force = n; s.lockT = this.time; } } }
+        else if (T === 'engine') { if (pin === 'set_force') { const f = Number(v); if (Number.isFinite(f)) { const n = Math.max(-100, Math.min(100, f)); if (o.vehicle ? Math.abs(n - (s.loggedF ?? -999)) >= 25 || (n === 0 && s.loggedF !== 0) : Math.round(n) !== Math.round(s.force || 0)) { log(`force ${Math.round(n)} %`); s.loggedF = n; } s.force = n; s.lockT = this.time; } } }
         else if (T === 'pump') {
           const n = Number(v);
           if (pin === 'set_speed' && Number.isFinite(n)) { const q = Math.max(-100, Math.min(100, n)); if (Math.round(q) !== Math.round(s.speed || 0)) log(`speed ${Math.round(q)} %`); s.speed = q; }
-          else if (pin === 'set_targetlevel' && Number.isFinite(n)) { const q = Math.max(0, Math.min(100, n)); if (Math.round(q) !== Math.round(s.target ?? -1)) log(`target level ${Math.round(q)} %`); s.target = q; }
+          else if (pin === 'set_targetlevel' && Number.isFinite(n)) { const q = Math.max(0, Math.min(100, (n + 100) / 2)); if (Math.abs(q - (s.loggedT ?? -99)) >= 10 || (q !== s.target && (q === 0 || q === 100))) { log(`target level ${Math.round(q)} % (set_targetlevel ${Math.round(n)})`); s.loggedT = q; } s.target = q; } // Pump.cs: -100..100 -> 0..100 %
           else if (pin === 'set_active') { const on = v !== '0'; if (on !== s.on) log(on ? 'on' : 'off'); s.on = on; }
           else if (pin === 'toggle' && v !== '0' && v !== '') { s.on = !s.on; log(s.on ? 'on' : 'off'); }
+        }
+        else if (T === 'nav' && pin === 'velocity_in') { // exactly "x,y" (y positive = down); anything else steers to 0,0
+          const m = /^\s*(-?[\d.]+(?:e-?\d+)?)\s*,\s*(-?[\d.]+(?:e-?\d+)?)\s*$/i.exec(v), x = m ? Number(m[1]) : 0, y = m ? Number(m[2]) : 0;
+          if (o.vehicle) this.world.steer(o, x, -y, true); else s.value = `${Math.max(-100, Math.min(100, x))},${Math.max(-100, Math.min(100, -y))}`;
         }
         else if (T === 'dock') {
           const want = pin === 'toggle' ? (v !== '0' && v !== '' ? !s.on : s.on) : pin === 'set_state' ? v !== '0' : s.on;
@@ -184,7 +193,8 @@
         else if (T === 'door') send('state_out', s.on ? '1' : '0');
         else if (T === 'motion') { const v = s.value !== '0' ? (P.Output !== undefined ? P.Output : '1') : (P.FalseOutput !== undefined ? P.FalseOutput : '0'); if (v !== '') send('state_out', v); }
         else if (T === 'periscope') { if (s.on !== false) send('position_out', s.value); if (s.fire) send('trigger_out', P.Output || '1'); }
-        else if (T === 'engine') { if (s.lockT !== undefined && this.time - s.lockT > 0.1 && s.force) { s.force = 0; log('no signal: back to manual (0 %)'); } }
+        else if (T === 'engine') { /* set_force is kept until the next signal (Engine.cs) */ }
+        else if (T === 'nav' && o.vehicle) { const out = this.world.navOut(o); for (const k in out) send(k, out[k]); }
         else if (T === 'nav') { const [x, y] = String(s.value).split(',').map(Number); send('velocity_x_out', String(x || 0)); send('velocity_y_out', String(-(y || 0))); send('current_velocity_x', '0.0000'); send('current_velocity_y', '0.0000'); }
         else if (T === 'dock') { send('state_out', s.on ? '1' : '0'); send('proximity_sensor', s.value !== '0' ? '1' : '0'); if (s.pulse) { send(s.pulse, '1'); s.pulse = null; } }
         else if (T === 'water' || T === 'smoke') { const wet = Number(s.value) > 0; const v = wet ? (P.Output !== undefined ? P.Output : '1') : (P.FalseOutput !== undefined ? P.FalseOutput : '0'); if (v !== '') send('signal_out', v); if (T === 'water') send('water_%', String(Math.round(Number(s.value) || 0))); }
@@ -195,6 +205,8 @@
         else if (act === 'press') { send('signal_out', P.Output || '1'); log('pressed'); }
         else if (act === 'toggle' && T === 'periscope') { s.fire = !s.fire; log(s.fire ? 'holding fire' : 'released fire'); }
         else if (act === 'toggle') { s.on = !s.on; log(T === 'switch' ? (s.on ? 'switched on' : 'switched off') : 'toggled'); }
+        else if (act === 'pilot' && T === 'nav' && o.vehicle) { const p = String(value).split(',').map(Number); this.world.pilot(o, p.length === 2 && p.every(Number.isFinite) ? p : null); log(p.length === 2 && p.every(Number.isFinite) ? `pilot heads for ${value}` : 'pilot lets go of the wheel'); }
+        else if (act === 'set' && T === 'nav' && o.vehicle) { const [x, y] = String(value).split(',').map(Number); this.world.steer(o, x || 0, y || 0); log(`pilot steers ${value}`); }
         else if (act === 'set') { if (T === 'switch' || T === 'door') s.on = /^(1|on|true|open)$/i.test(value); else s.value = value; log(`set to ${value}`); }
         else if (act === 'type') { s.lines.push('> ' + value); log(`> ${value}`); send('signal_out', value); }
         else this.errors.push(`"${act}" doesn't apply to a ${T}`);
@@ -244,6 +256,7 @@
       super.deliver(conn, sig);
     }
     valueOf(target) {
+      if (this.world) { const v = this.world.value(target); if (v !== undefined) return String(Math.round(v * 1000) / 1000); } // drone.x, player.hp, drone.dist.player, world.kills
       const dot = target.indexOf('.'), od = dot > 0 ? this.objs[target.slice(0, dot)] : null;
       if (od && od.kind === 'dev' && !DEVICES[od.type].outs.includes(target.slice(dot + 1)) && !DEVICES[od.type].ins.includes(target.slice(dot + 1))) { const f = od.s[target.slice(dot + 1)]; return f === undefined ? '' : typeof f === 'number' ? String(Math.round(f * 1000) / 1000) : String(f); } // gun.shots, eng.force...
       const o = this.objs[target];
@@ -259,19 +272,21 @@
       while (this.evI < this.ev.length && this.time >= this.ev[this.evI].t) {
         const e = this.ev[this.evI++], o = this.objs[e.target];
         if (e.act === 'say') { this.say(e.target.replace(/^ch/, '') || '0', e.value); continue; }
+        if (e.act === 'goto') { const [x, y] = String(e.value).split(',').map(Number); if (!this.world || !this.world.goto(e.target, x, y)) this.errors.push(`line ${e.ln}: "${e.target}" is not a diver`); else this.log.push(`${this.time.toFixed(2)}s ${e.target} swims to ${e.value}`); continue; }
         if (!o || o.kind !== 'dev') { this.errors.push(`line ${e.ln}: "${e.target}" is not a device`); continue; }
         o.act(e.act, e.value);
       }
       if (this.pending.length) { const p = this.pending; this.pending = []; if (p.length > 50) this.warns.push(`${this.time.toFixed(2)}s: ${p.length} signals delayed a tick (a chain or loop longer than 10 hops)`); for (const e of p) this.connSend(e.conn, e.sig); }
       for (const o of this.devs) o.update();
       for (const box of this.boxes) for (const ci of box.comps) if (ci.comp.update) ci.comp.update(STEP);
+      if (this.world) this.world.step(STEP);
       for (const w of this.watched) if (w.conn && w.conn.last !== w.last) { w.last = w.conn.last; this.trace.push(`${this.time.toFixed(2)}s ${w.name} = "${w.last}"`); if (this.trace.length > 2000) this.trace.splice(0, 1000); }
       this.frame++; this.time = this.frame * STEP;
       while (this.exI < this.ex.length && this.time >= this.ex[this.exI].t) {
         const x = this.ex[this.exI++], got = this.valueOf(x.target); let ok;
         const n = Number(got), m = Number(x.value);
         if (x.op === '=') ok = got === x.value || (Number.isFinite(n) && Number.isFinite(m) && Math.abs(n - m) < 1e-6);
-        else if (x.op === '!=') ok = got !== x.value; else if (x.op === '>') ok = n > m; else if (x.op === '<') ok = n < m; else if (x.op === '~') ok = new RegExp(x.value).test(got || ''); else ok = false;
+        else if (x.op === '!=') ok = got !== x.value; else if (x.op === '>') ok = n > m; else if (x.op === '<') ok = n < m; else if (x.op === '>=') ok = n >= m; else if (x.op === '<=') ok = n <= m; else if (x.op === '~') ok = new RegExp(x.value).test(got || ''); else ok = false;
         this.results.push({ ok, msg: `t=${x.t}s ${x.target} ${x.op} ${x.value}: ${ok ? 'ok' : 'FAILED (got "' + got + '")'}` });
       }
       // divide by zero: the game drops NaN/Infinity, so the output silently freezes at its last value
@@ -293,6 +308,8 @@
     // end of the script: check expectwarn/expecterror (a pitfall demo passes when the sandbox catches the pitfall)
     finish() {
       if (this.finished) return; this.finished = true;
+      // a display a player could never read to the end (a long text that keeps changing: sim/label.js)
+      if (LBL) for (const o of this.devs) if (o.type === 'display' && o.s.hist) { const r = LBL.check(o.s.hist, this.time); if (!r.ok) this.warns.push(`display ${o.id}: ${r.reason}`); }
       const warns = this.allWarnings;
       for (const m of this.spec.msgExpects) {
         const list = m.kind === 'warning' ? warns : this.errors, re = new RegExp(m.re, 'i'), hit = list.filter(e => re.test(e));
@@ -310,6 +327,12 @@
       if (this.trace.length) L.push('TRACE (watched pins, changes only):', ...this.trace.map(e => '  ' + e));
       if (this.log.length) L.push('DEVICES:', ...this.log.slice(-400).map(e => '  ' + e));
       const chat = (this.chat || []).filter(c => !c.crew); if (chat.length) L.push('RADIO CHAT (LinkToChat wifi):', ...chat.map(c => `  ${c.t.toFixed(2)}s ch${c.ch}: ${c.text}`));
+      if (this.world) {
+        const Wd = this.world, r = v => Math.round(v);
+        L.push('WORLD:', ...[...Wd.vehicles.values()].map(v => `  ${v.id} at ${r(v.x)},${r(v.y)} (${(Math.hypot(v.vx, v.vy) / 100).toFixed(2)} m/s), ballast ${Math.round(v.water / v.tank * 100)} %, ${v.bumps} bumps, ${v.impacts} damaging hits${v.bites ? `, bitten ${v.bites} times` : ''}`),
+          ...[...Wd.chars.values()].map(c => `  ${c.id} (${c.kind}) at ${r(c.x)},${r(c.y)} ${c.alive ? 'hp ' + r(c.hp) : 'DEAD'}${c.hits ? `, hit by bolts ${c.hits} times` : ''}${c.bites ? `, bitten ${c.bites} times` : ''}`),
+          `  kills ${Wd.kills}, friendly fire ${Wd.friendly}`);
+      }
       const fin = Object.entries(this.objs).filter(([, o]) => o.kind === 'dev').map(([id]) => `${id}=${JSON.stringify(this.valueOf(id))}`);
       if (fin.length) L.push('FINAL: ' + fin.join('  '));
       if (this.results.length) L.push('EXPECT:', ...this.results.map(r => '  ' + r.msg), `${this.results.filter(r => r.ok).length}/${this.results.length} passed`);

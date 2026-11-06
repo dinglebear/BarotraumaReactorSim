@@ -139,6 +139,10 @@ console.log('real-game checks passed');
   assert(sim.o2Min > 80, 'oxygen stays above 80 %');
   assert(sim.termLog.some(l => l.dir === '<' && /^Saved/.test(l.text)), 'CamelOS settings answer');
   assert(sim.termLog.filter(l => l.dir === '<' && l.t > 104 && l.t < 106).length === 1, 'CamelOS fun pack answers once');
+  // every text display can be read to the end: changing values fit, the ticker restarts each message from the beginning
+  const unreadable = sim.displayIssues(); assert(unreadable.length === 0, 'unreadable displays: ' + unreadable.map(x => x.id + ' ' + x.reason).join('; '));
+  const dispTexts = sim.devs.filter(d => d.kind === 'display').map(d => d.state.text);
+  assert(dispTexts.some(t => /^\d+ kW$/.test(t)) && dispTexts.some(t => /^\d\d:\d\d:\d\d$/.test(t)), 'screen wall values: ' + dispTexts.join(' | '));
   // nothing new sits inside a floor or wall (turrets and their periscope/loader excepted: they replace vanilla parts)
   const doc = new SE.SubDoc(text), vanillaIds = new Set(new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8')).items.keys());
   const inBoxes = new Set(); for (const n of doc.items.values()) if (n.children.some(c => c.tag === 'CircuitBox')) for (const c of n.children) if (c.tag === 'ItemContainer') for (const id of (c.attrs.find(a => a[0] === 'contained') || [0, ''])[1].split(/[,;]/)) inBoxes.add(id);
@@ -159,16 +163,20 @@ console.log('real-game checks passed');
   assert(doc.check().length === 0, 'capsule loader checks: ' + doc.check().join('; '));
   assert(doc.audit(null).filter(x => x.level !== 'info').length === 0, 'capsule audit');
   const ship = SF.parseSub(text);
-  assert(ship.hulls.length === 6 && ship.gaps.length === 4 && ship.waypoints.length > 30, 'capsule rooms, gaps, waypoints');
-  const sim = new SH.ShipSim(ship, { duration: 120, scenario: { fights: false } }); const r = sim.runToEnd();
-  assert(r.unmet_pct < 2, 'capsule power: unmet ' + r.unmet_pct);
+  assert(ship.hulls.length === 11 && ship.gaps.length === 9 && ship.waypoints.length > 60, 'capsule rooms, gaps (5 doors, 4 hatches), waypoints');
+  // the reactor mode lever: REACTIVE (up) holds the core hotter, ECO (pressed down) burns less fuel; both meet the load
+  const round = eco => { const sim = new SH.ShipSim(ship, { duration: 180, scenario: { fights: false } }), lever = sim.devs.find(d => d.kind === 'lever'); if (eco) lever.press(); return sim.runToEnd(); };
+  const re = round(false), eco = round(true);
+  assert(re.unmet_pct < 2 && eco.unmet_pct < 2, `capsule power: unmet ${re.unmet_pct} / ${eco.unmet_pct}`);
+  assert(eco.temp_max < re.temp_max && eco.fuel_condition_used < re.fuel_condition_used * 0.9, `ECO lever: ${eco.temp_max} vs ${re.temp_max} degrees, fuel ${eco.fuel_condition_used} vs ${re.fuel_condition_used}`);
   console.log('scratch build passed');
 }
 
 // circuit sandbox (sim/sandbox.js): every demo in sandbox/ passes, and the border/size limits are errors
 {
   const S = require('./sandbox');
-  for (const f of fs.readdirSync(path.join(ROOT, 'sandbox')).filter(f => f.endsWith('.sbx'))) {
+  const demos = [...fs.readdirSync(path.join(ROOT, 'sandbox')).filter(f => f.endsWith('.sbx')), ...fs.readdirSync(path.join(ROOT, 'sandbox/world')).filter(f => f.endsWith('.sbx')).map(f => 'world/' + f)];
+  for (const f of demos) {
     const { sb, report } = S.run(fs.readFileSync(path.join(ROOT, 'sandbox', f), 'utf8'), { readFile: q => fs.readFileSync(path.join(ROOT, q), 'utf8') });
     assert(sb.unexpectedErrors.length === 0 && sb.results.every(r => r.ok), `sandbox ${f}:\n${report}`);
   }
@@ -213,9 +221,100 @@ console.log('real-game checks passed');
   assert(B.slopes.length >= 3, 'slopes placed: ' + B.slopes.length);
   const flat = sh.structures.filter(s => s.identifier === 'shella0deg'), vert = sh.structures.filter(s => s.identifier === 'shella90deg');
   assert(flat.some(s => s.flippedy) && vert.some(s => s.flippedx), 'bottom shells FY, right shells FX');
-  // the capsule: stepped top deck, smoothed, watertight
+  // the capsule: tapered decks and a tower, smoothed, watertight
   const cap = SF.parseSub(rd('ships/custom/Claudes_Test_Capsule.sub'));
   assert.strictEqual(G.leaks(cap).length, 0, 'capsule watertight');
   assert(cap.structures.filter(s => G.solid(s) && G.body(s).angle % (Math.PI / 2) !== 0).length >= 4, 'capsule has slopes');
   console.log('hull smoothing passed');
+}
+
+// what a player sees on a text display (sim/label.js, reference/TEXT_DISPLAYS.md) and stairs as the game builds them
+{
+  const L = require('./label'), G = require('./shellgeom'), SF = require('./subfile'), zlib = require('zlib');
+  const every = (n, dt, f) => Array.from({ length: n }, (_, i) => ({ t: i * dt, text: f(i) }));
+  assert(L.fits('1000 kW') && !L.fits('Reactor output: 1000 kW'), 'about 7 characters fit');
+  assert(!L.check(every(60, 1, i => 'Reactor output: ' + (1000 + i) + ' kW'), 60).ok, 'long text changing every second never shows its end');
+  assert(L.check(every(60, 1, i => (1000 + i) + ' kW'), 60).ok, 'a short changing value is fine');
+  assert(L.check([{ t: 0, text: 'Reactor output: 1000 kW' }], 60).ok, 'a long text that holds still scrolls fine');
+  // the snap-back: after a change the scroll keeps its place (clamped to the new text), so a new message starts midway...
+  const m = new L.Marquee(); m.set('Chief Engineer Dingle: certified JESTER. Not a clown.'); for (let i = 0; i < 600; i++) m.tick(1 / 60);
+  m.set('Forecast: wet, dark, with a chance of mudraptors.'); assert(m.idx > 0, 'scroll position kept across a change');
+  // ...unless a text that fits comes in between: that resets it (the Camel's ticker sends a space for 0.5 s)
+  m.set(' '); m.set('Forecast: wet, dark, with a chance of mudraptors.'); assert.strictEqual(m.idx, 0, 'a short text resets the scroll');
+  // stairs: one 10 px plank at 45 degrees in the square at the bottom of the rect; a flip swaps the direction
+  const st = G.body({ identifier: 'stairsleft3', rect: [-1425, 121, 254, 343], flippedx: true });
+  assert.deepStrictEqual(st.seg.map(p => p.map(Math.round)), [[-1425, -222], [-1171, 32]], 'flipped left stairs rise to the right');
+  assert.strictEqual(G.body({ identifier: 'stairsleft3', rect: [-921, -134, 254, 343] }).stairs, 'Left');
+  // the renderer draws them, and the wire router keeps its bundles under the real ceiling slab
+  const R = require('./subrender'), camel = SF.parseSub(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8'));
+  const svg = R.render(camel, { width: 800 }).svg; assert((svg.match(/data-k="struct"/g) || []).length > 50 && /<polygon/.test(svg) && (svg.match(/data-k="item"/g) || []).length > 100, 'sub render has structures and items');
+  const SE = require('./subedit'), doc = new SE.SubDoc(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'ships/vanilla/Camel.sub'))).toString('utf8'));
+  const reactorRoom = doc.hulls().find(H => H.x0 === -1648 && H.y1 === 40); assert.strictEqual(doc.ceiling(reactorRoom), -8, 'reactor room ceiling slab is 48 thick');
+  const path1 = doc.route([-1500, -150], [-700, -150]); assert(path1.every(p => p[1] <= -16 && p[1] >= -216), 'route stays inside the room, under the slab');
+  console.log('displays and stairs passed');
+}
+
+// how walls look (shellgeom.visual) and the sub's own picture lined up under them (sim/preview.js)
+{
+  const G = require('./shellgeom'), SF = require('./subfile'), PV = require('./preview'), R = require('./subrender'), zlib = require('zlib');
+  const sub = f => { const b = fs.readFileSync(path.join(ROOT, f)); return SF.parseSub((b[0] === 0x1f ? zlib.gunzipSync(b) : b).toString('utf8')); };
+  // a hump slope is a plate from corner to corner, cut flush by its sprite's rectangle; its collision body pokes out
+  const slope = { identifier: 'shella52deg', rect: [39, 759, 285, 338] }, [x, y, w, h] = slope.rect, inRect = p => p[0] >= x - 0.5 && p[0] <= x + w + 0.5 && p[1] <= y + 0.5 && p[1] >= y - h - 0.5;
+  assert(G.visual(slope).length >= 4 && G.visual(slope).every(inRect), 'slope drawn inside its sprite rect');
+  assert(!G.body(slope).quad.every(inRect), 'its collision body pokes out of it');
+  // the picture lines up with the rooms; the game's box is about 6 % wider than ours (turret barrels and the like)
+  const camel = sub('ships/vanilla/Camel.sub'), img = PV.decodePng(Buffer.from(camel.previewImage, 'base64'));
+  assert.deepStrictEqual([img.w, img.h], [640, 368], 'the editor saves a 640 x 368 picture');
+  const reg = PV.register(img.rgba, img.w, img.h, camel);
+  assert(reg.score > 0.85 && Math.abs(reg.scale / reg.formula - 0.94) < 0.02, `Camel picture lines up (overlap ${reg.score}, scale x${(reg.scale / reg.formula).toFixed(3)})`);
+  // Camel Overkill kept the Camel's picture and its outline: it lands in the same place
+  const ok = sub('ships/custom/Camel_Overkill.sub'), img2 = PV.decodePng(Buffer.from(ok.previewImage, 'base64')), reg2 = PV.register(img2.rgba, img2.w, img2.h, ok);
+  assert(reg2.box.every((v, i) => Math.abs(v - reg.box[i]) < 20), 'Camel Overkill picture lines up with the Camel');
+  // the render draws it under everything; the hitboxes are their own layer
+  const svg = R.render(camel, { width: 600, picture: { href: 'previews/Camel.png', box: reg.box }, collision: 'hidden' }).svg;
+  assert(svg.indexOf('<image class="picture"') > 0 && svg.indexOf('<image') < svg.indexOf('class="rooms"') && /class="collision" style="display:none"/.test(svg), 'picture underneath, collision layer hidden');
+  assert(!/class="collision"/.test(R.render(camel, { width: 600 }).svg), 'no collision layer unless asked');
+  console.log('wall look and sub pictures passed');
+}
+
+// the world (sim/world.js): vehicle physics against SubmarineBody.cs / Engine.cs / Pump.cs, sensors, turrets
+{
+  const S = require('./sandbox'), W = require('./world');
+  const run = (body, t) => { const sb = new S.Sandbox(S.parse(body + `\nrun ${t}`)); assert.deepStrictEqual(sb.errors, []); while (!sb.done) sb.step(); return sb; };
+  // an empty tank: b = 2 x 0.07 -> 1.4 m/s² up; terminal 5.3 m/s up (drag 0.05 v²)
+  let sb = run('vehicle d At=0,0 Size=300,150 Mass=1000 Volume=45000 Water=0', 1);
+  assert(Math.abs(sb.world.vehicles.get('d').vy / 100 - 1.4) < 0.08, 'empty tank rises at 1.4 m/s²');
+  sb = run('vehicle d At=0,0 Size=300,150 Mass=1000 Volume=45000 Water=0', 40); assert(Math.abs(sb.world.vehicles.get('d').vy / 100 - Math.sqrt(1.4 / 0.05)) < 0.05, 'terminal rise speed');
+  // 7 % of the volume as water: neutral
+  sb = run('vehicle d At=0,0 Size=300,150 Mass=1000 Volume=45000 Water=3150', 10); assert(Math.abs(sb.world.vehicles.get('d').vy) < 1, 'neutral at 7 % water');
+  // full thrust = 20 x MaxForce N; terminal speed sqrt(a / 0.01)
+  sb = run('vehicle d At=0,0 Size=300,150 Mass=1550 Volume=45000\ndev e engine On=d MaxForce=50\ndev k const 100\nwire k.out e.set_force', 60);
+  assert(Math.abs(sb.world.vehicles.get('d').vx / 100 - Math.sqrt(1000 / 1550 / 0.01)) < 0.1, 'drone top speed ' + sb.world.vehicles.get('d').vx / 100);
+  // the engine keeps its last force when signals stop (Engine.cs)
+  sb = run('dev e engine\ndev b button Output=70\nwire b.out e.set_force\nat 0.5 press b', 3); assert.strictEqual(sb.valueOf('e'), '70', 'engine keeps set_force');
+  // set_targetlevel -100..100 -> (v + 100) / 2 %
+  sb = run('vehicle d At=0,0 Size=300,150 Volume=45000\ndev p pump On=d MaxFlow=600\ndev k const 60\nwire k.out p.set_targetlevel', 5); assert(Math.abs(sb.world.vehicles.get('d').water / sb.world.vehicles.get('d').tank - 0.8) < 0.02, 'pump target level 60 -> 80 %');
+  // rock stops it, a fast hit counts as damage; a wall sensor only sees rock while moving
+  sb = run('rock 400,-500,600,500\nvehicle d At=0,0 Size=300,150 Mass=1550 Volume=45000\ndev e engine On=d MaxForce=500\ndev k const 100\nwire k.out e.set_force\ndev s motion On=d Offset=250,0 RangeX=100 RangeY=50 Target=Wall', 4);
+  const d = sb.world.vehicles.get('d'); assert(d.x + d.w / 2 <= 401 && d.impacts === 1, 'rock stops the drone (impacts ' + d.impacts + ')');
+  sb = run('rock 300,-500,600,500\nvehicle d At=0,0 Size=300,150 Volume=45000\ndev s motion On=d Offset=250,0 RangeX=100 RangeY=50 Target=Wall', 0.5); assert.strictEqual(sb.objs.s.s.value, '0', 'a still drone sees no rock');
+  // a coilgun on auto-operate shoots a crawler, holds fire while the diver is in the way
+  sb = run('vehicle d At=0,0 Size=300,150 Volume=45000 Water=3150\nmonster c Kind=crawler At=1500,0 Sight=10\ndev g turret On=d Kind=coilgun MinAngle=0 MaxAngle=360 AutoOperate=true', 4);
+  assert(!sb.world.chars.get('c').alive, 'auto coilgun kills a crawler');
+  sb = run('vehicle d At=0,0 Size=300,150 Volume=45000 Water=3150\ndiver p At=700,0 Speed=0\nmonster c Kind=crawler At=1500,0 Sight=10\ndev g turret On=d Kind=coilgun MinAngle=0 MaxAngle=360 AutoOperate=true', 4);
+  assert(sb.world.chars.get('c').alive && sb.world.friendly === 0 && sb.objs.g.s.shots === 0, 'no shot through the diver');
+  // turret angles: 0 = right, 90 = down; limits snap to the nearer end
+  assert.strictEqual(W.clampAngle(80, 180, 360), 360); assert.strictEqual(W.clampAngle(100, 180, 360), 180); assert.strictEqual(W.clampAngle(20, 180, 360), 360);
+  console.log('world passed');
+}
+
+// reactor modes (circuits/reactor_modes.circ): reactive is steadier, eco burns less fuel, on the same demand
+{
+  const E = require('./engine'), F = require('./format'), P = require('./project');
+  const prof = E.parseProfile(fs.readFileSync(path.join(ROOT, 'load_profiles/synthetic_ramps.csv'), 'utf8'), 'synthetic_ramps');
+  const runMode = v => { const model = F.parseCirc(fs.readFileSync(path.join(ROOT, 'circuits/reactor_modes.circ'), 'utf8').replace(/^pin in8 const\.1$/m, 'pin in8 const.' + v)), cfg = Object.assign(JSON.parse(fs.readFileSync(path.join(ROOT, 'sim.config.json'), 'utf8')), { profile: prof, reactorMaxKW: prof.reactorMaxKW || 5000 }); const sim = new E.Sim(P.substitute(model, P.placeholders(cfg)), cfg); return sim.runToEnd(); };
+  const re = runMode(1), eco = runMode(0);
+  assert(re.score_reliability > eco.score_reliability + 2, `reactive steadier (${re.score_reliability} vs ${eco.score_reliability})`);
+  assert(eco.fuel_rods_used < re.fuel_rods_used * 0.93, `eco saves fuel (${eco.fuel_rods_used} vs ${re.fuel_rods_used} rods)`);
+  console.log('reactor modes passed');
 }

@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Circuit Sandbox</title>
+<title>Circuit Lab</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!--SHARED-->
+<!--MODE-->
 <style>
 /* Layout: the bench's engineering console. Script on the left, the live wiring bench on the right (devices you can
    operate, the circuit boxes drawn to scale inside their 8192-unit area), findings underneath. */
@@ -31,7 +33,7 @@
 * { box-sizing: border-box }
 [hidden] { display: none !important }
 html { -webkit-text-size-adjust: 100% }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: max(14px, env(safe-area-inset-top, 0px)) max(40px, env(safe-area-inset-bottom, 0px)) }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 max(40px, env(safe-area-inset-bottom, 0px)) }
 h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0 }
 a { color: var(--accent) }
 .wrap { max-width: 1500px; margin: 0 auto; display: grid; gap: 14px }
@@ -94,6 +96,12 @@ details.cheat pre { margin: 8px 0 0; max-height: 360px; overflow: auto; font: 11
 .tog[aria-pressed="true"]::after { left: 24px; background: var(--accent-ink) }
 input[type=range] { width: 100%; accent-color: var(--accent) }
 /* boxes */
+.worldwrap { position: relative; border: 1px solid var(--line); border-radius: 4px; background: #0a1c27; height: clamp(320px, 54vh, 680px); overflow: hidden; touch-action: none }
+.worldwrap canvas { width: 100%; height: 100%; display: block; cursor: grab }
+.worldwrap .zoom { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px }
+.worldwrap .zoom button { padding: 3px 9px; font-family: var(--f-mono); background: rgba(10, 28, 39, .85); color: #c9d6dc; border-color: #1d3442 }
+.worldkey { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted) }
+.worldkey i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: -1px; margin-right: 5px }
 .boxwrap { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--sunk); height: clamp(380px, 62vh, 760px); overflow: hidden; touch-action: none }
 .boxwrap svg { width: 100%; height: 100%; display: block; cursor: grab; user-select: none }
 .boxwrap .zoom { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px }
@@ -130,11 +138,12 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
 </style>
 </head>
 <body>
+<!--NAV-->
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <h1>Circuit Sandbox</h1>
-      <p>Wire circuit boxes, loose components and devices together, script what happens, then press buttons and type into terminals yourself. Same component engine as the reactor bench, 60 ticks a second. <a href="index.html">Reactor bench</a></p>
+      <h1>Circuit Lab</h1>
+      <p>Wire circuit boxes, loose components and devices together, script what happens, then press buttons and type into terminals yourself. Same component engine as the Sub Studio and the Reactor Bench, 60 ticks a second.</p>
     </div>
     <div class="controls" role="group" aria-label="Run controls">
       <button id="btnRun" class="primary">Run</button>
@@ -175,6 +184,15 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
     </div>
 
     <div class="col">
+      <section class="panel" aria-label="World" id="worldPanel" hidden>
+        <div class="phead"><h2>World</h2><div class="bar"><label class="hint" for="camSel">Camera</label><select id="camSel" aria-label="Camera"></select></div></div>
+        <div class="pbody">
+          <div class="worldwrap" id="worldWrap"><canvas id="worldCv" aria-label="The world: rock, vehicles, sensors, divers and monsters"></canvas>
+            <div class="zoom"><button id="wzIn" aria-label="Zoom in">+</button><button id="wzOut" aria-label="Zoom out">−</button><button id="wzFit" title="Everything">Fit</button></div></div>
+          <div class="worldkey"><span><i style="background:#8d7360"></i>rock</span><span><i style="background:#c9d6dc"></i>vehicle (blue = ballast water)</span><span><i style="background:#ffe066"></i>sensor seeing something</span><span><i style="background:#7ef0b0"></i>diver</span><span><i style="background:#ff6b4a"></i>crawler</span><span><i style="background:#b48cf0"></i>mudraptor</span><span><i style="background:#ffb347"></i>bolt</span></div>
+          <p class="hint mono" id="worldInfo"></p>
+        </div>
+      </section>
       <section class="panel" aria-label="Devices">
         <div class="phead"><h2>Devices</h2><span class="hint">Operate them while it runs</span></div>
         <div class="pbody"><div class="devs" id="devs"></div><div id="radio" hidden></div></div>
@@ -191,15 +209,15 @@ pre.log { margin: 0; max-height: 420px; overflow: auto; font: 12.5px/1.5 var(--f
   </div>
 </div>
 
-<script>/*__SIM__*/</script>
-<script type="application/json" id="lib">/*__LIB__*/</script>
+<!--LIBS-->
 <script>
 (() => {
 'use strict';
 const S = self.BaroSandbox, C = self.BaroComponents, F = self.BaroFormat;
-const LIB = JSON.parse(document.getElementById('lib').textContent);
+const LIB = self.BaroLabLib;
 const $ = id => document.getElementById(id);
-const store = { get(k, d) { try { const v = localStorage.getItem('sbx.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('sbx.' + k, JSON.stringify(v)); } catch (e) { } } };
+const WORLD_MODE = self.LAB_MODE === 'world', SP = WORLD_MODE ? 'wld.' : 'sbx.';
+const store = { get(k, d) { try { const v = localStorage.getItem(SP + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(SP + k, JSON.stringify(v)); } catch (e) { } } };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
@@ -208,7 +226,8 @@ const truthy = v => v !== undefined && v !== null && v !== '' && v !== '0';
 let sb = null, playing = false, speed = store.get('speed', '1'), lastTs = 0, carry = 0, curBox = null, shown = {};
 
 // ---------- examples + cheat sheet ----------
-const EX = LIB.examples;
+const EX = WORLD_MODE ? LIB.worlds : LIB.examples;
+if (WORLD_MODE) { document.querySelector('.brand h1').textContent = 'Drone Range'; document.querySelector('.brand p').textContent = 'Drones and small subs in a cave, with the game\'s buoyancy, drag, engine force and pumps. Mount engines, pumps, a nav terminal, motion detectors and turrets on a vehicle (On=<vehicle>), wire them to circuit boxes, and see whether it finds its way, follows the diver and hits the right target.'; }
 for (const k of Object.keys(EX)) { const o = document.createElement('option'); o.value = k; o.textContent = k.replace(/_/g, ' '); $('exSel').appendChild(o); }
 { const o = document.createElement('option'); o.value = ''; o.textContent = 'My script'; $('exSel').prepend(o); }
 const head = (S.HELP || '').trim();
@@ -221,7 +240,7 @@ function build(text) {
   playing = false; carry = 0; setRunBtn();
   const spec = S.parse(text, { readFile: p => { const f = LIB.files[p.replace(/^\.?\//, '')]; if (f === undefined) throw new Error(`no file "${p}" in this page (see the list under Syntax)`); return f; } });
   sb = new S.Sandbox(spec); sb.live = true;
-  shown = {}; renderDevices(); fillBoxes(); render(true);
+  shown = {}; renderDevices(); fillBoxes(); worldSetup(); render(true);
   const n = sb.errors.length;
   setStatus(n ? `${n} error${n > 1 ? 's' : ''} in the script: see Problems.` : `Built: ${sb.boxes.filter(b => !b.model.name.startsWith('part:')).length} box(es), ${spec.parts.length} loose part(s), ${sb.devs.length} device(s). Press Run.`, n ? 'err' : '');
 }
@@ -402,7 +421,7 @@ function zoom(f, cx, cy) { if (!vb) area(); cx = cx ?? vb[0] + vb[2] / 2; cy = c
 function render(force) {
   if (!sb) return;
   const dur = sb.spec.duration; $('clock').textContent = `${sb.time.toFixed(2)} / ${dur} s`; $('prog').style.width = Math.min(100, sb.time / dur * 100) + '%';
-  updateDevices(); updateBox();
+  updateDevices(); updateBox(); drawWorld();
   const warns = sb.allWarnings, errs = sb.errors;
   const pk = errs.length + '|' + warns.length;
   if (force || shown.prob !== pk) {
@@ -423,6 +442,96 @@ function render(force) {
 }
 document.querySelector('.tabs').onclick = e => { const b = e.target.closest('button[role=tab]'); if (!b) return; for (const x of document.querySelectorAll('.tabs button')) x.setAttribute('aria-selected', x === b); for (const p of document.querySelectorAll('[data-pane]')) p.hidden = p.dataset.pane !== b.dataset.tab; store.set('tab', b.dataset.tab); };
 { const t = store.get('tab', 'prob'), b = document.querySelector(`.tabs button[data-tab="${t}"]`); if (b) b.click(); }
+
+// ---------- world view (sim/world.js) ----------
+const cv = $('worldCv'); let cam = null, camDrag = null;
+function worldSetup() {
+  const w = sb && sb.world; $('worldPanel').hidden = !w;
+  if (!w) return;
+  const sel = $('camSel'), keep = sel.value; sel.innerHTML = '';
+  const opt = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); };
+  for (const id of w.vehicles.keys()) opt('v:' + id, 'Follow ' + id);
+  for (const [id, c] of w.chars) if (c.human) opt('c:' + id, 'Follow ' + id);
+  opt('fit', 'Whole world'); opt('free', 'Free (drag)');
+  sel.value = [...sel.options].some(o => o.value === keep) ? keep : sel.options[0].value;
+  cam = null; drawWorld();
+}
+function worldBounds(w) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; const add = (x, y) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); };
+  for (const r of w.rocks) { add(r.x0, r.y0); add(r.x1, r.y1); } for (const v of w.vehicles.values()) add(v.x, v.y); for (const c of w.chars.values()) { add(c.x, c.y); for (const p of c.path) add(p[0], p[1]); }
+  if (!isFinite(x0)) { x0 = -1000; x1 = 1000; y0 = -600; y1 = 600; } return [x0 - 300, y0 - 300, x1 + 300, y1 + 300];
+}
+function camFor(w, W, H) {
+  const mode = $('camSel').value;
+  if (mode === 'free' && cam) return cam;
+  if (mode === 'fit' || !cam) { const b = worldBounds(w), k = Math.min(W / (b[2] - b[0]), H / (b[3] - b[1])); if (mode === 'fit') return cam = { x: (b[0] + b[2]) / 2, y: (b[1] + b[3]) / 2, k }; cam = { x: 0, y: 0, k: Math.max(k, Math.min(W, H) / 3000) }; }
+  const [t, id] = mode.split(':'), o = t === 'v' ? w.vehicles.get(id) : w.chars.get(id);
+  if (o) { cam.x = o.x; cam.y = o.y; } return cam;
+}
+function drawWorld() {
+  const w = sb && sb.world; if (!w || $('worldPanel').hidden) return;
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const c = camFor(w, W, H), k = c.k, X = x => W / 2 + (x - c.x) * k, Y = y => H / 2 - (y - c.y) * k;
+  g.fillStyle = '#0a1c27'; g.fillRect(0, 0, W, H);
+  // grid: 1 m when close, 10 m when far
+  const step = k > 0.25 ? 100 : 1000; g.strokeStyle = 'rgba(255,255,255,.05)'; g.lineWidth = 1; g.beginPath();
+  for (let x = Math.ceil((c.x - W / 2 / k) / step) * step; x < c.x + W / 2 / k; x += step) { g.moveTo(X(x), 0); g.lineTo(X(x), H); }
+  for (let y = Math.ceil((c.y - H / 2 / k) / step) * step; y < c.y + H / 2 / k; y += step) { g.moveTo(0, Y(y)); g.lineTo(W, Y(y)); }
+  g.stroke();
+  // rock
+  g.fillStyle = '#5b4a3c'; g.strokeStyle = '#8d7360'; g.lineWidth = 1.5;
+  for (const r of w.rocks) { g.beginPath(); r.pts.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.closePath(); g.fill(); g.stroke(); }
+  // diver paths
+  g.setLineDash([5, 5]); g.strokeStyle = 'rgba(126,240,176,.35)';
+  for (const ch of w.chars.values()) if (ch.human && ch.path.length) { g.beginPath(); g.moveTo(X(ch.x), Y(ch.y)); for (const p of ch.path.slice(ch.wp)) g.lineTo(X(p[0]), Y(p[1])); g.stroke(); }
+  g.setLineDash([]);
+  // vehicles: trail, body, ballast, thrust, sensors, turrets
+  for (const v of w.vehicles.values()) {
+    g.strokeStyle = 'rgba(201,214,220,.25)'; g.beginPath(); v.trail.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.lineTo(X(v.x), Y(v.y)); g.stroke();
+    for (const o of v.devs) if (o.type === 'motion') { // rock boxes solid; big presence boxes (divers, monsters) faint and dashed until they see someone
+      const cx = v.x + o.off[0], cy = v.y + o.off[1], on = o.s.value === '1', wallOnly = o.tg && o.tg.wall && !o.tg.human && !o.tg.monster;
+      const x0 = X(cx - o.rx), y0 = Y(cy + o.ry), w2 = 2 * o.rx * k, h2 = 2 * o.ry * k;
+      g.lineWidth = 1; g.setLineDash(wallOnly ? [] : [4, 4]);
+      if (on) { g.fillStyle = wallOnly ? 'rgba(255,224,102,.35)' : 'rgba(255,224,102,.10)'; g.fillRect(x0, y0, w2, h2); }
+      g.strokeStyle = on ? '#ffe066' : wallOnly ? 'rgba(122,200,255,.45)' : 'rgba(122,200,255,.16)'; g.strokeRect(x0, y0, w2, h2); g.setLineDash([]);
+    }
+    const bx = X(v.x - v.w / 2), by = Y(v.y + v.h / 2), bw = v.w * k, bh = v.h * k;
+    g.fillStyle = '#2a3a44'; g.fillRect(bx, by, bw, bh);
+    const lvl = Math.min(1, v.water / v.tank); g.fillStyle = 'rgba(47,143,214,.75)'; g.fillRect(bx, by + bh * (1 - lvl * 0.4), bw, bh * lvl * 0.4);
+    g.strokeStyle = v.contact ? '#ff6f61' : '#c9d6dc'; g.lineWidth = 2; g.strokeRect(bx, by, bw, bh);
+    for (const o of v.devs) {
+      if (o.type === 'engine' && Math.abs(o.s.cur || 0) > 1) { const dir = Math.sign(o.s.cur), len = Math.abs(o.s.cur) / 100 * 60; g.strokeStyle = '#ffb347'; g.lineWidth = 3; g.beginPath(); const ex = dir > 0 ? bx : bx + bw; g.moveTo(ex, by + bh / 2); g.lineTo(ex - dir * len, by + bh / 2); g.stroke(); }
+      if (o.type === 'turret') { const px = X(v.x + o.off[0]), py = Y(v.y + o.off[1]); g.fillStyle = '#ffe066'; g.beginPath(); g.arc(px, py, 5, 0, 7); g.fill(); g.strokeStyle = '#ffe066'; g.lineWidth = 3; g.beginPath(); g.moveTo(px, py); g.lineTo(px + Math.cos(o.rot) * Math.max(14, 70 * k), py + Math.sin(o.rot) * Math.max(14, 70 * k)); g.stroke(); }
+    }
+    g.fillStyle = '#c9d6dc'; g.font = '12px "IBM Plex Mono", monospace'; g.fillText(v.id, bx, by - 6);
+  }
+  // bolts
+  g.strokeStyle = '#ffb347'; g.lineWidth = 2;
+  for (const b of w.bolts) { g.beginPath(); g.moveTo(X(b.x), Y(b.y)); g.lineTo(X(b.x - b.vx * 0.02), Y(b.y - b.vy * 0.02)); g.stroke(); }
+  // characters
+  for (const ch of w.chars.values()) {
+    const col = ch.human ? '#7ef0b0' : ch.kind === 'mudraptor' ? '#b48cf0' : '#ff6b4a', r = Math.max(4, ch.r * k);
+    g.globalAlpha = ch.alive ? 1 : 0.35; g.fillStyle = col; g.beginPath(); g.arc(X(ch.x), Y(ch.y), r, 0, 7); g.fill(); g.globalAlpha = 1;
+    if (!ch.alive) { g.strokeStyle = '#0a1c27'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(ch.x) - r, Y(ch.y) - r); g.lineTo(X(ch.x) + r, Y(ch.y) + r); g.moveTo(X(ch.x) + r, Y(ch.y) - r); g.lineTo(X(ch.x) - r, Y(ch.y) + r); g.stroke(); }
+    else { g.fillStyle = '#04100c'; g.fillRect(X(ch.x) - 16, Y(ch.y) - r - 9, 32, 4); g.fillStyle = col; g.fillRect(X(ch.x) - 16, Y(ch.y) - r - 9, 32 * Math.max(0, ch.hp / ch.maxHp), 4); }
+    g.fillStyle = '#c9d6dc'; g.font = '11px "IBM Plex Mono", monospace'; g.fillText(ch.id, X(ch.x) + r + 4, Y(ch.y) + 4);
+  }
+  // scale bar
+  const mt = [1, 2, 5, 10, 20, 50, 100].find(m => m * 100 * k > 60) || 100; g.strokeStyle = '#c9d6dc'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(10, H - 12); g.lineTo(10 + mt * 100 * k, H - 12); g.stroke(); g.fillStyle = '#c9d6dc'; g.fillText(mt + ' m', 10, H - 18);
+  const v0 = [...w.vehicles.values()][0];
+  $('worldInfo').textContent = v0 ? `${v0.id}: x ${(v0.x / 100).toFixed(1)} m, depth ${((w.top - v0.y) / 100).toFixed(1)} m, ${(Math.hypot(v0.vx, v0.vy) / 100).toFixed(2)} m/s, ballast ${Math.round(v0.water / v0.tank * 100)} %, ${v0.impacts} damaging hits · kills ${w.kills} · friendly fire ${w.friendly}` : `kills ${w.kills}`;
+}
+cv.addEventListener('pointerdown', e => { if (!cam) return; cv.setPointerCapture(e.pointerId); camDrag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y }; });
+cv.addEventListener('pointermove', e => { if (!camDrag) return; $('camSel').value = 'free'; cam.x = camDrag.cx - (e.clientX - camDrag.x) / cam.k; cam.y = camDrag.cy + (e.clientY - camDrag.y) / cam.k; drawWorld(); });
+cv.addEventListener('pointerup', () => { camDrag = null; });
+cv.addEventListener('wheel', e => { if (!cam) return; e.preventDefault(); cam.k = Math.min(3, Math.max(0.01, cam.k * Math.pow(0.9985, e.deltaY))); drawWorld(); }, { passive: false });
+$('wzIn').onclick = () => { if (cam) { cam.k = Math.min(3, cam.k * 1.3); drawWorld(); } };
+$('wzOut').onclick = () => { if (cam) { cam.k = Math.max(0.01, cam.k / 1.3); drawWorld(); } };
+$('wzFit').onclick = () => { $('camSel').value = 'fit'; drawWorld(); };
+$('camSel').onchange = drawWorld;
+new ResizeObserver(() => drawWorld()).observe($('worldWrap'));
 
 // ---------- run loop ----------
 function endCheck() {
@@ -459,9 +568,11 @@ $('btnCopy').onclick = () => {
 
 // ---------- start ----------
 {
-  const ex = store.get('ex', 'mini_os'), src = store.get('src', null);
+  const ex = store.get('ex', WORLD_MODE ? Object.keys(EX)[0] : 'mini_os'), src = store.get('src', null);
   $('exSel').value = EX[ex] !== undefined ? ex : '';
   $('src').value = src !== null && src.trim() ? src : (EX[ex] || EX[Object.keys(EX)[0]]);
+  // opened from the Sub Studio ("Open in Circuit Lab"): a sub's circuit box arrives as a ready-made script
+  if (location.hash === '#import') { let t = null; try { t = localStorage.getItem('bw.import'); localStorage.removeItem('bw.import'); } catch (e) { } if (t) { if ($('src').value && !Object.values(EX).includes($('src').value)) store.set('mine', $('src').value); $('src').value = t; $('exSel').value = ''; store.set('src', t); } history.replaceState(null, '', location.pathname); }
   try { build($('src').value); } catch (e) { setStatus('Could not build: ' + e.message, 'err'); }
   requestAnimationFrame(frame);
 }

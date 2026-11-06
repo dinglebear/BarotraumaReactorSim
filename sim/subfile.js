@@ -33,6 +33,8 @@
     const a = sub.attrs;
     const ship = { name: a.name || 'sub', description: a.description || '', class: a.class || '', tier: num(a.tier), dimensions: a.dimensions || '', hulls: [], items: [], wires: [], warnings: [],
       structures: [], gaps: [], waypoints: [], props: [] }; // structures/gaps/waypoints/props: for the viewer and for building subs
+    // the sub selection screen's picture (base64 PNG): the game's own render of the sub (sim/preview.js lines it up)
+    if (a.previewimage) Object.defineProperty(ship, 'previewImage', { value: a.previewimage, enumerable: false, writable: true });
     const byId = new Map(), wireItems = new Map();
     for (const n of sub.children) {
       if (n.tag === 'Hull') { const name = n.attrs.roomname || n.attrs.RoomName || ''; ship.hulls.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), name, label: roomLabel(name), linked: n.attrs.linked || '' }); }

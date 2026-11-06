@@ -1,5 +1,7 @@
 # Community auto-reactors: benchmark and study
 
+> October 2026: `basic_reactor`, `overclock_auto_reactor` and the Rimuru lever-0 variant were taken out of the library (the feed-forward and reactor-modes circuits cover what they showed). Their rows stay below for the record.
+
 All runs are on the real rounds recorded with the PowerLogger mod (no batteries), using `node sim/cli.js compare <names> --profile <round>`.
 - `score` is reliability, 0–100, computed from **avoidable** unmet demand: demand the reactor could have met right then, given its fuel and max output.
 - `kWh/rod` is fuel efficiency (higher is better).

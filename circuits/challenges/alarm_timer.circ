@@ -1,0 +1,136 @@
+# ALARM TIMER. A countdown for a text display: type "set 5:00" (or "set 5" for minutes) at a terminal, then "start",
+# "pause" and "reset", or use a start/pause button and a reset button. The display shows mm:ss, always zero-padded
+# ("01:09", never "1:9"), green while running, amber when paused. At zero it shows TIME! in red and sounds an alarm
+# (out3) until reset. Tested in sandbox/alarm_timer.sbx.
+#
+# Patterns (CIRCUIT_PATTERNS.md):
+#  * one writer per memory, and a feedback loop only one arithmetic step long: el -> add -> el. Its reset is a huge
+#    negative number added for 0.1 s against ClampMin=0, so a reset and a tick can't fight over the memory;
+#  * the start/pause state toggles through a XOR with its own memory (a pulse flips it);
+#  * zero padding: concat("0", n), then a regex (.{2})$ keeps the last two characters;
+#  * "mm:ss" is 5 characters, so it never scrolls on a text display.
+name alarm_timer
+box timer
+note "ALARM TIMER: HOW IT WORKS" "Time left = set time - elapsed. Elapsed counts the 1 Hz pulses while running and time is left: el = el + pulse (an adder with ClampMin=0). For 0.1 s after a reset or a new time, -1000000 is added instead, which clamps it to 0.\nRunning: a memory flipped by a XOR whenever start/pause is pressed, 'start' is typed while paused, 'pause' or 'stop' while running, or reset while running.\nThe terminal: set M:SS or set M (minutes), start, pause, stop, reset. Anything else gets the list of commands.\nTime up: the alarm output is 1 while running at 0:00, and the display shows TIME! in red. (A one-time terminal message would need an edge detector, and those depend on the order parts update in, which you can't control in game.)"
+note "WIRING" "in1 <- terminal signal_out, in2 <- start/pause button, in3 <- reset button\nout1 -> display set_text, out2 -> display set_text_color, out3 -> alarm (siren / light set_state), out4 -> terminal signal_in"
+# --- terminal commands
+c rSet regex Expression="^(?i)set ([0-9]+)(:[0-9]+)?$" UseCaptureGroup=true Output=1 FalseOutput="" ContinuousOutput=false
+c rSec regex Expression="^(?i)set [0-9]+:([0-9]+)$" UseCaptureGroup=true Output=1 FalseOutput=0 ContinuousOutput=false
+c rStart regex Expression="^(?i)start$" FalseOutput="" ContinuousOutput=false
+c rStop regex Expression="^(?i)(pause|stop)$" FalseOutput="" ContinuousOutput=false
+c rReset regex Expression="^(?i)reset$" FalseOutput="" ContinuousOutput=false
+c rHelp regex Expression="^(?i)(set [0-9]+(:[0-9]+)?|start|pause|stop|reset)$" Output="" FalseOutput="Commands: set M:SS (or set M), start, pause, reset" ContinuousOutput=false
+w in1 rSet.in rSec.in rStart.in rStop.in rReset.in rHelp.in
+# set time = minutes x 60 + seconds
+c k60 mem Value=60
+c mins mul
+c tsum add TimeFrame=0.1
+c tot mem Value=300
+w rSet.out mins.1
+w k60.out mins.2 dmin.2 smod.set_modulus
+w mins.out tsum.1
+w rSec.out tsum.2
+w tsum.out tot.in
+# --- elapsed: el = el + pulse, one arithmetic step around the loop (memory first, then the adder: a loop through
+# two arithmetic parts takes two frames and ends up as two counters taking turns). Reset: a huge negative input for
+# 0.1 s against ClampMin=0.
+c tick osc OutputType=Pulse Frequency=1
+c gt0 greater
+c a1 and
+c dec and
+c el mem Value=0
+c inc add ClampMin=0
+c zero mem Value=0
+c rst or TimeFrame=0.1
+c kBig mem Value=-1000000
+c rneg mul
+c dsum add
+w tick.out a1.1
+w run.out a1.2 xr.1 aStop.2 aRst.2
+w a1.out dec.1
+w gt0.out dec.2
+w rReset.out rst.1
+w in3 rst.2 aRst.1
+w rSet.out rst.1
+w rst.out rneg.1
+w kBig.out rneg.2
+w dec.out dsum.1
+w rneg.out dsum.2
+w el.out inc.1
+w dsum.out inc.2
+w inc.out el.in
+# time left
+c left sub ClampMin=0
+w tot.out left.1
+w el.out left.2
+w left.out gt0.1 dmin.1 smod.in eq0.1
+w zero.out gt0.2 eq0.2
+# --- running: toggled by a XOR with its own memory
+c run mem Value=0
+c xr xor
+c nrun not
+c aStart and
+c aStop and
+c aRst and
+c t1 or
+c t2 or
+c tg or
+w run.out nrun.in
+w rStart.out aStart.1
+w nrun.out aStart.2
+w rStop.out aStop.1
+w aStart.out t1.1
+w aStop.out t1.2
+w in2 t2.1
+w aRst.out t2.2
+w t1.out tg.1
+w t2.out tg.2
+w tg.out xr.2
+w xr.out run.in
+# --- mm:ss, zero padded
+c dmin div
+c fmin floor
+c smod mod Modulus=60
+c z mem Value=0
+c pm concat
+c ps concat
+c rm regex Expression="(.{2})$" UseCaptureGroup=true Output=1 FalseOutput=""
+c rs regex Expression="(.{2})$" UseCaptureGroup=true Output=1 FalseOutput=""
+c mmss concat Separator=:
+w dmin.out fmin.in
+w z.out pm.1 ps.1
+w fmin.out pm.2
+w smod.out ps.2
+w pm.out rm.in
+w ps.out rs.in
+w rm.out mmss.1
+w rs.out mmss.2
+c sTime mem Value=TIME!
+c dmux mux
+w mmss.out dmux.signal_in0
+w sTime.out dmux.signal_in1
+w dmux.out out1
+# --- time up: alarm while running at zero, the display says TIME! in red until reset
+c eq0 equals
+c alarm and
+w eq0.out alarm.1
+w run.out alarm.2
+w alarm.out out3 cidx.1 dmux.set_input
+c cidx add
+w nrun.out cidx.2
+c cmux mux
+w cidx.out cmux.set_input
+c green mem Value="120,255,140,255"
+c amber mem Value="255,190,80,255"
+c red mem Value="255,80,60,255"
+w green.out cmux.signal_in0
+w amber.out cmux.signal_in1
+w red.out cmux.signal_in2
+w cmux.out out2
+# --- terminal replies (once per command)
+c say1 regex Expression="^(?i)set " Output="Timer set." FalseOutput="" ContinuousOutput=false
+c say2 regex Expression="^(?i)(start|pause|stop|reset)$" UseCaptureGroup=true Output=1 FalseOutput="" ContinuousOutput=false
+w in1 say1.in say2.in
+w say1.out out4
+w say2.out out4
+w rHelp.out out4

@@ -1,0 +1,61 @@
+# SMART RETURN in a cave. The pilot saves the spot, drives over a pillar and under a stalactite to the far end, lets go
+# of the wheel and flips RETURN. The circuit (circuits/challenges/smart_return.circ) flies the straight line home,
+# goes under the stalactite and over the pillar when its sensors find them, and holds position at the saved spot.
+# The sub: 6 x 2.5 m, 2 t, one engine (MaxForce 100), a small ballast pump; four wall sensors 2 m beyond the hull.
+name smart return: save, drive off, come back around the rock
+world Top=0
+rock -4000,-2200,10000,-1600
+rock -4000,1600,10000,2200
+rock -4000,-1600,-3400,1600
+rock 9400,-1600,10000,1600
+rock 2400,-1600,3000,500
+wall 5200,1600 5800,1600 5500,-200
+vehicle sub At=0,0 Size=600,250 Mass=2000 Volume=150000
+dev eng engine On=sub MaxForce=100
+dev bal pump On=sub MaxFlow=100
+dev nav nav On=sub
+dev wR motion On=sub Offset=500,0 RangeX=200 RangeY=150 Target=Wall
+dev wL motion On=sub Offset=-500,0 RangeX=200 RangeY=150 Target=Wall
+dev wU motion On=sub Offset=0,325 RangeX=280 RangeY=200 Target=Wall
+dev wD motion On=sub Offset=0,-325 RangeX=280 RangeY=200 Target=Wall
+dev save button
+dev ret switch 0
+dev status display
+dev dist display
+
+box rt file=circuits/challenges/smart_return.circ
+
+wire nav.velocity_x_out eng.set_force
+wire nav.velocity_y_out bal.set_targetlevel
+wire nav.current_position_x rt.in1
+wire nav.current_position_y rt.in2
+wire nav.current_velocity_x rt.in3
+wire nav.current_velocity_y rt.in4
+wire save.out rt.in5
+wire ret.out rt.in6
+wire wR.state_out rt.in7
+wire wL.state_out rt.in8
+wire wU.state_out rt.in9
+wire wD.state_out rt.in0
+wire rt.out1 nav.velocity_in
+wire rt.out2 status.set_text
+wire rt.out3 dist.set_text
+
+# the pilot: save here, up over the pillar, down under the stalactite, on to the far end
+at 1 press save
+at 2 pilot nav 1500,1000
+at 25 pilot nav 4200,900
+at 45 pilot nav 4300,-700
+at 60 pilot nav 8000,-800
+at 100 pilot nav off
+at 101 toggle ret
+expect 100 sub.x > 7000
+expect 100 status = MANUAL
+expect 110 status ~ RETURN|DETOUR
+expect 200 status = ARRIVED
+expect 200 sub.x > -300
+expect 200 sub.x < 300
+expect 200 sub.y > -300
+expect 200 sub.y < 300
+expect 200 sub.impacts = 0
+run 200

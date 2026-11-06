@@ -134,7 +134,7 @@
     // ---------- item / connection plumbing ----------
     mkItem(name, props) { const it = Object.assign({ name, lsr: [], conns: {} }, props); this.items.push(it); return it; }
     conn(item, pin) { return item.conns[pin] || (item.conns[pin] = { item, pin, wires: [], cb: [] }); }
-    wire(a, b) { a.wires.push(b); b.wires.push(a); }
+    wire(a, b) { a.wires.push(b); b.wires.push(a); this._wifiIdx = null; }
     // Item.SendSignal
     itemSend(item, sig, conn) {
       item.lsr.length = 0;
@@ -177,7 +177,7 @@
         d.make(comp);
         ci.recv = (pin, sig) => comp.recv && comp.recv(pin, sig);
         ci.comp = comp;
-        if (d.alias === 'wifi') this.wifis.push(comp);
+        if (d.alias === 'wifi') { this.wifis.push(comp); this._wifiIdx = null; comp.onChannel = () => { sim._wifiIdx = null; }; }
         box.comps.push(ci); box.compById[cm.id] = ci;
       }
       for (const w of bm.wires) {
@@ -195,9 +195,15 @@
       return box;
     }
     cbInto(box, ep) { const ci = box.compById[ep.c]; if (!ci) return null; const c = this.conn(ci, ep.pin); c.wiredIn = true; return sig => this.deliver(c, sig); } // via deliver(): records the pin's last value (and lets the sandbox see same-tick conflicts)
+    // receivers per channel (wifis whose signal_out is wired), rebuilt when wiring or a channel changes: a transmission
+    // used to scan every wifi in the sub (~150 in the Camel Overkill), the biggest cost of a practice round
+    wifiRx(ch) {
+      if (!this._wifiIdx) { const m = new Map(); for (const w of this.wifis) { if (!w.isWired('signal_out')) continue; const k = String(w.p.Channel); if (!m.has(k)) m.set(k, []); m.get(k).push(w); } this._wifiIdx = m; }
+      return this._wifiIdx.get(String(ch)) || [];
+    }
     wifiTx(srcItem, srcComp, sig) {
-      for (const w of this.wifis) {
-        if (w === srcComp || w.p.Channel !== srcComp.p.Channel || !w.isWired('signal_out')) continue;
+      for (const w of this.wifiRx(srcComp.p.Channel)) {
+        if (w === srcComp) continue;
         const inConn = w.item.conns.signal_in;
         if (sig.src && inConn) { if (sig.src.lsr.includes(inConn)) continue; sig.src.lsr.push(inConn); }
         this.itemSend(w.item, { v: sig.v, steps: sig.steps + 1, src: sig.src }, this.conn(w.item, 'signal_out'));
@@ -249,7 +255,7 @@
         const ca = this.conn(A, 'signal_' + ap), cb = this.conn(B, 'signal_' + bp);
         if (l.wifi || this.cfg.linkMode === 'wifi') { // two external wifi components, one per box
           const ch = String(l.wifi || wifiCh++);
-          const mk = (nm) => { const it = this.mkItem(nm, {}); const comp = { p: { Channel: ch }, item: it }; comp.isWired = pin => !!it.conns[pin] && it.conns[pin].wires.length > 0; comp.wifiTx = s => this.wifiTx(it, comp, s); C.byAlias('wifi').make(comp); it.recv = (pin, s) => comp.recv(pin, s); this.wifis.push(comp); return it; };
+          const mk = (nm) => { const it = this.mkItem(nm, {}); const comp = { p: { Channel: ch }, item: it }; comp.isWired = pin => !!it.conns[pin] && it.conns[pin].wires.length > 0; comp.wifiTx = s => this.wifiTx(it, comp, s); C.byAlias('wifi').make(comp); it.recv = (pin, s) => comp.recv(pin, s); this.wifis.push(comp); this._wifiIdx = null; comp.onChannel = () => { this._wifiIdx = null; }; return it; };
           const wa = mk(`wifi:${l.from}`), wb = mk(`wifi:${l.to}`);
           this.wire(ca, this.conn(wa, 'signal_in')); this.wire(this.conn(wb, 'signal_out'), cb);
         } else this.wire(ca, cb);
@@ -505,7 +511,9 @@
       this.updateReactor(dt);
       this.updateJunction(dt);
       for (const b of this.batteries) this.updateBattery(b);
-      for (const box of this.boxes) for (const ci of box.comps) if (ci.comp.update) ci.comp.update(dt);
+      // components with an Update() (memory, logic, arithmetic, oscillators...), listed once instead of scanning every part
+      if (!this._updaters || this._updN !== this.boxes.length) { this._updaters = []; for (const box of this.boxes) for (const ci of box.comps) if (ci.comp.update) this._updaters.push(ci.comp); this._updN = this.boxes.length; }
+      for (const c of this._updaters) c.update(dt);
       this.metrics.sample(dt);
       this.frame++; this.time = this.frame * STEP;
     }

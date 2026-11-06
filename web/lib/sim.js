@@ -1636,6 +1636,15 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
       structures: [], gaps: [], waypoints: [], props: [] }; // structures/gaps/waypoints/props: for the viewer and for building subs
     // the sub selection screen's picture (base64 PNG): the game's own render of the sub (sim/preview.js lines it up)
     if (a.previewimage) Object.defineProperty(ship, 'previewImage', { value: a.previewimage, enumerable: false, writable: true });
+    // IDs and the references to them are numbers in a real .sub. Keep only safe characters, so a doctored file can't
+    // smuggle markup into the pages that draw it (IDs end up in HTML attributes); connection names likewise
+    (function clean(n) {
+      for (const k of Object.keys(n.attrs || {})) {
+        if (/^(ID|linked|linkedto\d+|w|i|gap|ladders|contained)$/.test(k)) n.attrs[k] = String(n.attrs[k]).replace(/[^\w.,;:-]/g, '');
+        else if (k === 'name' && (n.tag === 'input' || n.tag === 'output')) n.attrs[k] = String(n.attrs[k]).replace(/[^\w.-]/g, '');
+      }
+      for (const c of n.children || []) clean(c);
+    })(sub);
     const byId = new Map(), wireItems = new Map();
     for (const n of sub.children) {
       if (n.tag === 'Hull') { const name = n.attrs.roomname || n.attrs.RoomName || ''; ship.hulls.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), name, label: roomLabel(name), linked: n.attrs.linked || '' }); }
@@ -2772,12 +2781,12 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
     }
     // rooms
     out.push('<g class="rooms">');
-    for (const h of ship.hulls) out.push(rectPath(h.rect, `fill="${/ballast|tank|airlock|bilge|wet/i.test(h.label || h.name) ? P.roomWet : P.room}" data-k="hull" data-id="${h.id}"`));
+    for (const h of ship.hulls) out.push(rectPath(h.rect, `fill="${/ballast|tank|airlock|bilge|wet/i.test(h.label || h.name) ? P.roomWet : P.room}" data-k="hull" data-id="${esc(h.id)}"`));
     out.push('</g>');
     // decorative exterior sprites (no collision): their boxes, faint
     const structs = ship.structures || [];
     out.push('<g class="deco">');
-    for (const s of structs) if (!G.solid(s) && EXTERIOR.test(s.identifier) && !insideAnyHull(ship, s.rect)) out.push(rectPath(s.rect, `fill="${P.deco}" stroke="${P.decoEdge}" stroke-width="${k}" stroke-dasharray="${4 * k} ${3 * k}" data-k="struct" data-id="${s.id}"`));
+    for (const s of structs) if (!G.solid(s) && EXTERIOR.test(s.identifier) && !insideAnyHull(ship, s.rect)) out.push(rectPath(s.rect, `fill="${P.deco}" stroke="${P.decoEdge}" stroke-width="${k}" stroke-dasharray="${4 * k} ${3 * k}" data-k="struct" data-id="${esc(s.id)}"`));
     out.push('</g>');
     // solid structure: shell (exterior) and inside walls, drawn as their sprites cover them (shellgeom.visual: a slope's
     // plate cut flush by its rectangle), not as their collision bodies
@@ -2787,14 +2796,14 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
       if (sp && sp.stairs) { // the walkable plank, plus faint treads so it reads as stairs
         const b = G.body(s), [[x0, y0], [x1, y1]] = b.seg, n = Math.max(3, Math.round(b.len / 36)), tr = [];
         for (let i = 1; i < n; i++) { const tx = x0 + (x1 - x0) * i / n, ty = y0 + (y1 - y0) * i / n; tr.push(`M${tx.toFixed(1)} ${(-ty).toFixed(1)}h${(x1 > x0 ? -1 : 1) * 12}`); }
-        out.push(poly(b.quad, `fill="${P.platform}" stroke="${added(D && D.structures, s.id) ? P.added : P.wallEdge}" stroke-width="${k}" data-k="struct" data-id="${s.id}"`) + `<path d="${tr.join('')}" stroke="${P.platform}" stroke-width="${2 * k}" fill="none"/>`);
+        out.push(poly(b.quad, `fill="${P.platform}" stroke="${added(D && D.structures, s.id) ? P.added : P.wallEdge}" stroke-width="${k}" data-k="struct" data-id="${esc(s.id)}"`) + `<path d="${tr.join('')}" stroke="${P.platform}" stroke-width="${2 * k}" fill="none"/>`);
         continue;
       }
       if (!G.solid(s)) continue;
       const pf = sp || {}, b = G.body(s), ext = EXTERIOR.test(s.identifier) || /shell/i.test(s.name || '');
-      if (pf.platform) { out.push(poly(b.quad, `fill="none" stroke="${P.platform}" stroke-width="${3 * k}" data-k="struct" data-id="${s.id}"`)); continue; }
+      if (pf.platform) { out.push(poly(b.quad, `fill="none" stroke="${P.platform}" stroke-width="${3 * k}" data-k="struct" data-id="${esc(s.id)}"`)); continue; }
       const a = added(D && D.structures, s.id);
-      out.push(poly(G.visual(s), `fill="${ext ? P.shell : P.wall}" stroke="${a ? P.added : ext ? P.shellEdge : P.wallEdge}" stroke-width="${(a ? 3 : 1) * k}" data-k="struct" data-id="${s.id}"${a ? ' data-new="1"' : ''}`));
+      out.push(poly(G.visual(s), `fill="${ext ? P.shell : P.wall}" stroke="${a ? P.added : ext ? P.shellEdge : P.wallEdge}" stroke-width="${(a ? 3 : 1) * k}" data-k="struct" data-id="${esc(s.id)}"${a ? ' data-new="1"' : ''}`));
     }
     out.push('</g>');
     // what collides (the hitboxes): the bodies of every solid piece, platform and stair, as dashed outlines
@@ -2816,7 +2825,7 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
       out.push('<g class="props">');
       for (const p of ship.props || []) {
         const lad = /ladder/i.test(p.identifier);
-        out.push(rectPath(p.rect, lad ? `fill="none" stroke="${P.ladder}" stroke-width="${2 * k}" data-k="prop" data-id="${p.id}"` : `fill="none" stroke="${added(D && D.props, p.id) ? P.added : P.prop}" stroke-width="${k}" data-k="prop" data-id="${p.id}"`));
+        out.push(rectPath(p.rect, lad ? `fill="none" stroke="${P.ladder}" stroke-width="${2 * k}" data-k="prop" data-id="${esc(p.id)}"` : `fill="none" stroke="${added(D && D.props, p.id) ? P.added : P.prop}" stroke-width="${k}" data-k="prop" data-id="${esc(p.id)}"`));
       }
       out.push('</g>');
     }
@@ -2829,7 +2838,7 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
         let pts = w.nodes && w.nodes.length >= 2 ? w.nodes : null;
         if (!pts) { const a = byId.get(w.from.item), b = byId.get(w.to.item); if (!a || !b) continue; pts = [centre(a), centre(b)]; }
         const col = isNew ? P.addedWire : (WIRE[w.color] || WIRE.wire), op = D ? (isNew ? .95 : .25) : .8;
-        out.push(`<polyline points="${pts.map(p => r1(p[0]) + ',' + r1(-p[1])).join(' ')}" fill="none" stroke="${col}" stroke-width="${(isNew ? 2.2 : 1.6) * k}" opacity="${op}" stroke-linejoin="round" data-k="wire" data-id="${w.id}" data-a="${w.from.item}" data-b="${w.to.item}"${isNew ? ' data-new="1"' : ''}${/^power/.test(w.from.conn) || /^power/.test(w.to.conn) ? ' data-pw="1"' : ''}/>`);
+        out.push(`<polyline points="${pts.map(p => r1(p[0]) + ',' + r1(-p[1])).join(' ')}" fill="none" stroke="${col}" stroke-width="${(isNew ? 2.2 : 1.6) * k}" opacity="${op}" stroke-linejoin="round" data-k="wire" data-id="${esc(w.id)}" data-a="${esc(w.from.item)}" data-b="${esc(w.to.item)}"${isNew ? ' data-new="1"' : ''}${/^power/.test(w.from.conn) || /^power/.test(w.to.conn) ? ' data-pw="1"' : ''}/>`);
       }
       out.push('</g>');
     }
@@ -2840,7 +2849,7 @@ self.BaroStructurePrefabs = {"prefabs":{"extA_Tail":{"w":282,"h":745,"body":true
       for (const it of ship.items) {
         const r = it.rect, w = Math.max(r[2], mn), h = Math.max(r[3], mn), x = r[0] + r[2] / 2 - w / 2, y = r[1] - r[3] / 2 + h / 2, kind = itemKind(it), a = added(D && D.items, it.id);
         const big = w * h > 40000 ? .35 : 1; // engines, reactors: a lighter fill so the room still shows
-        out.push(`<rect x="${r1(x)}" y="${r1(-y)}" width="${r1(w)}" height="${r1(h)}" rx="${r1(2 * k)}" fill="${P.kind[kind]}" fill-opacity="${(D && !a ? .45 : .9) * big}" stroke="${a ? P.added : '#000'}" stroke-width="${r1((a ? 3 : .8) * k)}" data-k="item" data-id="${it.id}" data-kind="${kind}"${a ? ' data-new="1"' : ''}><title>${esc(it.identifier)} #${it.id}</title></rect>`);
+        out.push(`<rect x="${r1(x)}" y="${r1(-y)}" width="${r1(w)}" height="${r1(h)}" rx="${r1(2 * k)}" fill="${P.kind[kind]}" fill-opacity="${(D && !a ? .45 : .9) * big}" stroke="${a ? P.added : '#000'}" stroke-width="${r1((a ? 3 : .8) * k)}" data-k="item" data-id="${esc(it.id)}" data-kind="${kind}"${a ? ' data-new="1"' : ''}><title>${esc(it.identifier)} #${it.id}</title></rect>`);
       }
       out.push('</g>');
     }

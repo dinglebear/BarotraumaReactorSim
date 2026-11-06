@@ -274,6 +274,11 @@ console.log('real-game checks passed');
   const svg = R.render(camel, { width: 600, picture: { href: 'previews/Camel.png', box: reg.box }, collision: 'hidden' }).svg;
   assert(svg.indexOf('<image class="picture"') > 0 && svg.indexOf('<image') < svg.indexOf('class="rooms"') && /class="collision" style="display:none"/.test(svg), 'picture underneath, collision layer hidden');
   assert(!/class="collision"/.test(R.render(camel, { width: 600 }).svg), 'no collision layer unless asked');
+  // a doctored .sub can't put markup into the pages: IDs and connection names are cleaned when read, and escaped when drawn
+  const evil = '&quot;&gt;&lt;img/src/onerror=alert(1)&gt;';
+  const bad = SF.parseSub(`<Submarine name="x"><Hull ID="1${evil}" rect="0,100,100,100" /><Item identifier="lamp" ID="2${evil}" rect="10,90,20,20"><ConnectionPanel><input name="power${evil}"><link w="3${evil}" i="0" /></input></ConnectionPanel></Item></Submarine>`);
+  assert(/^[\w.,;:-]+$/.test(bad.hulls[0].id + bad.items[0].id) && /^[\w.-]+$/.test(JSON.stringify(bad.items[0].conns).replace(/[{}[\]":,]/g, '')), 'IDs and pin names cleaned: ' + bad.items[0].id + ' ' + JSON.stringify(bad.items[0].conns));
+  assert(!/<img/i.test(R.render(bad, { width: 200 }).svg), 'nothing from the file becomes markup');
   console.log('wall look and sub pictures passed');
 }
 

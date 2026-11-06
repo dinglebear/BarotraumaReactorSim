@@ -19,7 +19,6 @@ Everything needed to do it again is in this repo. A human then tests in game, an
 | Anything shown on a text display or terminal | `reference/TEXT_DISPLAYS.md` (a changing value must fit ~7 characters) |
 | The next sub: Claude's own, built from scratch | `ships/CLAUDE_SUB_PLAN.md` |
 | A complete worked example, built and debugged over 4 in-game rounds | `ships/CAMEL_OVERKILL.md` + `ships/patches/camel_overkill.gen.js` + `circuits/camel/` |
-| How community circuits work (HuskOS, Smart Sub Toolkit, LHMRS/DMFSS, Iroh, MK-II door) | `context/circuit_studies/` |
 | Exact game code behaviour | `reference/BAROTRAUMA_MECHANICS.md` |
 
 ## Tools (all `node sim/cli.js <command>`, Node 18+, no installs)

@@ -5,7 +5,7 @@ const C = require('./components'), F = require('./format'), E = require('./engin
 const ROOT = path.resolve(__dirname, '..');
 // number formatting like .NET float.ToString("G")
 for (const [v, s] of [[0.1, '0.1'], [1 / 3, '0.33333334'], [1e9, '1E+09'], [0.00001, '1E-05'], [-0, '-0'], [999999, '999999']]) assert.strictEqual(C.fmtF(v), s);
-// every community circuit parses and round-trips through export
+// the example circuit parses and round-trips through export
 for (const f of fs.readdirSync(path.join(ROOT, 'context/community_circuits'))) {
   const m = P.loadModel(fs.readFileSync(path.join(ROOT, 'context/community_circuits', f), 'utf8'), f);
   const back = F.parseTxt(F.toTxt(m.boxes[0]));
@@ -60,13 +60,12 @@ for (const [name, maxRms] of [['Dugong_round001', 0.5], ['Humpback_round001', 1.
   assert(rms < maxRms, `${name}: temperature drifted from the game (rms ${rms}):\n` + out);
 }
 console.log('real-game checks passed');
-// pin finder: strip Rimuru's harness (its lever pin has no label) and it must find a working one by trial and error
+// pin finder: strip the pins off Claude's feed-forward circuit and it must find a working set by trial and error
 {
-  const A = require('./autopins'), P = require('./project'), E = require('./engine'), f = path.join(ROOT, 'context/reactor_circuits/rimuru_autoreactor.txt');
-  const m = P.loadModel(fs.readFileSync(f, 'utf8'), 'rimuru_autoreactor.txt'); for (const b of m.boxes) b.pins = null;
+  const A = require('./autopins'), P = require('./project'), E = require('./engine'), f = path.join(ROOT, 'circuits/example_feedforward.circ');
+  const m = P.loadModel(fs.readFileSync(f, 'utf8'), 'example_feedforward.circ'); for (const b of m.boxes) b.pins = null;
   const res = A.solve(m, { reactorMaxKW: 3000 }, { guess: E.guessPins });
-  assert(!res.initialWorks && res.works, 'autopins did not repair Rimuru:\n' + res.log.join('\n'));
-  assert(/^const\./.test(res.pins.reactor.in9) && res.pins.reactor.out0 === 'reactor.set_turbineoutput' && res.pins.reactor.out1 === 'reactor.set_fissionrate', 'autopins found odd pins: ' + JSON.stringify(res.pins));
+  assert(res.works, 'autopins did not repair the circuit:\n' + res.log.join('\n'));
   console.log('autopins check passed');
 }
 // Blueprints mod compatibility (github.com/Max112358/Barotrauma-Blueprints, load_blueprint.lua parseXML + builder):

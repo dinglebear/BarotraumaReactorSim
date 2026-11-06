@@ -3,7 +3,6 @@
 This is what I learned studying community "smart sub" circuits and building the Camel Overkill with the sub editor. Read it before designing doors, alarms, terminals, wifi networks, power management or anything else sub-wide. Read SUBEDIT.md for how to put a design into a `.sub`.
 
 Sources:
-- Full study notes are in `context/circuit_studies/`:
   - HuskOS: a terminal OS.
   - Smart Sub Toolkit: chat commands and wifi buses.
   - LHMRS-SD + DMFSS-1: a mothership that remote-controls its shuttle.

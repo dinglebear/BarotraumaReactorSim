@@ -32,7 +32,7 @@ function resolve(p, dirs) {
   for (const d of dirs) for (const ext of ['', '.circ', '.sbx', '.txt', '.csv', '_reactor.txt']) { const q = path.join(ROOT, d, p + ext); if (fs.existsSync(q)) return q; }
   throw new Error('file not found: ' + p);
 }
-const CIRC_DIRS = ['circuits', 'context/community_circuits', 'context/reactor_circuits'];
+const CIRC_DIRS = ['circuits', 'context/community_circuits'];
 function loadModel(file, batteryFile) {
   if (!batteryFile && file.endsWith('_reactor.txt')) { const b = file.replace(/_reactor\.txt$/, '_battery.txt'); if (fs.existsSync(b)) batteryFile = b; }
   const pinsFile = [file.replace(/\.(txt|circ)$/, '.pins'), file.replace(/(_reactor)?\.(txt|circ)$/, '.pins')].find(p => fs.existsSync(p)) || '';

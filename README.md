@@ -2,7 +2,6 @@
 
 Design, wire and test Barotrauma submarines and circuits outside the game, then take them in game: subs as `.sub` files, circuits through the **[Blueprints](https://github.com/Max112358/Barotrauma-Blueprints)** mod.
 
-Open **[the workshop](https://claude.ai/artifact/H7Y1hxZhsLgqyyr8Gjuyw5)** (or `web/index.html`). It has five pages:
 | Page | What it's for |
 |---|---|
 | **Sub Studio** (`web/subs.html`) | Every sub as the game draws it (the picture the editor saves inside each `.sub`, lined up automatically), with rooms, items coloured by job and wires along their saved nodes on top. Collision (hitboxes) is a separate layer. Filter wires (power, signal, added against the vanilla sub), click anything to see what it's wired to, find by name, ID, wifi channel or room, measure, and run a practice round with floods, fires and fights. Open your own `.sub` too. |
@@ -60,7 +59,6 @@ node sim/cli.js sandbox world/smart_return          # a Circuit Lab / Drone Rang
 node sim/cli.js sub render Camel_Overkill --base Camel   # a picture of a sub, additions in orange
 node sim/build_web.js                                # rebuild the web pages after adding circuits, subs or test files
 ```
-Circuits written as `.circ` export to Blueprints `.txt` on a single-profile `run`. To rewire a whole sub (doors, lights, relays, embedded circuit boxes), see [`SUBEDIT.md`](SUBEDIT.md) (`node sim/cli.js sub list|patch|check`) and the pattern library [`CIRCUIT_PATTERNS.md`](CIRCUIT_PATTERNS.md). `node sim/cli.js explain <file.sub|assembly.xml>` turns any sub or community item assembly into a readable netlist. [`context/reactor_circuits/STUDY.md`](context/reactor_circuits/STUDY.md) benchmarks the community circuits to beat.
 
 ## Challenge circuits (each with a test)
 | Circuit | Test | What it does |
@@ -87,14 +85,15 @@ See [`ships/CAMEL_OVERKILL.md`](ships/CAMEL_OVERKILL.md) for what each part does
 |---|---|
 | `circuits/` | circuits made here (`.circ` source + exported Blueprints `.txt`); `challenges/` has the vehicle and timer challenges, `camel/` the Camel Overkill boxes |
 | `sandbox/` | Circuit Lab scripts (`*.sbx`), every one a test; `sandbox/world/` the Drone Range ones |
-| `context/reactor_circuits/` | community reactor circuits (Blueprints `.txt`, optional `.pins`) and their study |
-| `context/blueprints_mod/`, `context/community_circuits/` | Blueprints mod scripts and example circuits (format reference) |
 | `load_profiles/` | test files: recorded rounds (`*_roundNNN*.csv`) and synthetic ones (`synthetic_*`, from `sim/make_profiles.js`) |
 | `ships/` | vanilla subs used by the mock (`vanilla/`), sub patches (`patches/`), patched subs (`custom/`) and vanilla item templates for the sub editor (`templates/`) |
-| `context/circuit_studies/` | study notes on community smart-sub circuits (HuskOS, Smart Sub Toolkit, LHMRS/DMFSS, the Iroh, MK-II doors) |
 | `mod/ReactorPowerLogger/` | the client-side logging mod |
 | `reference/` | game mechanics from the game source: reactor and devices (`BAROTRAUMA_MECHANICS.md`), vehicles, sensors and turrets (`VEHICLE_MECHANICS.md`), text displays (`TEXT_DISPLAYS.md`) |
 | `sim/` | simulator: engine, components, formats, CLI, pin finder, web build |
 | `web/` | page sources (`*_app.html`, `shared.css`) and the built workshop (`index.html`, `subs.html`, `sandbox.html`, `world.html`, `bench.html`, `lib/`, `thumbs/`); rebuild with `node sim/build_web.js` |
 | `renders/` | pictures from `sub render` (not committed) |
 | `logs/`, `traces/` | run results and reactor traces (not committed) |
+
+## Licence and credits
+Use anything original here, as long as you link to https://github.com/dinglebear/BarotraumaMockReactorSim (see `LICENSE`). Game content is not covered: see `NOTICE.md`.
+To run the workshop locally, open `web/index.html`; rebuild it with `node sim/build_web.js`. Tests: `npm test`.

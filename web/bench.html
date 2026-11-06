@@ -568,7 +568,7 @@ function edRender() {
   for (const w of b.wires) { wiredPins.add((w.from.c ?? 'BOX') + '|' + w.from.pin); wiredPins.add((w.to.c ?? 'BOX') + '|' + w.to.pin); }
   const pinDot = (x, y, c, pin, role) => {
     const key = (c ?? 'BOX') + '|' + pin, pend = ED.pend && ED.pend.c === c && ED.pend.pin === pin, sel = ED.sel && ED.sel.kind === 'pin' && ED.sel.c === c && ED.sel.pin === pin;
-    return `<circle class="cb-pin${wiredPins.has(key) ? ' wired' : ''}${pend ? ' pend' : ''}${sel ? ' sel' : ''}" cx="${x}" cy="${y}" r="9" data-k="pin" data-c="${c ?? ''}" data-pin="${pin}" data-role="${role}"/>`;
+    return `<circle class="cb-pin${wiredPins.has(key) ? ' wired' : ''}${pend ? ' pend' : ''}${sel ? ' sel' : ''}" cx="${x}" cy="${y}" r="9" data-k="pin" data-c="${esc(c ?? '')}" data-pin="${esc(pin)}" data-role="${role}"/>`;
   };
   const val = (x, y, vv, anchor) => vv === undefined ? '' : `<text class="cb-v" x="${x}" y="${y}" font-size="17" text-anchor="${anchor}">${esc(String(vv).slice(0, 12))}</text>`;
   // input / output nodes (draggable in Edit mode, like in game)

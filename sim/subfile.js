@@ -35,6 +35,15 @@
       structures: [], gaps: [], waypoints: [], props: [] }; // structures/gaps/waypoints/props: for the viewer and for building subs
     // the sub selection screen's picture (base64 PNG): the game's own render of the sub (sim/preview.js lines it up)
     if (a.previewimage) Object.defineProperty(ship, 'previewImage', { value: a.previewimage, enumerable: false, writable: true });
+    // IDs and the references to them are numbers in a real .sub. Keep only safe characters, so a doctored file can't
+    // smuggle markup into the pages that draw it (IDs end up in HTML attributes); connection names likewise
+    (function clean(n) {
+      for (const k of Object.keys(n.attrs || {})) {
+        if (/^(ID|linked|linkedto\d+|w|i|gap|ladders|contained)$/.test(k)) n.attrs[k] = String(n.attrs[k]).replace(/[^\w.,;:-]/g, '');
+        else if (k === 'name' && (n.tag === 'input' || n.tag === 'output')) n.attrs[k] = String(n.attrs[k]).replace(/[^\w.-]/g, '');
+      }
+      for (const c of n.children || []) clean(c);
+    })(sub);
     const byId = new Map(), wireItems = new Map();
     for (const n of sub.children) {
       if (n.tag === 'Hull') { const name = n.attrs.roomname || n.attrs.RoomName || ''; ship.hulls.push({ id: n.attrs.ID, rect: rect(n.attrs.rect), name, label: roomLabel(name), linked: n.attrs.linked || '' }); }

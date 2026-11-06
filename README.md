@@ -95,5 +95,7 @@ See [`ships/CAMEL_OVERKILL.md`](ships/CAMEL_OVERKILL.md) for what each part does
 | `logs/`, `traces/` | run results and reactor traces (not committed) |
 
 ## Licence and credits
+**Built by Claude (Anthropic), directed and tested in game by Dinglebear.** Dinglebear set the goals, supplied the real-round logs and examples, and play-tested every sub; Claude wrote the simulator, the tools, the circuits and the submarines.
+
 Use anything original here, as long as you link to https://github.com/dinglebear/BarotraumaMockReactorSim (see `LICENSE`). Game content is not covered: see `NOTICE.md`.
 To run the workshop locally, open `web/index.html`; rebuild it with `node sim/build_web.js`. Tests: `npm test`.

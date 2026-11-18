@@ -30,6 +30,24 @@
       "order": 1,
       "title": "Naive battery buffer (demo)",
       "desc": "Batteries without charge management: they drain and stop helping. Kept to show why charge management matters."
+    },
+    "battery_eco": {
+      "group": "My auto-reactors",
+      "order": 4,
+      "title": "Battery ECO (fuel saver + batteries)",
+      "desc": "ECO core (turbine/2 + 8 degrees) made safe by the batteries: about 13 % more energy per rod than example_battery with the same reliability. Needs batteries."
+    },
+    "battery_flywheel": {
+      "group": "My auto-reactors",
+      "order": 5,
+      "title": "Battery flywheel (reactor holds still)",
+      "desc": "The setpoint is held and only re-written when it is 12 % of max away from the real output, so the batteries swing and the reactor sits still: turbine travel -43 %, battery score 97.6 on the long haul. A point or two less reliable in fights. Needs batteries."
+    },
+    "regex_lite": {
+      "group": "My auto-reactors",
+      "order": 6,
+      "title": "Regex Lite (10 parts)",
+      "desc": "The cheapest safe reactor box: a regex drops the last two digits of the temperature (a divide by 100 with no part for it). As good as example_feedforward on every test file, 2 parts fewer."
     }
   }
 }

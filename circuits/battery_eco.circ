@@ -1,0 +1,115 @@
+# BATTERY ECO: the fuel-saver. The reactor runs the ECO core (just hot enough for the load: temperature = turbine/2 + 8,
+# at least 12 degrees, so about a quarter less fission and fuel) and the batteries are what makes that safe: a sudden
+# load is covered from the batteries while the core heats up (reactor_modes alone browns out there). Charge target is 70 %.
+name battery_eco
+box battery
+note "BATTERY BOX: HOW IT WORKS" "Keeps the batteries near 60 % so they can soak up surplus AND cover dips (a full battery can't absorb anything).\nDemand = grid load - battery charging (charge rate % x total recharge).\nError = 60 - charge %. The reactor is asked for demand + error x recharge/50 (at most +/- half the recharge): more when the batteries are low, less when they are high.\nIt only asks for less than demand by what the batteries really deliver (+50 kW), so disabled or empty batteries never cause a brownout.\nSurplus = reactor output - demand goes into the batteries: set_rate = surplus / total recharge.\nIt keeps battery output enabled (disable_output 0)."
+note "WIRING" "in1 charge_%, in2 charge_rate, in7 power_value_out (from ONE battery)\nin3 main junction box load_value_out, in6 reactor power_value_out\nout1 set_rate and out3 disable_output -> EVERY battery\nout2 -> reactor box in8"
+pin in1 battery.charge_%
+pin in2 battery.charge_rate
+pin in3 junction.load_value_out
+pin in6 reactor.power_value_out
+pin in7 battery.power_value_out
+pin out1 battery.set_rate
+pin out3 battery.disable_output
+c kb mem Value=$BATT_KW
+c k100 mem Value=100
+c chg mul                     # charge_rate% * BATT_KW
+c chgk div                    # / 100 -> charging kW
+c dem sub                     # grid load - charging = demand
+c ktgt mem Value=70           # target charge %
+c err sub                     # 60 - charge%
+c kg mem Value=$BATT_KW/50    # gain: kW of bias per 1% of charge error
+c bias mul ClampMin=-$BATT_KW/2 ClampMax=$BATT_KW/2
+c setp add                    # demand + bias -> reactor setpoint
+c sur sub                     # reactor output - demand = surplus
+c rate div                    # surplus / BATT_KW
+c pct mul ClampMin=0 ClampMax=100   # -> set_rate %
+c kn mem Value=$BATT_N
+c bo mul                      # one battery's output * battery count = kW the batteries give
+c k50 mem Value=50
+c allow0 add                  # + 50
+c km1 mem Value=-1
+c allow mul                   # -(given + 50): the lowest bias the batteries can back up
+c d1 sub                      # max(bias, allow) = (bias + allow + |bias - allow|) / 2
+c ad abs
+c s1 add
+c s2 add
+c k2 mem Value=2
+c bmax div
+c k0 mem Value=0              # keep battery output enabled
+w in2 chg.1
+w kb.out chg.2 rate.2
+w chg.out chgk.1
+w k100.out chgk.2 pct.2
+w in3 dem.1
+w chgk.out dem.2
+w dem.out setp.1 sur.2
+w ktgt.out err.1
+w in1 err.2
+w err.out bias.1
+w kg.out bias.2
+w in7 bo.1
+w kn.out bo.2
+w bo.out allow0.1
+w k50.out allow0.2
+w allow0.out allow.1
+w km1.out allow.2
+w bias.out d1.1 s1.1
+w allow.out d1.2 s1.2
+w d1.out ad.in
+w s1.out s2.1
+w ad.out s2.2
+w s2.out bmax.1
+w k2.out bmax.2
+w bmax.out setp.2
+w k0.out out3
+w setp.out out2
+w in6 sur.1
+w sur.out rate.1
+w rate.out pct.1
+w pct.out out1
+box reactor
+note "ECO REACTOR BOX: HOW IT WORKS (17 parts)" "Makes what the battery box asks for (in8, kW). Turbine = setpoint / max x 100.\nTarget temperature = actual turbine / 2 + 8, between 12 and 57: just enough output cap (temperature / 50) for the turbine, which burns far less fuel than holding 50.\nFission = (actual turbine + 2 x target - temperature) x 50 / fuel.\nThe batteries cover any jump the cool core cannot make yet.\nTurn the reactor's automatic control OFF."
+note "WIRING" "From the reactor: in2 power_value_out, in3 temperature_out, in4 fuel_out\nin8 <- battery box out2\nout1 -> set_fissionrate, out2 -> set_turbineoutput"
+c tdiv div
+c tmax mem Value=$MAX
+c tpct mul ClampMin=0 ClampMax=100
+c k100 mem Value=100
+c pdiv div
+c ppct mul
+c tdeg div
+c k05 mem Value=0.5
+c eco1 mul
+c k8 mem Value=8
+c eco add ClampMin=12 ClampMax=57
+c k2 mem Value=2
+c t2 mul
+c f1 add
+c f2 sub
+c k50 mem Value=50
+c fmul mul
+c fdiv div ClampMin=0 ClampMax=100
+w in8 tdiv.1
+w tmax.out tdiv.2 pdiv.2
+w tdiv.out tpct.1
+w k100.out tpct.2 ppct.2 tdeg.2
+w tpct.out out2
+w in2 pdiv.1
+w pdiv.out ppct.1
+w ppct.out f1.1 eco1.1
+w in3 tdeg.1
+w k05.out eco1.2
+w eco1.out eco.1
+w k8.out eco.2
+w eco.out t2.1
+w k2.out t2.2
+w t2.out f1.2
+w f1.out f2.1
+w tdeg.out f2.2
+w f2.out fmul.1
+w k50.out fmul.2
+w fmul.out fdiv.1
+w in4 fdiv.2
+w fdiv.out out1
+link battery.out2 reactor.in8

@@ -1,5 +1,7 @@
 # Barotrauma Workshop
 
+**Live site:** https://dinglebear.github.io/BarotraumaReactorSim/ (published from `main` by `.github/workflows/pages.yml`; first enable it under Settings → Pages → Source: GitHub Actions).
+
 Design, wire and test Barotrauma submarines and circuits outside the game, then take them in game: subs as `.sub` files, circuits through the **[Blueprints](https://github.com/Max112358/Barotrauma-Blueprints)** mod.
 
 | Page | What it's for |

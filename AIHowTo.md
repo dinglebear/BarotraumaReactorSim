@@ -22,7 +22,6 @@ Defaults come from `sim.config.json` (the web page's "Save settings" writes this
 | `circuits/<name>.circ` | YOUR circuits (edit these). A run exports `<name>.txt` (1 box) or `<name>_reactor.txt` + `<name>_battery.txt` (2 boxes) in the in-game Blueprints format. |
 | `load_profiles/*.csv` | Test files: the ship's power demand over a round. Real ones come from the mod in `mod/`. `synthetic_*` are made by `sim/make_profiles.js` from a ship model calibrated on the real rounds, and they rank circuits like the real rounds do (avoidable unmet: rank correlation 0.98). Use them for fast iteration and confirm on the real ones. |
 | `logs/<circuit>__<profile>.log` | Result of each run (read this). |
-| `context/reactor_circuits/` | Community reactor circuits (`.txt`, optional `name.pins`) to beat. `compare` can run them by name. |
 | `context/community_circuits/` | Non-reactor example circuits (format reference only). |
 | `reference/BAROTRAUMA_MECHANICS.md` | Exact game math. Read it only if you need a detail this file doesn't give. |
 | `sim/` | Simulator (engine.js, components.js, format.js). You should not need to edit it. |
@@ -110,7 +109,6 @@ How to check: `node sim/cli.js verify <round>` drives fission and turbine from t
 - Danger: temp > 60 for 20 s starts a fire (repeats). Temp > 70 runs the meltdown timer (120 s → meltdown). Temp < 40 is outside the optimal range (no ±3 % bonus).
 - **Wear** (as in game): the reactor loses 0.125 condition/s while running, after a random 120-720 s delay, down to 10 %. The fire and meltdown timers run `lerp(2x, 1x, condition)` faster, so a worn reactor catches fire after ~10.5 s above 60 and melts down after ~63 s above 70. `reactor_condition_min_pct` is in the log. The junction box wears too (0.1/s).
 - **Test files are about demand.** A test file is the sub's real (or modelled) power demand. Rods and rod type come from the settings (`--rods`, `--fuel`; default 2 uranium), whatever the player had in that round. Rods do not run down during a test, but the fuel burned is still counted (`kwh_per_rod`). To replay a recorded round's own rods and refuelling (for checking the simulator), use `--recorded-rods --fuel-drain`; `verify` does this itself.
-- **Real rounds are the real test.** `Dugong_round001`, `Dugong_round002_rimuru`, `Humpback_round001` and `Typhon2_round001` are recorded rounds. Typhon2's demand goes far above the reactor's 5200 kW, so only stored battery energy can cover that. The `synthetic_*` rounds come from a ship model calibrated on them.
 - Warm start = sub saved mid-round in a steady state (temp 50, turbine = load). With AutoTemp on, the game's round-start fast sync also runs for the first 5 s.
 - Grid: voltage = supply/load. < 0.5 devices shut off, < 0.9 brownout, > 2 junction boxes take random damage.
 - Batteries (exactly as in game, all on the reactor's grid):
@@ -202,7 +200,6 @@ Tips:
 - Constants are `mem` components (`c k mem Value=50`).
 
 ## 9. Community circuits
-Put the in-game `.txt` (or a `_reactor.txt` + `_battery.txt` pair) in `context/reactor_circuits/`. Pin wiring comes from, in order:
 1. labels written as `reactor.load_value_out`;
 2. a `name.pins` file with lines like `reactor in1 reactor.load_value_out`;
 3. a guess from the circuit's own labels, reported in WARNINGS (check it).
@@ -222,10 +219,6 @@ A `.pins` file can also retune a circuit per ship: `prop reactor <componentId> <
 
 `node sim/cli.js decompile <name>` shows it as .circ text.
 
-**Benchmark and analysis of the community circuits: `context/reactor_circuits/STUDY.md`.** Read it before designing. It covers which designs are fuel-efficient, which meet demand, and why each one fails. The current bar to beat:
-- reliability: `overclock_reactor` (avoidable unmet 0.4–1.5 %, but heavy overvolt and fuel);
-- fuel: `lammert_arc_hts` and Rimuru (~25 % better than vanilla), and `reactor_modes` in eco mode.
-Compare with: `node sim/cli.js compare vanilla,lammert_arc_hts,overclock_reactor,rimuru_autoreactor,reactor_modes,<yours> --profile Dugong_round001,Humpback_round001,Typhon2_round001`.
 
 ## 10. Web bench (for the human)
 `web/index.html` is the master page. Rebuild it with `node sim/build_web.js` after adding circuits or profiles. It has:

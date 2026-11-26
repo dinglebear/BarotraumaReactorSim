@@ -1,0 +1,120 @@
+# FLYWHEEL: the reactor holds still and the batteries swing around it.
+# example_battery asks the reactor for demand + charge bias every tick, so the turbine is always on the move. Here the
+# setpoint sits in a memory part and is only re-written when the wanted value is more than 12 % of the reactor's max
+# away from what the reactor really makes (power_value_out). Inside that band the batteries cover the gap both ways.
+# Tested (synthetic_longhaul, the ship's own batteries): turbine travel -43 %, fission travel -26 %, battery score 97.6
+# against 87.5, a point or two less reliable in the worst fights. Reactor box is the same as example_battery's.
+name battery_flywheel
+box battery
+note "FLYWHEEL BATTERY BOX: HOW IT WORKS" "Same demand / surplus / charge-bias math as example_battery, but the setpoint is HELD in a memory part and only re-written when it is more than 12 % of max output away from the reactor's real output (in6).\nThe reactor holds still and the batteries cover the gap each way.\nKeeps the batteries near 60 % so they can soak up surplus AND cover dips (a full battery can't absorb anything).\nDemand = grid load - battery charging (charge rate % x total recharge).\nError = 60 - charge %. The reactor is asked for demand + error x recharge/50 (at most +/- half the recharge): more when the batteries are low, less when they are high.\nIt only asks for less than demand by what the batteries really deliver (+50 kW), so disabled or empty batteries never cause a brownout.\nSurplus = reactor output - demand goes into the batteries: set_rate = surplus / total recharge.\nIt keeps battery output enabled (disable_output 0)."
+note "WIRING" "in1 charge_%, in2 charge_rate, in7 power_value_out (from ONE battery)\nin3 main junction box load_value_out, in6 reactor power_value_out\nout1 set_rate and out3 disable_output -> EVERY battery\nout2 -> reactor box in8"
+pin in1 battery.charge_%
+pin in2 battery.charge_rate
+pin in3 junction.load_value_out
+pin in6 reactor.power_value_out
+pin in7 battery.power_value_out
+pin out1 battery.set_rate
+pin out3 battery.disable_output
+c kb mem Value=$BATT_KW
+c k100 mem Value=100
+c chg mul                     # charge_rate% * BATT_KW
+c chgk div                    # / 100 -> charging kW
+c dem sub                     # grid load - charging = demand
+c ktgt mem Value=60           # target charge %
+c err sub                     # 60 - charge%
+c kg mem Value=$BATT_KW/50    # gain: kW of bias per 1% of charge error
+c bias mul ClampMin=-$BATT_KW/2 ClampMax=$BATT_KW/2
+c setp0 add                   # demand + bias
+c ge sub                      # wanted - what the reactor makes now
+c gabs abs
+c kband mem Value=$MAX/8     # dead band: 12 % of reactor max
+c gt greater                  # 1 when the gap is bigger than the band
+c setp mem                    # holds the setpoint; only re-written when the gap is big
+c sur sub                     # reactor output - demand = surplus
+c rate div                    # surplus / BATT_KW
+c pct mul ClampMin=0 ClampMax=100   # -> set_rate %
+c kn mem Value=$BATT_N
+c bo mul                      # one battery's output * battery count = kW the batteries give
+c k50 mem Value=50
+c allow0 add                  # + 50
+c km1 mem Value=-1
+c allow mul                   # -(given + 50): the lowest bias the batteries can back up
+c d1 sub                      # max(bias, allow) = (bias + allow + |bias - allow|) / 2
+c ad abs
+c s1 add
+c s2 add
+c k2 mem Value=2
+c bmax div
+c k0 mem Value=0              # keep battery output enabled
+w in2 chg.1
+w kb.out chg.2 rate.2
+w chg.out chgk.1
+w k100.out chgk.2 pct.2
+w in3 dem.1
+w chgk.out dem.2
+w dem.out setp0.1 sur.2
+w ktgt.out err.1
+w in1 err.2
+w err.out bias.1
+w kg.out bias.2
+w in7 bo.1
+w kn.out bo.2
+w bo.out allow0.1
+w k50.out allow0.2
+w allow0.out allow.1
+w km1.out allow.2
+w bias.out d1.1 s1.1
+w allow.out d1.2 s1.2
+w d1.out ad.in
+w s1.out s2.1
+w ad.out s2.2
+w s2.out bmax.1
+w k2.out bmax.2
+w bmax.out setp0.2
+w setp0.out ge.1 setp.in
+w in6 ge.2
+w ge.out gabs.in
+w gabs.out gt.1
+w kband.out gt.2
+w gt.out setp.lock_state
+w k0.out out3
+w setp.out out2
+w in6 sur.1
+w sur.out rate.1
+w rate.out pct.1
+w pct.out out1
+box reactor
+note "REACTOR BOX: HOW IT WORKS (12 parts)" "Makes what the battery box asks for (in8, kW).\nTurbine = setpoint / max output x 100.\nFission = (actual turbine + 100 - temperature) x 50 / fuel: exactly the heat needed, temperature held at 50.\nTurn the reactor's automatic control OFF."
+note "WIRING" "From the reactor: in2 power_value_out, in3 temperature_out, in4 fuel_out\nin8 <- battery box out2\nout1 -> set_fissionrate, out2 -> set_turbineoutput"
+c tdiv div                    # setpoint / max
+c tmax mem Value=$MAX
+c tpct mul ClampMin=0 ClampMax=100  # * 100 -> turbine
+c k100 mem Value=100
+c pdiv div                    # actual output / max
+c ppct mul                    # * 100 = actual turbine % (the real one, not the target)
+c tdeg div                    # temperature_out / 100 = temperature
+c terr sub                    # 100 - temperature  (= 50 + (50 - temp): heat target plus temperature feedback)
+c fadd add                    # actual turbine + 100 - temp
+c k50 mem Value=50
+c fmul mul                    # * 50
+c fdiv div ClampMin=0 ClampMax=100  # / fuel -> fission (aims for temperature 50)
+w in8 tdiv.1
+w tmax.out tdiv.2
+w tdiv.out tpct.1
+w k100.out tpct.2
+w tpct.out out2
+w in2 pdiv.1
+w tmax.out pdiv.2
+w pdiv.out ppct.1
+w k100.out ppct.2
+w ppct.out fadd.1
+w in3 tdeg.1
+w k100.out tdeg.2 terr.1
+w tdeg.out terr.2
+w terr.out fadd.2
+w k50.out fmul.2
+w fadd.out fmul.1
+w fmul.out fdiv.1
+w in4 fdiv.2
+w fdiv.out out1
+link battery.out2 reactor.in8

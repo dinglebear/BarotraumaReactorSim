@@ -1,0 +1,39 @@
+# REGEX LITE: the cheapest safe closed-loop reactor box here, 10 parts (example_feedforward uses 12).
+# A regex part does the "divide by 100" jobs for free: temperature_out "5230" -> "52" is one regex that keeps every
+# digit but the last two, so there is no 100 constant for it and no divide part.
+# Loop: turbine = load / max x 100 ; fission = (turbine + 100 - temp) x 50 / fuel  (heat the turbine uses, held at 50 degrees).
+name regex_lite
+box reactor
+note "REGEX LITE: HOW IT WORKS (10 parts)" "Turbine = load / max output x 100 (one divide, MAX/100 in a constant).\nTemperature = a regex that drops the last two digits of temperature_out (5230 -> 52): a divide by 100 with no constant.\nFission = (turbine + 100 - temperature) x 50 / fuel: the heat the turbine uses, pulled to 50 degrees.\nThe feedback uses the turbine's REAL position (power out / max): using the target instead is 1 part cheaper but the core overshoots to 88 degrees when the load jumps (tested).\nTurn the reactor's automatic control OFF."
+note "WIRING" "From the reactor: in1 load_value_out, in2 power_value_out, in3 temperature_out, in4 fuel_out\nout1 -> set_fissionrate, out2 -> set_turbineoutput"
+pin in1 reactor.load_value_out
+pin in2 reactor.power_value_out
+pin in3 reactor.temperature_out
+pin in4 reactor.fuel_out
+pin out1 reactor.set_fissionrate
+pin out2 reactor.set_turbineoutput
+c kmax mem Value=$MAX/100     # kW per turbine %
+c tdiv div ClampMin=0 ClampMax=100   # load / (max/100) = turbine %
+c tdeg regex Expression=^([0-9]*)[0-9][0-9]$ UseCaptureGroup=true Output=1 OutputEmptyCaptureGroup=true   # temperature_out / 100, no constant
+c k100 mem Value=100
+c pdiv div ClampMin=0 ClampMax=100   # real output / (max/100) = the turbine's actual %
+c u1 add                      # turbine + 100
+c u2 sub                      # - temperature
+c k50 mem Value=50
+c fm mul                      # * 50
+c fd div ClampMin=0 ClampMax=100   # / fuel
+w in1 tdiv.1
+w kmax.out tdiv.2
+w tdiv.out out2
+w in2 pdiv.1
+w kmax.out pdiv.2
+w pdiv.out u1.1
+w k100.out u1.2
+w in3 tdeg.in
+w u1.out u2.1
+w tdeg.out u2.2
+w u2.out fm.1
+w k50.out fm.2
+w fm.out fd.1
+w in4 fd.2
+w fd.out out1
